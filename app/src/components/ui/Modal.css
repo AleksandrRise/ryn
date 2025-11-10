@@ -1,0 +1,118 @@
+/* Modal Overlay and Dialog Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.modal-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal {
+  background: linear-gradient(145deg, rgba(20, 16, 13, 0.98) 0%, rgba(15, 12, 10, 0.98) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  transform: scale(0.9);
+  transition: transform 0.3s ease;
+}
+
+.modal-overlay.show .modal {
+  transform: scale(1);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.modal-icon {
+  width: 48px;
+  height: 48px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.1) 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.modal-icon svg {
+  stroke: #ef4444;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.5px;
+}
+
+.modal-content {
+  color: #d4d4d4;
+  font-size: 15px;
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.modal-btn {
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: none;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.modal-btn-cancel {
+  background: rgba(15, 12, 10, 0.6);
+  border: 1px solid rgba(212, 165, 116, 0.2);
+  color: #999;
+}
+
+.modal-btn-cancel:hover {
+  background: rgba(15, 12, 10, 0.8);
+  border-color: rgba(212, 165, 116, 0.3);
+  color: #d4a574;
+}
+
+.modal-btn-confirm {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #fff;
+}
+
+.modal-btn-confirm:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+}
+
+.modal-btn-confirm:active {
+  transform: translateY(0);
+}

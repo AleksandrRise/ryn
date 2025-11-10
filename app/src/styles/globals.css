@@ -1,0 +1,146 @@
+/**
+ * Global styles for Ryn Compliance Dashboard
+ * Replicates the exact design from the original HTML/CSS
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background: linear-gradient(135deg, #1a1410 0%, #0d0a08 25%, #1a1410 50%, #0a0806 75%, #151210 100%);
+  background-attachment: fixed;
+  color: #e8e8e8;
+  overflow-x: hidden;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 20% 50%, rgba(212, 165, 116, 0.03) 0%, transparent 50%),
+              radial-gradient(circle at 80% 20%, rgba(201, 152, 95, 0.02) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+.app {
+  display: flex;
+  height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+/* Utility Classes */
+.gradient-text {
+  background: linear-gradient(135deg, #d4a574 0%, #e8c9a0 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass-effect {
+  background: linear-gradient(145deg, rgba(20, 16, 13, 0.6) 0%, rgba(15, 12, 10, 0.8) 100%);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(212, 165, 116, 0.1);
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 12, 10, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 165, 116, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 165, 116, 0.5);
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes aiPulseSubtle {
+  0% {
+    box-shadow: 0 0 0 0 rgba(124, 179, 66, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(124, 179, 66, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(124, 179, 66, 0);
+  }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .main-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    font-size: 13px;
+  }
+}
