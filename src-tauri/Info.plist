@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Ryn uses screen recording to enable AI-powered debugging and inspection of the application interface through the Model Context Protocol (MCP).</string>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Ryn needs accessibility access to interact with windows for debugging and inspection purposes.</string>
+</dict>
+</plist>

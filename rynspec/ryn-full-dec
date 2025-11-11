@@ -511,6 +511,20 @@ Lessons from HIPAA, ISO 27001, PCI-DSS automation:
 6. Differentiation opportunities: Building the 10x compliance tool
 The massive gap nobody has filled
 Every existing platform (Vanta, Drata, Secureframe, Scytale, Sprinto) focuses exclusively on infrastructure monitoring and evidence collection. Not one scans application code for SOC 2 compliance. This represents the single largest opportunity in the market.
+
+Desktop app approach as bridge to IDE integration
+While the #1 market opportunity identified in research is IDE-integrated real-time feedback (VS Code extensions), Ryn's MVP implements a desktop companion app using Tauri that achieves similar functionality through file watching and continuous monitoring. This approach delivers immediate value while maintaining optionality for future IDE extension development:
+
+**Desktop App Benefits for MVP**:
+- File watching provides real-time feedback as developers code (similar to IDE experience)
+- Single codebase serves multiple IDEs (VS Code, JetBrains, Vim, etc.)
+- Faster to market than separate IDE extensions
+- Desktop app can monitor entire project context (not just open files)
+- Cross-platform support (macOS, Linux, Windows) from day one
+- Lower friction for adoption (single install vs extension per IDE)
+
+Future transition path: Once product-market fit is proven, Ryn can expand with native IDE extensions while keeping desktop app as a cross-IDE fallback.
+
 What code-level compliance means in practice:
 Scanning codebases to detect:
     •    Missing audit logging on sensitive endpoints (API routes handling PII, financial transactions, admin actions)
@@ -522,9 +536,9 @@ Scanning codebases to detect:
     •    Sensitive data in logs (passwords, tokens, PII leaking into application logs)
 Market validation: Developer forums consistently request "tools that actually fix code, not just check boxes." Reviews of existing platforms mention "still requires manual code changes" as top complaint. Delve's positioning ("automatic code scanning with each git push") attracts developer interest despite limited traction.
 Specific 10x opportunities validated by research
-1. IDE-integrated real-time compliance checking
+1. Real-time compliance checking during development
 The gap: Developers get no feedback on SOC 2 compliance while writing code. They discover gaps during audits, 6-12 months later.
-The opportunity: VS Code and JetBrains extensions that scan code in real-time, similar to ESLint for syntax but for compliance controls.
+The opportunity: Real-time feedback as developers code. Ryn's MVP delivers this via a Tauri desktop app with file watching that monitors code changes and provides feedback immediately upon save (IDE-adjacent behavior). Future versions can expand to native IDE extensions for deeper integration.
 Example implementation:
     •    Developer writes Flask route for updating user data
     •    IDE highlights: "Missing audit log for PII modification (CC7.2 requirement)"

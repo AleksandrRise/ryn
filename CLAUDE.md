@@ -1,2 +1,0 @@
-- make granulated, unambiguous todo lists that aren't confusing and left up to multiple interpretations.
-- use docs folder in .claude folder to always store documentation from context7. dont add any redundant files in docs.

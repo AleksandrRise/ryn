@@ -21,13 +21,29 @@ export function McpInit() {
       return
     }
 
-    // MCP plugin is initialized on the Rust side, no JS setup needed
-    console.log("[MCP Init] MCP plugin is active (Rust-side)")
-    setStatus("ready")
+    // Setup MCP plugin event listeners
+    let cleanupFn: (() => Promise<void>) | null = null
 
-    // No cleanup needed since plugin is managed by Tauri
+    ;(async () => {
+      try {
+        const { setupPluginListeners, cleanupPluginListeners } = await import("tauri-plugin-mcp")
+        await setupPluginListeners()
+        cleanupFn = cleanupPluginListeners
+        console.log("[MCP Init] Plugin listeners setup complete")
+        setStatus("ready")
+      } catch (error) {
+        console.error("[MCP Init] Failed to setup plugin listeners:", error)
+        setStatus("error")
+      }
+    })()
+
+    // Cleanup on unmount
     return () => {
-      console.log("[MCP Init] Component unmounting")
+      if (cleanupFn) {
+        cleanupFn().then(() => {
+          console.log("[MCP Init] Plugin listeners cleaned up")
+        })
+      }
     }
   }, [])
 

@@ -17,25 +17,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-### Tauri Desktop App
+### Quick Start
 
 ```bash
-# Install dependencies
+# Install dependencies (runs once)
 pnpm install
 
-# Run Next.js dev server (http://localhost:3000)
-pnpm dev
-
-# Run Tauri desktop app
+# Run Tauri desktop app with hot-reload (recommended for development)
 pnpm tauri dev
 
-# Build production
-pnpm build              # Next.js
-pnpm tauri build        # Desktop app
+# Build production (Next.js static export + Tauri bundle)
+pnpm build              # Next.js static export
+pnpm tauri build        # Desktop app bundle
 
-# Lint
-pnpm lint
+# Development only
+pnpm dev                # Next.js dev server (http://localhost:3000) - separate from Tauri
+pnpm lint               # Run ESLint
 ```
+
+### Tauri Development Notes
+
+- `pnpm tauri dev` runs Next.js in static export mode and launches the Tauri window
+- The Next.js dev server (`pnpm dev`) is separate and useful for isolated frontend testing
+- MCP plugin is only enabled in debug builds and exposes a Unix socket at `/tmp/tauri-mcp.sock`
+- Rebuild Rust code: changes to `src-tauri/src/*.rs` require restarting `pnpm tauri dev`
 
 ## Architecture
 
@@ -74,12 +79,12 @@ src-tauri/src/main.rs          # Rust backend (placeholder commands)
 3. **Dashboard**: `app/page.tsx` - Main compliance view
 4. **Types**: `lib/types/violation.ts` - Core data models
 
-## Critical Issues
+## Known Issues
 
-1. **TypeScript Errors Ignored**: `next.config.mjs` has `ignoreBuildErrors: true`
-2. **Missing Rust Dependency**: Add `chrono` to `src-tauri/Cargo.toml`
-3. **Backend Not Implemented**: All Tauri commands in `main.rs` are TODO stubs returning mock data
-4. **No Tests**: Testing infrastructure missing
+1. **TypeScript Errors Ignored**: `next.config.mjs` has `ignoreBuildErrors: true` - TypeScript errors don't block builds but should be addressed
+2. **Backend Stub Implementation**: All Tauri commands in `main.rs` are TODO stubs returning mock data
+3. **No Test Framework**: Vitest, Playwright, and Rust unit tests are not configured
+4. **Incorrect Package Name**: `package.json` lists `"name": "my-v0-project"` instead of `"ryn"`
 
 ## Key Features (Status)
 
@@ -107,8 +112,8 @@ src-tauri/src/main.rs          # Rust backend (placeholder commands)
 
 ### Backend (Cargo.toml)
 - tauri 2.0, tauri-plugin-sql (SQLite), tauri-plugin-fs, tauri-plugin-dialog
-- serde, serde_json
-- **Missing**: chrono (referenced in code)
+- serde, serde_json, chrono (with serde support)
+- tauri-plugin-mcp (local path)
 
 ## Testing
 
@@ -117,21 +122,45 @@ No testing framework configured. Need to add:
 - Playwright/Cypress for E2E
 - Rust unit tests in src-tauri
 
-## Quick Start
+## Frontend-Backend Communication
 
-```bash
-# Install dependencies
-pnpm install
+Tauri commands defined in `src-tauri/src/main.rs` are invoked from React via `lib/tauri/commands.ts`. Add new commands as follows:
 
-# Add missing Rust dependency
-cargo add chrono --manifest-path src-tauri/Cargo.toml
+1. Define the command in `src-tauri/src/main.rs`:
+   ```rust
+   #[tauri::command]
+   fn my_command(param: String) -> Result<String, String> {
+       // Implementation
+       Ok(result)
+   }
+   ```
 
-# Run Tauri desktop app
-pnpm tauri dev
-```
+2. Register in `invoke_handler`:
+   ```rust
+   .invoke_handler(tauri::generate_handler![my_command])
+   ```
 
-## Documentation
+3. Call from React:
+   ```typescript
+   import { invoke } from "@tauri-apps/api/core";
+   const result = await invoke("my_command", { param: "value" });
+   ```
+
+Key plugins available:
+- **tauri-plugin-sql**: SQLite database queries
+- **tauri-plugin-dialog**: File/folder selection dialogs
+- **tauri-plugin-fs**: File system operations
+- **tauri-plugin-mcp** (dev-only): Unix socket server at `/tmp/tauri-mcp.sock`
+
+## Documentation Storage
+
+Per project guidelines, all context7 library documentation should be stored in `.claude/docs/` folder. Do not add redundant or unrelated files to this directory.
+
+## Other Resources
 
 - `/ryn-stack`: Comprehensive market research on SOC 2 compliance landscape (750KB)
 - `/ryn-sum`: One-paragraph product pitch
 - `README.md`: Empty (needs content)
+
+- make granulated, unambiguous todo lists that aren't confusing and left up to multiple interpretations.
+- use docs folder in .claude folder to always store documentation from context7. dont add any redundant files in docs.
