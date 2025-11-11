@@ -19,7 +19,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={inter.className}>
         <WaterBackground />
-        <div className="fixed inset-0 bg-black/40 z-[5]" />
+        <div className="fixed inset-0 bg-black/70 z-[5]" />
         <div className="relative z-10">{children}</div>
       </body>
     </html>
