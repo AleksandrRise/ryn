@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(cd:*)",
+      "Bash(cargo tauri:*)",
+      "Bash(cd:*)",
+      "Bash(cd:*)",
+      "Bash(cd:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm tauri dev:*)",
+      "Bash(pnpm add:*)"
+    ],
+    "deny": []
+  }
+}
