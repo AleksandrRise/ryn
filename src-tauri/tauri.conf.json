@@ -23,8 +23,19 @@
       }
     ],
     "security": {
-      "csp": null
-    }
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "windows": ["main"],
+          "permissions": [
+            "core:event:allow-listen",
+            "core:event:allow-emit"
+          ]
+        }
+      ]
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
