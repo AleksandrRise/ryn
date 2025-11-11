@@ -21,57 +21,13 @@ export function McpInit() {
       return
     }
 
-    let cleanup: (() => void) | undefined
+    // MCP plugin is initialized on the Rust side, no JS setup needed
+    console.log("[MCP Init] MCP plugin is active (Rust-side)")
+    setStatus("ready")
 
-    console.log("[MCP Init] Starting initialization...")
-    setStatus("loading")
-
-    // Dynamically import and setup MCP listeners
-    import("tauri-plugin-mcp")
-      .then((module) => {
-        console.log("[MCP Init] Module loaded:", module)
-        const { setupPluginListeners, cleanupPluginListeners } = module
-
-        if (typeof setupPluginListeners !== "function") {
-          console.error("[MCP Init] setupPluginListeners is not a function")
-          setStatus("error: setupPluginListeners not found")
-          return
-        }
-
-        console.log("[MCP Init] Calling setupPluginListeners...")
-        return setupPluginListeners()
-          .then(() => {
-            console.log("[MCP Init] ✓ Plugin listeners initialized successfully")
-            setStatus("ready")
-            cleanup = cleanupPluginListeners
-          })
-          .catch((err) => {
-            console.error("[MCP Init] ✗ Error setting up listeners:", err)
-            console.error("[MCP Init] Error type:", typeof err)
-            console.error("[MCP Init] Error keys:", err ? Object.keys(err) : "null/undefined")
-
-            let errMsg = "unknown error"
-            if (err) {
-              if (err.message) errMsg = err.message
-              else if (typeof err.toString === "function") errMsg = err.toString()
-              else if (typeof err === "string") errMsg = err
-              else errMsg = JSON.stringify(err)
-            }
-            setStatus(`error: ${errMsg}`)
-          })
-      })
-      .catch((error) => {
-        console.error("[MCP Init] ✗ Failed to import module:", error)
-        const errMsg = error?.message || error?.toString() || String(error)
-        setStatus(`error: ${errMsg}`)
-      })
-
-    // Cleanup on unmount
+    // No cleanup needed since plugin is managed by Tauri
     return () => {
-      if (cleanup) {
-        console.log("[MCP Init] Cleaning up listeners...")
-        cleanup()
-      }
+      console.log("[MCP Init] Component unmounting")
     }
   }, [])
 

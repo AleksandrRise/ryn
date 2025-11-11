@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import type { Severity } from "@/lib/types/violation"
+import { open } from "@tauri-apps/plugin-dialog"
 
 export function ScanResults() {
   const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
@@ -22,8 +23,20 @@ export function ScanResults() {
   })
 
   const handleSelectFolder = async () => {
-    // Placeholder - will connect to Tauri file dialog
-    console.log("Select folder dialog")
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Select Project Folder",
+      })
+
+      if (selected && typeof selected === "string") {
+        setProjectPath(selected)
+        console.log("Selected folder:", selected)
+      }
+    } catch (error) {
+      console.error("Error opening folder dialog:", error)
+    }
   }
 
   const handleStartScan = () => {
@@ -107,13 +120,13 @@ export function ScanResults() {
 
   return (
     <div className="px-8 py-12">
-      <div className="mb-12">
+      <div className="mb-12 animate-fade-in-up">
         <h1 className="text-[48px] font-bold leading-none tracking-tighter mb-3">Scan Configuration</h1>
         <p className="text-[14px] text-[#f0f0f0]">Configure and run compliance scans</p>
       </div>
 
       {/* Scan Configuration Panel */}
-      <div className="mb-16 p-8 border border-[#1a1a1a] bg-[#050505]">
+      <div className="mb-16 p-8 border border-[#1a1a1a] bg-[#050505] animate-fade-in-up delay-200">
         <div className="grid grid-cols-2 gap-8 mb-8">
           {/* Left: Project Selection */}
           <div>
@@ -138,25 +151,32 @@ export function ScanResults() {
           {/* Right: SOC 2 Controls */}
           <div>
             <h3 className="text-[13px] uppercase tracking-wider text-[#f0f0f0] mb-4">SOC 2 Controls</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               {Object.entries(selectedControls).map(([control, checked]) => (
-                <label key={control} className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleControl(control)}
-                    className="w-4 h-4"
-                  />
-                  <div>
-                    <p className="text-[13px] font-medium">{control}</p>
-                    <p className="text-[11px] text-[#f0f0f0]">
-                      {control === "CC6.1" && "Access Controls"}
-                      {control === "CC6.7" && "Encryption & Secrets"}
-                      {control === "CC7.2" && "Logging & Monitoring"}
-                      {control === "A1.2" && "Data Availability"}
-                    </p>
+                <button
+                  key={control}
+                  onClick={() => toggleControl(control)}
+                  className={`px-4 py-3 text-left transition-all border ${
+                    checked
+                      ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
+                      : "bg-[#0a0a0a] text-[#666] border-[#1a1a1a] hover:border-[#333]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[13px] font-medium tracking-wide">{control}</p>
+                    <span className={`text-[10px] font-bold tracking-widest ${
+                      checked ? "text-black" : "text-[#333]"
+                    }`}>
+                      {checked ? "ON" : "OFF"}
+                    </span>
                   </div>
-                </label>
+                  <p className={`text-[11px] ${checked ? "opacity-70" : "opacity-50"}`}>
+                    {control === "CC6.1" && "Access Controls"}
+                    {control === "CC6.7" && "Encryption & Secrets"}
+                    {control === "CC7.2" && "Logging & Monitoring"}
+                    {control === "A1.2" && "Data Availability"}
+                  </p>
+                </button>
               ))}
             </div>
           </div>
@@ -166,7 +186,7 @@ export function ScanResults() {
         <button
           onClick={handleStartScan}
           disabled={isScanning}
-          className="px-8 py-3 bg-white text-black text-[13px] font-medium hover:bg-[#f0f0f0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-8 py-3 bg-[#b3b3b3] text-black text-[13px] font-medium hover:bg-[#999] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isScanning ? "Scanning..." : "Start Scan"}
         </button>
@@ -197,7 +217,7 @@ export function ScanResults() {
       )}
 
       {/* Scan Results */}
-      <div className="mb-12">
+      <div className="mb-12 animate-fade-in-up delay-400">
         <h2 className="text-[36px] font-bold leading-none tracking-tighter mb-3">Scan Results</h2>
         <div className="flex gap-4 text-[13px] text-[#fafafa]">
           <span>Completed 2 minutes ago</span>
@@ -208,13 +228,15 @@ export function ScanResults() {
         </div>
       </div>
 
-      <div className="flex gap-6 mb-8 text-[13px] border-b border-[#1a1a1a] pb-3">
+      <div className="flex gap-6 mb-8 text-[13px] border-b border-[#1a1a1a] animate-fade-in-up delay-500">
         {(["all", "critical", "high", "medium", "low"] as const).map((severity) => (
           <button
             key={severity}
             onClick={() => setSelectedSeverity(severity as Severity | "all")}
-            className={`uppercase tracking-wider ${
-              selectedSeverity === severity ? "text-white" : "text-[#f5f5f5] hover:text-[#fafafa]"
+            className={`uppercase tracking-wider pb-3 transition-all ${
+              selectedSeverity === severity
+                ? "text-white border-b-2 border-white"
+                : "text-[#f5f5f5] hover:text-[#fafafa] border-b-2 border-transparent"
             }`}
           >
             {severity}
@@ -222,7 +244,7 @@ export function ScanResults() {
         ))}
       </div>
 
-      <table className="w-full">
+      <table className="w-full animate-fade-in-up delay-600">
         <thead>
           <tr>
             <th className="w-24">Severity</th>

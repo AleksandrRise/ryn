@@ -20,14 +20,14 @@ export function Dashboard() {
 
   return (
     <div className="px-8 py-12">
-      <div className="mb-16">
+      <div className="mb-16 animate-fade-in-up">
         <h1 className="text-[72px] font-bold leading-none tracking-tighter mb-2">{complianceScore}% Compliant</h1>
         <p className="text-[14px] text-[#666]">28 violations found • Last scanned 2 minutes ago</p>
       </div>
 
       <div className="grid grid-cols-[1.5fr,1fr] gap-16">
         {/* Left column - Violations breakdown */}
-        <div>
+        <div className="animate-fade-in-left delay-200">
           <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Violations by Severity</h2>
 
           <div className="space-y-4">
@@ -55,7 +55,7 @@ export function Dashboard() {
         </div>
 
         {/* Right column - Recent activity */}
-        <div>
+        <div className="animate-fade-in-right delay-300">
           <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Recent Activity</h2>
 
           <div className="space-y-4">

@@ -81,25 +81,29 @@ export function Settings() {
 
   return (
     <div className="px-8 py-12 max-w-4xl">
-      <h1 className="text-[48px] font-bold leading-none tracking-tighter mb-16">Settings</h1>
+      <h1 className="text-[48px] font-bold leading-none tracking-tighter mb-16 animate-fade-in-up">Settings</h1>
 
       <div className="space-y-16">
         {/* Framework Detection */}
-        <section>
+        <section className="animate-fade-in-up delay-200">
           <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Framework</h2>
           <div className="space-y-6">
-            <label className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
+            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Auto-detect framework</p>
                 <p className="text-[12px] text-[#666]">Automatically identify your project framework</p>
               </div>
-              <input
-                type="checkbox"
-                checked={state.autoDetectFramework}
-                onChange={(e) => dispatch({ type: "SET_AUTO_DETECT_FRAMEWORK", payload: e.target.checked })}
-                className="w-5 h-5"
-              />
-            </label>
+              <button
+                onClick={() => dispatch({ type: "SET_AUTO_DETECT_FRAMEWORK", payload: !state.autoDetectFramework })}
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                  state.autoDetectFramework
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                }`}
+              >
+                {state.autoDetectFramework ? "ON" : "OFF"}
+              </button>
+            </div>
 
             {!state.autoDetectFramework && (
               <div className="py-4 border-b border-[#1a1a1a]">
@@ -123,53 +127,65 @@ export function Settings() {
         </section>
 
         {/* Trust Levels */}
-        <section>
+        <section className="animate-fade-in-up delay-300">
           <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Trust Levels</h2>
           <div className="space-y-6">
-            <label className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
+            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Auto-apply low risk fixes</p>
                 <p className="text-[12px] text-[#666]">Automatically apply fixes with minimal impact</p>
               </div>
-              <input
-                type="checkbox"
-                checked={state.autoApplyLow}
-                onChange={(e) => dispatch({ type: "SET_AUTO_APPLY_LOW", payload: e.target.checked })}
-                className="w-5 h-5"
-              />
-            </label>
+              <button
+                onClick={() => dispatch({ type: "SET_AUTO_APPLY_LOW", payload: !state.autoApplyLow })}
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                  state.autoApplyLow
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                }`}
+              >
+                {state.autoApplyLow ? "ON" : "OFF"}
+              </button>
+            </div>
 
-            <label className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
+            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Auto-apply medium risk fixes</p>
                 <p className="text-[12px] text-[#666]">Requires preview before applying</p>
               </div>
-              <input
-                type="checkbox"
-                checked={state.autoApplyMedium}
-                onChange={(e) => dispatch({ type: "SET_AUTO_APPLY_MEDIUM", payload: e.target.checked })}
-                className="w-5 h-5"
-              />
-            </label>
+              <button
+                onClick={() => dispatch({ type: "SET_AUTO_APPLY_MEDIUM", payload: !state.autoApplyMedium })}
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                  state.autoApplyMedium
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                }`}
+              >
+                {state.autoApplyMedium ? "ON" : "OFF"}
+              </button>
+            </div>
           </div>
         </section>
 
         {/* Scan Preferences */}
-        <section>
+        <section className="animate-fade-in-up delay-400">
           <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Scan Preferences</h2>
           <div className="space-y-6">
-            <label className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
+            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Enable continuous monitoring</p>
                 <p className="text-[12px] text-[#666]">Automatically scan files when they change</p>
               </div>
-              <input
-                type="checkbox"
-                checked={state.continuousMonitoring}
-                onChange={(e) => dispatch({ type: "SET_CONTINUOUS_MONITORING", payload: e.target.checked })}
-                className="w-5 h-5"
-              />
-            </label>
+              <button
+                onClick={() => dispatch({ type: "SET_CONTINUOUS_MONITORING", payload: !state.continuousMonitoring })}
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                  state.continuousMonitoring
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                }`}
+              >
+                {state.continuousMonitoring ? "ON" : "OFF"}
+              </button>
+            </div>
 
             <div className="py-4 border-b border-[#1a1a1a]">
               <label className="block mb-2 text-[14px]">Scan frequency</label>
@@ -189,7 +205,7 @@ export function Settings() {
         </section>
 
         {/* Database */}
-        <section>
+        <section className="animate-fade-in-up delay-500">
           <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Database</h2>
           <div className="space-y-6">
             <div className="py-4 border-b border-[#1a1a1a]">
@@ -227,34 +243,42 @@ export function Settings() {
         </section>
 
         {/* Notifications */}
-        <section>
+        <section className="animate-fade-in-up delay-600">
           <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Notifications</h2>
           <div className="space-y-6">
-            <label className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
+            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Desktop notifications</p>
                 <p className="text-[12px] text-[#666]">Show alerts for new violations and scan completion</p>
               </div>
-              <input
-                type="checkbox"
-                checked={state.desktopNotifications}
-                onChange={(e) => dispatch({ type: "SET_DESKTOP_NOTIFICATIONS", payload: e.target.checked })}
-                className="w-5 h-5"
-              />
-            </label>
+              <button
+                onClick={() => dispatch({ type: "SET_DESKTOP_NOTIFICATIONS", payload: !state.desktopNotifications })}
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                  state.desktopNotifications
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                }`}
+              >
+                {state.desktopNotifications ? "ON" : "OFF"}
+              </button>
+            </div>
 
-            <label className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
+            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Email alerts</p>
                 <p className="text-[12px] text-[#666]">Receive critical violation alerts via email</p>
               </div>
-              <input
-                type="checkbox"
-                checked={state.emailAlerts}
-                onChange={(e) => dispatch({ type: "SET_EMAIL_ALERTS", payload: e.target.checked })}
-                className="w-5 h-5"
-              />
-            </label>
+              <button
+                onClick={() => dispatch({ type: "SET_EMAIL_ALERTS", payload: !state.emailAlerts })}
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                  state.emailAlerts
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                }`}
+              >
+                {state.emailAlerts ? "ON" : "OFF"}
+              </button>
+            </div>
 
             <div className="py-4 border-b border-[#1a1a1a]">
               <label className="block mb-2 text-[14px]">Slack webhook URL</label>
@@ -271,7 +295,7 @@ export function Settings() {
         </section>
 
         {/* IDE Integration */}
-        <section>
+        <section className="animate-fade-in-up delay-700">
           <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">IDE Integration</h2>
           <div className="space-y-6">
             <div className="py-4 border-b border-[#1a1a1a]">

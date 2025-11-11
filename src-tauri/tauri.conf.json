@@ -30,7 +30,10 @@
           "windows": ["main"],
           "permissions": [
             "core:event:allow-listen",
-            "core:event:allow-emit"
+            "core:event:allow-emit",
+            "dialog:allow-open",
+            "dialog:allow-save",
+            "dialog:default"
           ]
         }
       ]
