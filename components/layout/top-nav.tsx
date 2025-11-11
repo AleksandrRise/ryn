@@ -31,7 +31,7 @@ export function TopNav() {
                   key={link.href}
                   href={link.href}
                   className={`text-[13px] ${
-                    isActive ? "text-white" : "text-[#666] hover:text-white"
+                    isActive ? "text-blue-400" : "text-[#e5e5e5] hover:text-white"
                   } transition-colors`}
                 >
                   {link.label}
@@ -42,9 +42,9 @@ export function TopNav() {
         </div>
 
         {/* Right side - project info */}
-        <div className="ml-auto flex items-center gap-4 text-[12px] text-[#666]">
+        <div className="ml-auto flex items-center gap-4 text-[12px] text-[#e5e5e5]">
           <span>~/my-project</span>
-          <span className="text-[#404040]">•</span>
+          <span className="text-[#b3b3b3]">•</span>
           <span>Django 4.2</span>
         </div>
       </div>

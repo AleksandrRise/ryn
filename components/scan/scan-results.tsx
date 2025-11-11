@@ -99,7 +99,7 @@ export function ScanResults() {
       case "medium":
         return "text-[#eab308]"
       case "low":
-        return "text-[#525252]"
+        return "text-[#e8e8e8]"
       default:
         return "text-white"
     }
@@ -109,7 +109,7 @@ export function ScanResults() {
     <div className="px-8 py-12">
       <div className="mb-12">
         <h1 className="text-[48px] font-bold leading-none tracking-tighter mb-3">Scan Configuration</h1>
-        <p className="text-[14px] text-[#666]">Configure and run compliance scans</p>
+        <p className="text-[14px] text-[#f0f0f0]">Configure and run compliance scans</p>
       </div>
 
       {/* Scan Configuration Panel */}
@@ -117,7 +117,7 @@ export function ScanResults() {
         <div className="grid grid-cols-2 gap-8 mb-8">
           {/* Left: Project Selection */}
           <div>
-            <h3 className="text-[13px] uppercase tracking-wider text-[#666] mb-4">Project Location</h3>
+            <h3 className="text-[13px] uppercase tracking-wider text-[#f0f0f0] mb-4">Project Location</h3>
             <div className="flex gap-4">
               <input
                 type="text"
@@ -137,7 +137,7 @@ export function ScanResults() {
 
           {/* Right: SOC 2 Controls */}
           <div>
-            <h3 className="text-[13px] uppercase tracking-wider text-[#666] mb-4">SOC 2 Controls</h3>
+            <h3 className="text-[13px] uppercase tracking-wider text-[#f0f0f0] mb-4">SOC 2 Controls</h3>
             <div className="grid grid-cols-2 gap-4">
               {Object.entries(selectedControls).map(([control, checked]) => (
                 <label key={control} className="flex items-center gap-3 cursor-pointer">
@@ -149,7 +149,7 @@ export function ScanResults() {
                   />
                   <div>
                     <p className="text-[13px] font-medium">{control}</p>
-                    <p className="text-[11px] text-[#666]">
+                    <p className="text-[11px] text-[#f0f0f0]">
                       {control === "CC6.1" && "Access Controls"}
                       {control === "CC6.7" && "Encryption & Secrets"}
                       {control === "CC7.2" && "Logging & Monitoring"}
@@ -166,7 +166,7 @@ export function ScanResults() {
         <button
           onClick={handleStartScan}
           disabled={isScanning}
-          className="px-8 py-3 bg-white text-black text-[13px] font-medium hover:bg-[#e5e5e5] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-8 py-3 bg-white text-black text-[13px] font-medium hover:bg-[#f0f0f0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isScanning ? "Scanning..." : "Start Scan"}
         </button>
@@ -177,7 +177,7 @@ export function ScanResults() {
         <div className="mb-12 p-8 border border-[#1a1a1a] bg-[#050505]">
           <div className="mb-4">
             <div className="flex items-baseline justify-between mb-2">
-              <h3 className="text-[13px] uppercase tracking-wider text-[#666]">Scanning...</h3>
+              <h3 className="text-[13px] uppercase tracking-wider text-[#f0f0f0]">Scanning...</h3>
               <span className="text-[24px] font-bold tabular-nums">{scanProgress.percentage}%</span>
             </div>
             <div className="h-1 bg-[#1a1a1a] overflow-hidden">
@@ -187,7 +187,7 @@ export function ScanResults() {
               />
             </div>
           </div>
-          <div className="flex justify-between text-[12px] text-[#666]">
+          <div className="flex justify-between text-[12px] text-[#f0f0f0]">
             <span className="font-mono">{scanProgress.currentFile || "Initializing scan..."}</span>
             <span>
               {scanProgress.filesScanned} / {scanProgress.totalFiles} files
@@ -199,7 +199,7 @@ export function ScanResults() {
       {/* Scan Results */}
       <div className="mb-12">
         <h2 className="text-[36px] font-bold leading-none tracking-tighter mb-3">Scan Results</h2>
-        <div className="flex gap-4 text-[13px] text-[#666]">
+        <div className="flex gap-4 text-[13px] text-[#fafafa]">
           <span>Completed 2 minutes ago</span>
           <span>•</span>
           <span>247 files scanned</span>
@@ -214,7 +214,7 @@ export function ScanResults() {
             key={severity}
             onClick={() => setSelectedSeverity(severity as Severity | "all")}
             className={`uppercase tracking-wider ${
-              selectedSeverity === severity ? "text-white" : "text-[#404040] hover:text-[#666]"
+              selectedSeverity === severity ? "text-white" : "text-[#f5f5f5] hover:text-[#fafafa]"
             }`}
           >
             {severity}
@@ -242,9 +242,9 @@ export function ScanResults() {
                   {violation.severity}
                 </span>
               </td>
-              <td className="text-[13px] text-[#666]">{violation.control}</td>
+              <td className="text-[13px] text-[#f0f0f0]">{violation.control}</td>
               <td className="text-[14px]">{violation.description}</td>
-              <td className="text-[12px] text-[#666] font-mono">
+              <td className="text-[12px] text-[#f0f0f0] font-mono">
                 {violation.file}:{violation.line}
               </td>
               <td className="text-right">
