@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { WaterBackground } from "@/components/ui/water-background"
+import { McpInit } from "@/components/mcp-init"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -18,6 +19,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={inter.className}>
+        <McpInit />
         <WaterBackground />
         <div className="fixed inset-0 bg-black/70 z-[5]" />
         <div className="relative z-10">{children}</div>
