@@ -34,7 +34,7 @@ export function AuditTrail() {
 
   return (
     <div className="px-8 py-12">
-      <div className="flex items-baseline justify-between mb-12 pb-8 border-b border-[#1a1a1a]">
+      <div className="flex items-baseline justify-between mb-12 pb-8 border-b border-[#1a1a1a] animate-fade-in-up">
         <div>
           <h1 className="text-[48px] font-bold leading-none tracking-tighter mb-3">Audit Trail</h1>
           <p className="text-[13px] text-[#aaaaaa]">Complete compliance activity log</p>
@@ -42,7 +42,7 @@ export function AuditTrail() {
         <button className="text-[13px] hover:underline">Export Report →</button>
       </div>
 
-      <table className="w-full">
+      <table className="w-full animate-fade-in-up delay-200">
         <thead>
           <tr>
             <th className="w-48">Timestamp</th>
