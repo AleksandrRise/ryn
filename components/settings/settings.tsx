@@ -86,12 +86,12 @@ export function Settings() {
       <div className="space-y-16">
         {/* Framework Detection */}
         <section className="animate-fade-in-up delay-200">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Framework</h2>
+          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Framework</h2>
           <div className="space-y-6">
             <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Auto-detect framework</p>
-                <p className="text-[12px] text-[#666]">Automatically identify your project framework</p>
+                <p className="text-[12px] text-[#aaaaaa]">Automatically identify your project framework</p>
               </div>
               <button
                 onClick={() => dispatch({ type: "SET_AUTO_DETECT_FRAMEWORK", payload: !state.autoDetectFramework })}
@@ -128,12 +128,12 @@ export function Settings() {
 
         {/* Trust Levels */}
         <section className="animate-fade-in-up delay-300">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Trust Levels</h2>
+          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Trust Levels</h2>
           <div className="space-y-6">
             <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Auto-apply low risk fixes</p>
-                <p className="text-[12px] text-[#666]">Automatically apply fixes with minimal impact</p>
+                <p className="text-[12px] text-[#aaaaaa]">Automatically apply fixes with minimal impact</p>
               </div>
               <button
                 onClick={() => dispatch({ type: "SET_AUTO_APPLY_LOW", payload: !state.autoApplyLow })}
@@ -150,7 +150,7 @@ export function Settings() {
             <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Auto-apply medium risk fixes</p>
-                <p className="text-[12px] text-[#666]">Requires preview before applying</p>
+                <p className="text-[12px] text-[#aaaaaa]">Requires preview before applying</p>
               </div>
               <button
                 onClick={() => dispatch({ type: "SET_AUTO_APPLY_MEDIUM", payload: !state.autoApplyMedium })}
@@ -168,12 +168,12 @@ export function Settings() {
 
         {/* Scan Preferences */}
         <section className="animate-fade-in-up delay-400">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Scan Preferences</h2>
+          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Scan Preferences</h2>
           <div className="space-y-6">
             <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Enable continuous monitoring</p>
-                <p className="text-[12px] text-[#666]">Automatically scan files when they change</p>
+                <p className="text-[12px] text-[#aaaaaa]">Automatically scan files when they change</p>
               </div>
               <button
                 onClick={() => dispatch({ type: "SET_CONTINUOUS_MONITORING", payload: !state.continuousMonitoring })}
@@ -199,14 +199,14 @@ export function Settings() {
                 <option value="weekly">Weekly</option>
                 <option value="manual">Manual only</option>
               </select>
-              <p className="text-[12px] text-[#666] mt-2">When to automatically run compliance scans</p>
+              <p className="text-[12px] text-[#aaaaaa] mt-2">When to automatically run compliance scans</p>
             </div>
           </div>
         </section>
 
         {/* Database */}
         <section className="animate-fade-in-up delay-500">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Database</h2>
+          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Database</h2>
           <div className="space-y-6">
             <div className="py-4 border-b border-[#1a1a1a]">
               <label className="block mb-2 text-[14px]">Database type</label>
@@ -231,12 +231,12 @@ export function Settings() {
                 placeholder="postgresql://user:password@localhost:5432/dbname"
                 className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] font-mono focus:outline-none focus:border-white"
               />
-              <p className="text-[12px] text-[#666] mt-2">Used for scanning database access patterns</p>
+              <p className="text-[12px] text-[#aaaaaa] mt-2">Used for scanning database access patterns</p>
             </div>
 
             <div className="space-y-4">
               <button className="text-[13px] hover:underline">Clear scan history</button>
-              <span className="text-[#404040] mx-2">•</span>
+              <span className="text-[#aaaaaa] mx-2">•</span>
               <button className="text-[13px] hover:underline">Export all data</button>
             </div>
           </div>
@@ -244,12 +244,12 @@ export function Settings() {
 
         {/* Notifications */}
         <section className="animate-fade-in-up delay-600">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">Notifications</h2>
+          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Notifications</h2>
           <div className="space-y-6">
             <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Desktop notifications</p>
-                <p className="text-[12px] text-[#666]">Show alerts for new violations and scan completion</p>
+                <p className="text-[12px] text-[#aaaaaa]">Show alerts for new violations and scan completion</p>
               </div>
               <button
                 onClick={() => dispatch({ type: "SET_DESKTOP_NOTIFICATIONS", payload: !state.desktopNotifications })}
@@ -266,7 +266,7 @@ export function Settings() {
             <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
                 <p className="text-[14px] mb-1">Email alerts</p>
-                <p className="text-[12px] text-[#666]">Receive critical violation alerts via email</p>
+                <p className="text-[12px] text-[#aaaaaa]">Receive critical violation alerts via email</p>
               </div>
               <button
                 onClick={() => dispatch({ type: "SET_EMAIL_ALERTS", payload: !state.emailAlerts })}
@@ -289,18 +289,18 @@ export function Settings() {
                 placeholder="https://hooks.slack.com/services/..."
                 className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] font-mono focus:outline-none focus:border-white"
               />
-              <p className="text-[12px] text-[#666] mt-2">Send compliance updates to Slack</p>
+              <p className="text-[12px] text-[#aaaaaa] mt-2">Send compliance updates to Slack</p>
             </div>
           </div>
         </section>
 
         {/* IDE Integration */}
         <section className="animate-fade-in-up delay-700">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#666] mb-6">IDE Integration</h2>
+          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">IDE Integration</h2>
           <div className="space-y-6">
             <div className="py-4 border-b border-[#1a1a1a]">
               <p className="text-[14px] mb-2">VS Code Extension</p>
-              <p className="text-[12px] text-[#666] mb-4">
+              <p className="text-[12px] text-[#aaaaaa] mb-4">
                 Get real-time compliance feedback as you code
               </p>
               <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-colors">
@@ -310,7 +310,7 @@ export function Settings() {
 
             <div className="py-4 border-b border-[#1a1a1a]">
               <p className="text-[14px] mb-2">JetBrains Plugin</p>
-              <p className="text-[12px] text-[#666] mb-4">
+              <p className="text-[12px] text-[#aaaaaa] mb-4">
                 Support for IntelliJ IDEA, PyCharm, WebStorm, and more
               </p>
               <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-colors">

@@ -64,7 +64,7 @@ const MemoizedDiffBlock = memo(function MemoizedDiffBlock({
     <div className="grid grid-cols-2 gap-4">
       <div className="border border-[#1a1a1a] overflow-hidden">
         <div className="bg-[#050505] px-4 py-2 border-b border-[#1a1a1a]">
-          <p className="text-[11px] uppercase tracking-wider text-[#666]">Before</p>
+          <p className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">Before</p>
         </div>
         <SyntaxHighlighter
           language={language}
@@ -160,7 +160,7 @@ def get_api_credentials():
           <div className="mb-12 pb-8 border-b border-[#1a1a1a]">
             <div className="flex items-baseline gap-4 mb-3">
               <span className="text-[11px] uppercase tracking-wider text-[#ef4444] font-medium">Critical</span>
-              <span className="text-[11px] uppercase tracking-wider text-[#404040]">{violation.control}</span>
+              <span className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">{violation.control}</span>
               <span
                 className={`text-[11px] uppercase tracking-wider px-2 py-1 ${getConfidenceBadge(violation.confidence)}`}
               >
@@ -168,7 +168,7 @@ def get_api_credentials():
               </span>
             </div>
             <h1 className="text-[42px] font-bold leading-tight tracking-tight mb-3">{violation.title}</h1>
-            <p className="text-[13px] text-[#666] font-mono">
+            <p className="text-[13px] text-[#aaaaaa] font-mono">
               {violation.file}:{violation.line}
             </p>
           </div>
@@ -177,13 +177,13 @@ def get_api_credentials():
           <div className="mb-6 flex gap-4 text-[12px]">
             <button
               onClick={() => setShowDiff(false)}
-              className={`uppercase tracking-wider ${!showDiff ? "text-white" : "text-[#404040] hover:text-[#666]"}`}
+              className={`uppercase tracking-wider ${!showDiff ? "text-white" : "text-[#aaaaaa] hover:text-[#aaaaaa]"}`}
             >
               Current
             </button>
             <button
               onClick={() => setShowDiff(true)}
-              className={`uppercase tracking-wider ${showDiff ? "text-white" : "text-[#404040] hover:text-[#666]"}`}
+              className={`uppercase tracking-wider ${showDiff ? "text-white" : "text-[#aaaaaa] hover:text-[#aaaaaa]"}`}
             >
               Proposed Fix
             </button>
@@ -205,7 +205,7 @@ def get_api_credentials():
           {/* Fix explanation */}
           {showDiff && (
             <div className="mb-8">
-              <h3 className="text-[11px] uppercase tracking-wider text-[#666] mb-3">Why This Fix Works</h3>
+              <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Why This Fix Works</h3>
               <p className="text-[14px] leading-relaxed">{violation.explanation}</p>
             </div>
           )}
@@ -229,30 +229,30 @@ def get_api_credentials():
           {/* SOC 2 Control Explanation */}
           <div className="mb-8 p-6 border border-[#1a1a1a] bg-[#050505]">
             <div className="flex items-baseline gap-2 mb-3">
-              <h3 className="text-[11px] uppercase tracking-wider text-[#666]">SOC 2 Control</h3>
+              <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">SOC 2 Control</h3>
               <span className="text-[11px] font-mono text-white">{violation.controlInfo.id}</span>
             </div>
             <h4 className="text-[14px] font-medium mb-2">{violation.controlInfo.name}</h4>
-            <p className="text-[12px] leading-relaxed text-[#a3a3a3] mb-4">{violation.controlInfo.description}</p>
+            <p className="text-[12px] leading-relaxed text-[#aaaaaa] mb-4">{violation.controlInfo.description}</p>
             <div className="pt-4 border-t border-[#1a1a1a]">
-              <p className="text-[11px] uppercase tracking-wider text-[#666] mb-2">Requirement</p>
-              <p className="text-[12px] text-[#a3a3a3]">{violation.controlInfo.requirement}</p>
+              <p className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-2">Requirement</p>
+              <p className="text-[12px] text-[#aaaaaa]">{violation.controlInfo.requirement}</p>
             </div>
           </div>
 
           <div className="mb-8">
-            <h3 className="text-[11px] uppercase tracking-wider text-[#666] mb-3">Why This Matters</h3>
-            <p className="text-[13px] leading-relaxed text-[#a3a3a3]">{violation.description}</p>
+            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Why This Matters</h3>
+            <p className="text-[13px] leading-relaxed text-[#aaaaaa]">{violation.description}</p>
           </div>
 
           <div className="mb-8">
-            <h3 className="text-[11px] uppercase tracking-wider text-[#666] mb-3">Trust Level</h3>
+            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Trust Level</h3>
             <p className="text-[13px]">Requires review before applying</p>
           </div>
 
           <div>
-            <h3 className="text-[11px] uppercase tracking-wider text-[#666] mb-3">Impact</h3>
-            <p className="text-[13px] text-[#a3a3a3]">
+            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Impact</h3>
+            <p className="text-[13px] text-[#aaaaaa]">
               High - Exposed credentials could lead to unauthorized system access
             </p>
           </div>
@@ -264,7 +264,7 @@ def get_api_credentials():
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-8 max-w-md">
             <h3 className="text-[24px] font-bold mb-4">Apply Fix?</h3>
-            <p className="text-[14px] text-[#a3a3a3] mb-6">
+            <p className="text-[14px] text-[#aaaaaa] mb-6">
               This will modify <span className="font-mono text-white">{violation.file}</span> and apply the proposed
               changes. You can review the changes before committing.
             </p>

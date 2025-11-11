@@ -90,7 +90,7 @@ export function WaterBackground({
 
           // Convert ripple effect to grayscale intensity
           const brightness = Math.floor(rippleEffect * intensity * 255)
-          const gray = Math.max(0, Math.min(255, 10 + brightness)) // Very dark gray base
+          const gray = Math.max(0, Math.min(255, 120 + brightness)) // Much brighter to show through 70% overlay
 
           // Fill cellSize x cellSize block
           for (let dy = 0; dy < cellSize && y + dy < canvas.height; dy++) {

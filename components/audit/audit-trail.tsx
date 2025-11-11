@@ -37,7 +37,7 @@ export function AuditTrail() {
       <div className="flex items-baseline justify-between mb-12 pb-8 border-b border-[#1a1a1a]">
         <div>
           <h1 className="text-[48px] font-bold leading-none tracking-tighter mb-3">Audit Trail</h1>
-          <p className="text-[13px] text-[#666]">Complete compliance activity log</p>
+          <p className="text-[13px] text-[#aaaaaa]">Complete compliance activity log</p>
         </div>
         <button className="text-[13px] hover:underline">Export Report →</button>
       </div>
@@ -54,10 +54,10 @@ export function AuditTrail() {
         <tbody>
           {events.map((event) => (
             <tr key={event.id} className="hover:bg-[#0a0a0a]">
-              <td className="text-[12px] font-mono text-[#666]">{event.timestamp}</td>
-              <td className="text-[12px] uppercase tracking-wider text-[#666]">{event.type}</td>
+              <td className="text-[12px] font-mono text-[#aaaaaa]">{event.timestamp}</td>
+              <td className="text-[12px] uppercase tracking-wider text-[#aaaaaa]">{event.type}</td>
               <td className="text-[14px]">{event.description}</td>
-              <td className="text-[13px] text-[#666]">{event.details}</td>
+              <td className="text-[13px] text-[#aaaaaa]">{event.details}</td>
             </tr>
           ))}
         </tbody>
