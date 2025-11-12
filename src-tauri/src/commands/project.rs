@@ -121,13 +121,8 @@ fn create_audit_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
-
-    fn setup_test_env() -> TempDir {
-        let temp_dir = TempDir::new().unwrap();
-        std::env::set_var("RYN_DATA_DIR", temp_dir.path());
-        temp_dir
-    }
+    use crate::db::test_helpers::TestDbGuard;
+    use std::path::Path;
 
     #[tokio::test]
     async fn test_select_project_folder_returns_path() {
@@ -137,9 +132,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_create_project_success() {
-        let _temp_dir = setup_test_env();
-        let project_dir = TempDir::new().unwrap();
+        let _guard = TestDbGuard::new();
+        let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
         let result = create_project(path.clone(), None, None).await;
@@ -152,9 +148,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_create_project_with_custom_name() {
-        let _temp_dir = setup_test_env();
-        let project_dir = TempDir::new().unwrap();
+        let _guard = TestDbGuard::new();
+        let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
         let result = create_project(path, Some("my-app".to_string()), None).await;
@@ -165,9 +162,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_create_project_with_framework() {
-        let _temp_dir = setup_test_env();
-        let project_dir = TempDir::new().unwrap();
+        let _guard = TestDbGuard::new();
+        let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
         let result = create_project(path, None, Some("Django".to_string())).await;
@@ -178,17 +176,19 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_create_project_invalid_path() {
-        let _temp_dir = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = create_project("/nonexistent/path".to_string(), None, None).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("does not exist"));
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_create_project_extracts_name_from_path() {
-        let _temp_dir = setup_test_env();
-        let project_dir = TempDir::new().unwrap();
+        let _guard = TestDbGuard::new();
+        let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
         let result = create_project(path.clone(), None, None).await;
@@ -204,25 +204,27 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_projects_empty() {
-        let _temp_dir = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = get_projects().await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0);
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_projects_multiple() {
-        let _temp_dir = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         // Create first project
-        let project_dir_1 = TempDir::new().unwrap();
+        let project_dir_1 = tempfile::TempDir::new().unwrap();
         let path_1 = project_dir_1.path().to_string_lossy().to_string();
         let result_1 = create_project(path_1, Some("project-1".to_string()), None).await;
         assert!(result_1.is_ok());
 
         // Create second project
-        let project_dir_2 = TempDir::new().unwrap();
+        let project_dir_2 = tempfile::TempDir::new().unwrap();
         let path_2 = project_dir_2.path().to_string_lossy().to_string();
         let result_2 = create_project(path_2, Some("project-2".to_string()), None).await;
         assert!(result_2.is_ok());
@@ -238,12 +240,13 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_projects_ordered_by_creation() {
-        let _temp_dir = setup_test_env();
+        let _guard = TestDbGuard::new();
 
-        let dirs: Vec<TempDir> = (0..3)
+        let dirs: Vec<tempfile::TempDir> = (0..3)
             .map(|i| {
-                let dir = TempDir::new().unwrap();
+                let dir = tempfile::TempDir::new().unwrap();
                 let path = dir.path().to_string_lossy().to_string();
                 let _ = create_project(path, Some(format!("project-{}", i)), None);
                 std::thread::sleep(std::time::Duration::from_millis(10));
@@ -265,12 +268,13 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_create_multiple_projects_different_frameworks() {
-        let _temp_dir = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         let frameworks = vec!["Django", "Express", "Flask"];
         for (i, fw) in frameworks.iter().enumerate() {
-            let dir = TempDir::new().unwrap();
+            let dir = tempfile::TempDir::new().unwrap();
             let path = dir.path().to_string_lossy().to_string();
             let result = create_project(
                 path,
@@ -288,9 +292,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_project_timestamps_set() {
-        let _temp_dir = setup_test_env();
-        let project_dir = TempDir::new().unwrap();
+        let _guard = TestDbGuard::new();
+        let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
         let result = create_project(path, None, None).await;
@@ -302,11 +307,12 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_create_project_idempotent_names() {
-        let _temp_dir = setup_test_env();
+        let _guard = TestDbGuard::new();
 
-        let dir1 = TempDir::new().unwrap();
-        let dir2 = TempDir::new().unwrap();
+        let dir1 = tempfile::TempDir::new().unwrap();
+        let dir2 = tempfile::TempDir::new().unwrap();
 
         let path1 = dir1.path().to_string_lossy().to_string();
         let path2 = dir2.path().to_string_lossy().to_string();
@@ -326,10 +332,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_projects_after_create() {
-        let _temp_dir = setup_test_env();
+        let _guard = TestDbGuard::new();
 
-        let dir = TempDir::new().unwrap();
+        let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().to_string_lossy().to_string();
         let created = create_project(path, Some("test-project".to_string()), None).await;
         assert!(created.is_ok());
@@ -343,9 +350,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_create_project_path_normalized() {
-        let _temp_dir = setup_test_env();
-        let dir = TempDir::new().unwrap();
+        let _guard = TestDbGuard::new();
+        let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().to_string_lossy().to_string();
 
         let result = create_project(path.clone(), None, None).await;

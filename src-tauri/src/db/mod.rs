@@ -5,6 +5,9 @@ use anyhow::{Result, Context};
 pub mod migrations;
 pub mod queries;
 
+#[cfg(test)]
+pub mod test_helpers;
+
 pub use migrations::{run_migrations, seed_controls};
 pub use queries::*;
 

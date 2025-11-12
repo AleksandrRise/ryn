@@ -1,0 +1,6 @@
+[build]
+rustflags = []
+
+[test]
+# Run tests sequentially to prevent database race conditions
+# Each test needs isolated database access

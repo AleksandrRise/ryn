@@ -307,7 +307,7 @@ mod tests {
     async fn test_get_audit_events_no_match_filters() {
         let _temp_env = setup_test_env();
 
-        let _e1 = create_test_audit_event("project_created", Some(1));
+        let _e1 = create_test_audit_event("scan", Some(1));
 
         let filters = AuditFilters {
             event_type: Some(vec!["nonexistent_event".to_string()]),
@@ -326,14 +326,14 @@ mod tests {
     async fn test_get_audit_events_filter_multiple_event_types() {
         let _temp_env = setup_test_env();
 
-        let _e1 = create_test_audit_event("project_created", Some(1));
-        let _e2 = create_test_audit_event("scan_completed", Some(1));
-        let _e3 = create_test_audit_event("violation_dismissed", Some(1));
+        let _e1 = create_test_audit_event("scan", Some(1));
+        let _e2 = create_test_audit_event("violation", Some(1));
+        let _e3 = create_test_audit_event("fix", Some(1));
 
         let filters = AuditFilters {
             event_type: Some(vec![
-                "project_created".to_string(),
-                "scan_completed".to_string(),
+                "scan".to_string(),
+                "violation".to_string(),
             ]),
             project_id: None,
             start_date: None,
