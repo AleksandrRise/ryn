@@ -30,10 +30,21 @@ fn main() {
     #[cfg(debug_assertions)]
     {
         println!("[ryn] Development build detected, enabling MCP plugin");
+
+        // Clean up stale socket file if it exists
+        let socket_path = "/tmp/tauri-mcp.sock";
+        if std::path::Path::new(socket_path).exists() {
+            if let Err(e) = std::fs::remove_file(socket_path) {
+                eprintln!("[ryn] Warning: Failed to remove stale socket file: {}", e);
+            } else {
+                println!("[ryn] Cleaned up stale socket file");
+            }
+        }
+
         builder = builder.plugin(tauri_plugin_mcp::init_with_config(
             tauri_plugin_mcp::PluginConfig::new("ryn".to_string())
                 .start_socket_server(true)
-                .socket_path("/tmp/tauri-mcp.sock".into())
+                .socket_path(socket_path.into())
         ));
     }
 
