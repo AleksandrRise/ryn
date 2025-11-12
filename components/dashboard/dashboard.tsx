@@ -1,8 +1,8 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Play, FileSearch, Shield, AlertTriangle } from "lucide-react"
 
 export function Dashboard() {
   const complianceScore = 73
@@ -13,6 +13,21 @@ export function Dashboard() {
     low: 12,
   }
   const totalViolations = violations.critical + violations.high + violations.medium + violations.low
+
+  // Track mouse position for each card
+  const [mousePos, setMousePos] = useState<{ [key: string]: { x: number; y: number } }>({
+    critical: { x: 50, y: 50 },
+    high: { x: 50, y: 50 },
+    medium: { x: 50, y: 50 },
+    low: { x: 50, y: 50 },
+  })
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLAnchorElement>, card: string) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = ((e.clientX - rect.left) / rect.width) * 100
+    const y = ((e.clientY - rect.top) / rect.height) * 100
+    setMousePos(prev => ({ ...prev, [card]: { x, y } }))
+  }
 
   const recentActivity = [
     { type: "scan", message: "Completed full scan", time: "2 minutes ago" },
@@ -40,11 +55,11 @@ export function Dashboard() {
           </div>
           <div className="flex gap-3">
             <Button size="lg" className="gap-2">
-              <Play className="w-4 h-4" />
+              <i className="las la-play text-base"></i>
               Run Scan
             </Button>
             <Button size="lg" variant="outline" className="gap-2">
-              <FileSearch className="w-4 h-4" />
+              <i className="las la-search text-base"></i>
               View Report
             </Button>
           </div>
@@ -57,7 +72,18 @@ export function Dashboard() {
             style={{ width: `${complianceScore}%` }}
           />
         </div>
-        <p className="text-sm text-white/40 mt-3">{totalViolations} violations found • Last scanned 2 minutes ago</p>
+
+        {/* Stats Pills */}
+        <div className="flex items-center gap-3 mt-4">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+            <span className="text-sm font-medium text-white/70">{totalViolations} violations</span>
+          </div>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
+            <i className="las la-clock text-sm text-white/50"></i>
+            <span className="text-sm font-medium text-white/50">2m ago</span>
+          </div>
+        </div>
       </div>
 
       {/* Main Grid Layout - Bento Box Style */}
@@ -67,106 +93,145 @@ export function Dashboard() {
         <div className="col-span-8 grid grid-cols-2 gap-5 animate-fade-in-left delay-100">
 
           {/* Critical Violations */}
-          <Link href="/scan?severity=critical" className="group relative overflow-hidden bg-gradient-to-br from-red-500/10 to-transparent border border-red-500/30 rounded-3xl p-8 hover:border-red-500/60 transition-all duration-500 cursor-pointer hover:shadow-[0_0_30px_rgba(239,68,68,0.15)]">
-            {/* Gradient overlay on hover */}
-            <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <Link
+            href="/scan?severity=critical"
+            className="group relative overflow-hidden bg-gradient-to-br from-red-500/10 to-transparent border border-red-500/30 rounded-3xl p-8 hover:border-red-500/60 transition-all duration-500 cursor-pointer hover:shadow-[0_0_30px_rgba(239,68,68,0.15)]"
+            onMouseMove={(e) => handleMouseMove(e, 'critical')}
+          >
+            {/* Cursor-following radial glow */}
+            <div
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+              style={{
+                background: `radial-gradient(1600px circle at ${mousePos.critical.x}% ${mousePos.critical.y}%, rgba(239, 68, 68, 0.25), transparent 50%)`
+              }}
+            />
 
             <div className="relative">
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-8">
                 <div className="p-2.5 bg-red-500/15 rounded-xl group-hover:bg-red-500/25 transition-colors duration-300">
-                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                  <i className="las la-exclamation-triangle text-xl text-red-400"></i>
                 </div>
-                <span className="text-[11px] font-bold text-red-400/80 uppercase tracking-[0.15em]">Critical</span>
+                <span className="text-xs font-semibold text-red-400 uppercase tracking-widest">Critical</span>
               </div>
 
-              <div className="mb-4">
-                <div className="text-6xl font-bold text-red-400 tabular-nums leading-none mb-3 group-hover:scale-105 transition-transform duration-300">
+              <div className="mb-6">
+                <div className="text-7xl font-extrabold text-red-400 tabular-nums leading-none mb-4 tracking-tighter">
                   {violations.critical}
                 </div>
-                <p className="text-sm text-white/50 leading-relaxed">Immediate action required</p>
+                <p className="text-base font-medium text-white/60 leading-relaxed tracking-wide">Immediate action required</p>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-red-400/60 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-red-400/70 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
                 <span>View details</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <i className="las la-arrow-right text-base"></i>
               </div>
             </div>
           </Link>
 
           {/* High Violations */}
-          <Link href="/scan?severity=high" className="group relative overflow-hidden bg-gradient-to-br from-orange-500/10 to-transparent border border-orange-500/30 rounded-3xl p-8 hover:border-orange-500/60 transition-all duration-500 cursor-pointer hover:shadow-[0_0_30px_rgba(249,115,22,0.15)]">
-            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <Link
+            href="/scan?severity=high"
+            className="group relative overflow-hidden bg-gradient-to-br from-orange-500/10 to-transparent border border-orange-500/30 rounded-3xl p-8 hover:border-orange-500/60 transition-all duration-500 cursor-pointer hover:shadow-[0_0_30px_rgba(249,115,22,0.15)]"
+            onMouseMove={(e) => handleMouseMove(e, 'high')}
+          >
+            {/* Cursor-following radial glow */}
+            <div
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+              style={{
+                background: `radial-gradient(1600px circle at ${mousePos.high.x}% ${mousePos.high.y}%, rgba(249, 115, 22, 0.25), transparent 50%)`
+              }}
+            />
 
             <div className="relative">
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-8">
                 <div className="p-2.5 bg-orange-500/15 rounded-xl group-hover:bg-orange-500/25 transition-colors duration-300">
-                  <Shield className="w-5 h-5 text-orange-400" />
+                  <i className="las la-shield-alt text-xl text-orange-400"></i>
                 </div>
-                <span className="text-[11px] font-bold text-orange-400/80 uppercase tracking-[0.15em]">High</span>
+                <span className="text-xs font-semibold text-orange-400 uppercase tracking-widest">High</span>
               </div>
 
-              <div className="mb-4">
-                <div className="text-6xl font-bold text-orange-400 tabular-nums leading-none mb-3 group-hover:scale-105 transition-transform duration-300">
+              <div className="mb-6">
+                <div className="text-7xl font-extrabold text-orange-400 tabular-nums leading-none mb-4 tracking-tighter">
                   {violations.high}
                 </div>
-                <p className="text-sm text-white/50 leading-relaxed">Fix within 24 hours</p>
+                <p className="text-base font-medium text-white/60 leading-relaxed tracking-wide">Fix within 24 hours</p>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-orange-400/60 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-orange-400/70 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
                 <span>View details</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <i className="las la-arrow-right text-base"></i>
               </div>
             </div>
           </Link>
 
           {/* Medium Violations */}
-          <Link href="/scan?severity=medium" className="group relative overflow-hidden bg-gradient-to-br from-yellow-500/10 to-transparent border border-yellow-500/30 rounded-3xl p-8 hover:border-yellow-500/60 transition-all duration-500 cursor-pointer hover:shadow-[0_0_30px_rgba(234,179,8,0.15)]">
-            <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <Link
+            href="/scan?severity=medium"
+            className="group relative overflow-hidden bg-gradient-to-br from-yellow-500/10 to-transparent border border-yellow-500/30 rounded-3xl p-8 hover:border-yellow-500/60 transition-all duration-500 cursor-pointer hover:shadow-[0_0_30px_rgba(234,179,8,0.15)]"
+            onMouseMove={(e) => handleMouseMove(e, 'medium')}
+          >
+            {/* Cursor-following radial glow */}
+            <div
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+              style={{
+                background: `radial-gradient(1600px circle at ${mousePos.medium.x}% ${mousePos.medium.y}%, rgba(234, 179, 8, 0.25), transparent 50%)`
+              }}
+            />
 
             <div className="relative">
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-8">
                 <div className="p-2.5 bg-yellow-500/15 rounded-xl group-hover:bg-yellow-500/25 transition-colors duration-300">
-                  <FileSearch className="w-5 h-5 text-yellow-400" />
+                  <i className="las la-file-alt text-xl text-yellow-400"></i>
                 </div>
-                <span className="text-[11px] font-bold text-yellow-400/80 uppercase tracking-[0.15em]">Medium</span>
+                <span className="text-xs font-semibold text-yellow-400 uppercase tracking-widest">Medium</span>
               </div>
 
-              <div className="mb-4">
-                <div className="text-6xl font-bold text-yellow-400 tabular-nums leading-none mb-3 group-hover:scale-105 transition-transform duration-300">
+              <div className="mb-6">
+                <div className="text-7xl font-extrabold text-yellow-400 tabular-nums leading-none mb-4 tracking-tighter">
                   {violations.medium}
                 </div>
-                <p className="text-sm text-white/50 leading-relaxed">Fix within 7 days</p>
+                <p className="text-base font-medium text-white/60 leading-relaxed tracking-wide">Fix within 7 days</p>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-yellow-400/60 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-yellow-400/70 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
                 <span>View details</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <i className="las la-arrow-right text-base"></i>
               </div>
             </div>
           </Link>
 
           {/* Low Violations */}
-          <Link href="/scan?severity=low" className="group relative overflow-hidden bg-gradient-to-br from-gray-500/10 to-transparent border border-white/10 rounded-3xl p-8 hover:border-white/20 transition-all duration-500 cursor-pointer hover:shadow-[0_0_30px_rgba(255,255,255,0.08)]">
-            <div className="absolute inset-0 bg-gradient-to-br from-white/3 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <Link
+            href="/scan?severity=low"
+            className="group relative overflow-hidden bg-gradient-to-br from-gray-500/10 to-transparent border border-white/10 rounded-3xl p-8 hover:border-white/20 transition-all duration-500 cursor-pointer hover:shadow-[0_0_30px_rgba(255,255,255,0.08)]"
+            onMouseMove={(e) => handleMouseMove(e, 'low')}
+          >
+            {/* Cursor-following radial glow */}
+            <div
+              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+              style={{
+                background: `radial-gradient(1600px circle at ${mousePos.low.x}% ${mousePos.low.y}%, rgba(255, 255, 255, 0.15), transparent 50%)`
+              }}
+            />
 
             <div className="relative">
-              <div className="flex items-center gap-3 mb-6">
+              <div className="flex items-center gap-3 mb-8">
                 <div className="p-2.5 bg-white/5 rounded-xl group-hover:bg-white/10 transition-colors duration-300">
-                  <Shield className="w-5 h-5 text-white/60" />
+                  <i className="las la-shield-alt text-xl text-white/60"></i>
                 </div>
-                <span className="text-[11px] font-bold text-white/40 uppercase tracking-[0.15em]">Low</span>
+                <span className="text-xs font-semibold text-white/50 uppercase tracking-widest">Low</span>
               </div>
 
-              <div className="mb-4">
-                <div className="text-6xl font-bold text-white/60 tabular-nums leading-none mb-3 group-hover:scale-105 transition-transform duration-300">
+              <div className="mb-6">
+                <div className="text-7xl font-extrabold text-white/60 tabular-nums leading-none mb-4 tracking-tighter">
                   {violations.low}
                 </div>
-                <p className="text-sm text-white/40 leading-relaxed">Address when possible</p>
+                <p className="text-base font-medium text-white/50 leading-relaxed tracking-wide">Address when possible</p>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-white/40 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
+              <div className="flex items-center gap-2 text-sm font-medium text-white/50 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
                 <span>View details</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <i className="las la-arrow-right text-base"></i>
               </div>
             </div>
           </Link>
@@ -227,18 +292,19 @@ export function Dashboard() {
       </div>
 
       {/* Action Footer */}
-      <div className="mt-8 flex items-center justify-between p-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl animate-fade-in-up delay-300">
+      <Link
+        href="/scan"
+        className="mt-8 flex items-center justify-between p-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl animate-fade-in-up delay-300 hover:bg-white/10 hover:border-white/20 transition-all duration-300 cursor-pointer group"
+      >
         <div>
-          <p className="font-semibold mb-1">Need help fixing violations?</p>
-          <p className="text-sm text-white/60">AI-powered fixes available for {violations.critical + violations.high} high-priority issues</p>
+          <p className="font-semibold mb-1 group-hover:text-white transition-colors">Need help fixing violations?</p>
+          <p className="text-sm text-white/60 group-hover:text-white/80 transition-colors">AI-powered fixes available for {violations.critical + violations.high} high-priority issues</p>
         </div>
-        <Link href="/scan">
-          <Button size="lg" className="gap-2">
-            View All Violations
-            <ArrowRight className="w-4 h-4" />
-          </Button>
-        </Link>
-      </div>
+        <div className="flex items-center gap-2 text-sm font-medium group-hover:translate-x-1 transition-transform">
+          <span>View All Violations</span>
+          <i className="las la-arrow-right text-base"></i>
+        </div>
+      </Link>
     </div>
   )
 }
