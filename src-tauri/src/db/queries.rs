@@ -1,0 +1,620 @@
+use rusqlite::{Connection, params, OptionalExtension};
+use anyhow::{Result, Context};
+use crate::models::*;
+
+// ===== PROJECT CRUD =====
+
+pub fn insert_project(conn: &Connection, name: &str, path: &str, framework: Option<&str>) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO projects (name, path, framework) VALUES (?, ?, ?)",
+        params![name, path, framework],
+    ).context("Failed to insert project")?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn select_projects(conn: &Connection) -> Result<Vec<Project>> {
+    let mut stmt = conn
+        .prepare("SELECT id, name, path, framework, created_at, updated_at FROM projects ORDER BY created_at DESC")
+        .context("Failed to prepare select projects query")?;
+
+    let projects = stmt
+        .query_map([], |row| {
+            Ok(Project {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                path: row.get(2)?,
+                framework: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })
+        .context("Failed to map projects from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect projects")?;
+
+    Ok(projects)
+}
+
+pub fn select_project(conn: &Connection, id: i64) -> Result<Option<Project>> {
+    let mut stmt = conn
+        .prepare("SELECT id, name, path, framework, created_at, updated_at FROM projects WHERE id = ?")
+        .context("Failed to prepare select project query")?;
+
+    let project = stmt
+        .query_row(params![id], |row| {
+            Ok(Project {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                path: row.get(2)?,
+                framework: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })
+        .optional()
+        .context("Failed to query project")?;
+
+    Ok(project)
+}
+
+pub fn update_project(conn: &Connection, id: i64, name: &str, framework: Option<&str>) -> Result<()> {
+    let updated_at = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE projects SET name = ?, framework = ?, updated_at = ? WHERE id = ?",
+        params![name, framework, updated_at, id],
+    ).context("Failed to update project")?;
+
+    Ok(())
+}
+
+pub fn delete_project(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute(
+        "DELETE FROM projects WHERE id = ?",
+        params![id],
+    ).context("Failed to delete project")?;
+
+    Ok(())
+}
+
+// ===== SCAN CRUD =====
+
+pub fn insert_scan(conn: &Connection, project_id: i64) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO scans (project_id, status) VALUES (?, ?)",
+        params![project_id, "running"],
+    ).context("Failed to insert scan")?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn select_scans(conn: &Connection, project_id: i64) -> Result<Vec<Scan>> {
+    let mut stmt = conn
+        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, violations_found, status FROM scans WHERE project_id = ? ORDER BY started_at DESC")
+        .context("Failed to prepare select scans query")?;
+
+    let scans = stmt
+        .query_map(params![project_id], |row| {
+            Ok(Scan {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                started_at: row.get(2)?,
+                completed_at: row.get(3)?,
+                files_scanned: row.get(4)?,
+                violations_found: row.get(5)?,
+                status: row.get(6)?,
+            })
+        })
+        .context("Failed to map scans from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect scans")?;
+
+    Ok(scans)
+}
+
+pub fn select_scan(conn: &Connection, id: i64) -> Result<Option<Scan>> {
+    let mut stmt = conn
+        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, violations_found, status FROM scans WHERE id = ?")
+        .context("Failed to prepare select scan query")?;
+
+    let scan = stmt
+        .query_row(params![id], |row| {
+            Ok(Scan {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                started_at: row.get(2)?,
+                completed_at: row.get(3)?,
+                files_scanned: row.get(4)?,
+                violations_found: row.get(5)?,
+                status: row.get(6)?,
+            })
+        })
+        .optional()
+        .context("Failed to query scan")?;
+
+    Ok(scan)
+}
+
+pub fn update_scan_status(conn: &Connection, id: i64, status: &str, completed_at: Option<&str>) -> Result<()> {
+    conn.execute(
+        "UPDATE scans SET status = ?, completed_at = ? WHERE id = ?",
+        params![status, completed_at, id],
+    ).context("Failed to update scan status")?;
+
+    Ok(())
+}
+
+pub fn update_scan_results(conn: &Connection, id: i64, files_scanned: i32, violations_found: i32) -> Result<()> {
+    conn.execute(
+        "UPDATE scans SET files_scanned = ?, violations_found = ? WHERE id = ?",
+        params![files_scanned, violations_found, id],
+    ).context("Failed to update scan results")?;
+
+    Ok(())
+}
+
+// ===== VIOLATION CRUD =====
+
+pub fn insert_violation(conn: &Connection, violation: &Violation) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO violations (scan_id, control_id, severity, description, file_path, line_number, code_snippet, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        params![
+            violation.scan_id,
+            violation.control_id,
+            violation.severity,
+            violation.description,
+            violation.file_path,
+            violation.line_number,
+            violation.code_snippet,
+            violation.status,
+        ],
+    ).context("Failed to insert violation")?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn select_violations(conn: &Connection, scan_id: i64) -> Result<Vec<Violation>> {
+    let mut stmt = conn
+        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at FROM violations WHERE scan_id = ? ORDER BY severity DESC, line_number ASC")
+        .context("Failed to prepare select violations query")?;
+
+    let violations = stmt
+        .query_map(params![scan_id], |row| {
+            Ok(Violation {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                control_id: row.get(2)?,
+                severity: row.get(3)?,
+                description: row.get(4)?,
+                file_path: row.get(5)?,
+                line_number: row.get(6)?,
+                code_snippet: row.get(7)?,
+                status: row.get(8)?,
+                detected_at: row.get(9)?,
+            })
+        })
+        .context("Failed to map violations from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect violations")?;
+
+    Ok(violations)
+}
+
+pub fn select_violation(conn: &Connection, id: i64) -> Result<Option<Violation>> {
+    let mut stmt = conn
+        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at FROM violations WHERE id = ?")
+        .context("Failed to prepare select violation query")?;
+
+    let violation = stmt
+        .query_row(params![id], |row| {
+            Ok(Violation {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                control_id: row.get(2)?,
+                severity: row.get(3)?,
+                description: row.get(4)?,
+                file_path: row.get(5)?,
+                line_number: row.get(6)?,
+                code_snippet: row.get(7)?,
+                status: row.get(8)?,
+                detected_at: row.get(9)?,
+            })
+        })
+        .optional()
+        .context("Failed to query violation")?;
+
+    Ok(violation)
+}
+
+pub fn update_violation_status(conn: &Connection, id: i64, status: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE violations SET status = ? WHERE id = ?",
+        params![status, id],
+    ).context("Failed to update violation status")?;
+
+    Ok(())
+}
+
+// ===== FIX CRUD =====
+
+pub fn insert_fix(conn: &Connection, fix: &Fix) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO fixes (violation_id, original_code, fixed_code, explanation, trust_level, applied_by) VALUES (?, ?, ?, ?, ?, ?)",
+        params![
+            fix.violation_id,
+            fix.original_code,
+            fix.fixed_code,
+            fix.explanation,
+            fix.trust_level,
+            fix.applied_by,
+        ],
+    ).context("Failed to insert fix")?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn select_fix(conn: &Connection, id: i64) -> Result<Option<Fix>> {
+    let mut stmt = conn
+        .prepare("SELECT id, violation_id, original_code, fixed_code, explanation, trust_level, applied_at, applied_by, git_commit_sha FROM fixes WHERE id = ?")
+        .context("Failed to prepare select fix query")?;
+
+    let fix = stmt
+        .query_row(params![id], |row| {
+            Ok(Fix {
+                id: row.get(0)?,
+                violation_id: row.get(1)?,
+                original_code: row.get(2)?,
+                fixed_code: row.get(3)?,
+                explanation: row.get(4)?,
+                trust_level: row.get(5)?,
+                applied_at: row.get(6)?,
+                applied_by: row.get(7)?,
+                git_commit_sha: row.get(8)?,
+            })
+        })
+        .optional()
+        .context("Failed to query fix")?;
+
+    Ok(fix)
+}
+
+pub fn select_fix_for_violation(conn: &Connection, violation_id: i64) -> Result<Option<Fix>> {
+    let mut stmt = conn
+        .prepare("SELECT id, violation_id, original_code, fixed_code, explanation, trust_level, applied_at, applied_by, git_commit_sha FROM fixes WHERE violation_id = ? LIMIT 1")
+        .context("Failed to prepare select fix query")?;
+
+    let fix = stmt
+        .query_row(params![violation_id], |row| {
+            Ok(Fix {
+                id: row.get(0)?,
+                violation_id: row.get(1)?,
+                original_code: row.get(2)?,
+                fixed_code: row.get(3)?,
+                explanation: row.get(4)?,
+                trust_level: row.get(5)?,
+                applied_at: row.get(6)?,
+                applied_by: row.get(7)?,
+                git_commit_sha: row.get(8)?,
+            })
+        })
+        .optional()
+        .context("Failed to query fix")?;
+
+    Ok(fix)
+}
+
+pub fn update_fix_applied(conn: &Connection, id: i64, git_commit_sha: &str) -> Result<()> {
+    let applied_at = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE fixes SET applied_at = ?, git_commit_sha = ? WHERE id = ?",
+        params![applied_at, git_commit_sha, id],
+    ).context("Failed to update fix applied")?;
+
+    Ok(())
+}
+
+// ===== AUDIT EVENT CRUD =====
+
+pub fn insert_audit_event(conn: &Connection, event: &AuditEvent) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO audit_events (event_type, project_id, violation_id, fix_id, description, metadata) VALUES (?, ?, ?, ?, ?, ?)",
+        params![
+            event.event_type,
+            event.project_id,
+            event.violation_id,
+            event.fix_id,
+            event.description,
+            event.metadata,
+        ],
+    ).context("Failed to insert audit event")?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn select_audit_events(conn: &Connection, limit: i64) -> Result<Vec<AuditEvent>> {
+    let mut stmt = conn
+        .prepare("SELECT id, event_type, project_id, violation_id, fix_id, description, metadata, created_at FROM audit_events ORDER BY created_at DESC LIMIT ?")
+        .context("Failed to prepare select audit events query")?;
+
+    let events = stmt
+        .query_map(params![limit], |row| {
+            Ok(AuditEvent {
+                id: row.get(0)?,
+                event_type: row.get(1)?,
+                project_id: row.get(2)?,
+                violation_id: row.get(3)?,
+                fix_id: row.get(4)?,
+                description: row.get(5)?,
+                metadata: row.get(6)?,
+                created_at: row.get(7)?,
+            })
+        })
+        .context("Failed to map audit events from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect audit events")?;
+
+    Ok(events)
+}
+
+pub fn select_audit_events_by_project(conn: &Connection, project_id: i64) -> Result<Vec<AuditEvent>> {
+    let mut stmt = conn
+        .prepare("SELECT id, event_type, project_id, violation_id, fix_id, description, metadata, created_at FROM audit_events WHERE project_id = ? ORDER BY created_at DESC")
+        .context("Failed to prepare select audit events query")?;
+
+    let events = stmt
+        .query_map(params![project_id], |row| {
+            Ok(AuditEvent {
+                id: row.get(0)?,
+                event_type: row.get(1)?,
+                project_id: row.get(2)?,
+                violation_id: row.get(3)?,
+                fix_id: row.get(4)?,
+                description: row.get(5)?,
+                metadata: row.get(6)?,
+                created_at: row.get(7)?,
+            })
+        })
+        .context("Failed to map audit events from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect audit events")?;
+
+    Ok(events)
+}
+
+// ===== CONTROL QUERIES =====
+
+pub fn select_controls(conn: &Connection) -> Result<Vec<Control>> {
+    let mut stmt = conn
+        .prepare("SELECT id, name, description, requirement, category FROM controls ORDER BY id")
+        .context("Failed to prepare select controls query")?;
+
+    let controls = stmt
+        .query_map([], |row| {
+            Ok(Control::new(
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
+        })
+        .context("Failed to map controls from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect controls")?;
+
+    Ok(controls)
+}
+
+pub fn select_control(conn: &Connection, id: &str) -> Result<Option<Control>> {
+    let mut stmt = conn
+        .prepare("SELECT id, name, description, requirement, category FROM controls WHERE id = ?")
+        .context("Failed to prepare select control query")?;
+
+    let control = stmt
+        .query_row(params![id], |row| {
+            Ok(Control::new(
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
+        })
+        .optional()
+        .context("Failed to query control")?;
+
+    Ok(control)
+}
+
+// ===== SETTINGS CRUD =====
+
+pub fn insert_or_update_setting(conn: &Connection, key: &str, value: &str) -> Result<()> {
+    let updated_at = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+        params![key, value, updated_at],
+    ).context("Failed to insert or update setting")?;
+
+    Ok(())
+}
+
+pub fn select_setting(conn: &Connection, key: &str) -> Result<Option<Settings>> {
+    let mut stmt = conn
+        .prepare("SELECT key, value, updated_at FROM settings WHERE key = ?")
+        .context("Failed to prepare select setting query")?;
+
+    let setting = stmt
+        .query_row(params![key], |row| {
+            Ok(Settings {
+                key: row.get(0)?,
+                value: row.get(1)?,
+                updated_at: row.get(2)?,
+            })
+        })
+        .optional()
+        .context("Failed to query setting")?;
+
+    Ok(setting)
+}
+
+pub fn select_all_settings(conn: &Connection) -> Result<Vec<Settings>> {
+    let mut stmt = conn
+        .prepare("SELECT key, value, updated_at FROM settings ORDER BY key")
+        .context("Failed to prepare select settings query")?;
+
+    let settings = stmt
+        .query_map([], |row| {
+            Ok(Settings {
+                key: row.get(0)?,
+                value: row.get(1)?,
+                updated_at: row.get(2)?,
+            })
+        })
+        .context("Failed to map settings from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect settings")?;
+
+    Ok(settings)
+}
+
+pub fn delete_setting(conn: &Connection, key: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM settings WHERE key = ?",
+        params![key],
+    ).context("Failed to delete setting")?;
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    use crate::db::{init_db};
+
+    fn setup_test_db() -> (TempDir, Connection) {
+        let temp_dir = TempDir::new().unwrap();
+        std::env::set_var("RYN_DATA_DIR", temp_dir.path());
+        let conn = init_db().unwrap();
+        (temp_dir, conn)
+    }
+
+    #[test]
+    fn test_project_crud() {
+        let (_temp_dir, conn) = setup_test_db();
+
+        // Create
+        let id = insert_project(&conn, "test-app", "/path/to/app", Some("Django")).unwrap();
+        assert!(id > 0);
+
+        // Read
+        let project = select_project(&conn, id).unwrap();
+        assert!(project.is_some());
+        let p = project.unwrap();
+        assert_eq!(p.name, "test-app");
+        assert_eq!(p.path, "/path/to/app");
+        assert_eq!(p.framework, Some("Django".to_string()));
+
+        // Update
+        update_project(&conn, id, "updated-app", Some("Flask")).unwrap();
+        let updated = select_project(&conn, id).unwrap().unwrap();
+        assert_eq!(updated.name, "updated-app");
+        assert_eq!(updated.framework, Some("Flask".to_string()));
+
+        // Delete
+        delete_project(&conn, id).unwrap();
+        let deleted = select_project(&conn, id).unwrap();
+        assert!(deleted.is_none());
+    }
+
+    #[test]
+    fn test_scan_crud() {
+        let (_temp_dir, conn) = setup_test_db();
+
+        // Create project first
+        let project_id = insert_project(&conn, "test", "/path", None).unwrap();
+
+        // Create scan
+        let scan_id = insert_scan(&conn, project_id).unwrap();
+        assert!(scan_id > 0);
+
+        // Read
+        let scan = select_scan(&conn, scan_id).unwrap();
+        assert!(scan.is_some());
+        let s = scan.unwrap();
+        assert_eq!(s.project_id, project_id);
+        assert_eq!(s.status, "running");
+
+        // Update status
+        let completed_at = chrono::Utc::now().to_rfc3339();
+        update_scan_status(&conn, scan_id, "completed", Some(&completed_at)).unwrap();
+        let updated = select_scan(&conn, scan_id).unwrap().unwrap();
+        assert_eq!(updated.status, "completed");
+
+        // Update results
+        update_scan_results(&conn, scan_id, 100, 5).unwrap();
+        let with_results = select_scan(&conn, scan_id).unwrap().unwrap();
+        assert_eq!(with_results.files_scanned, 100);
+        assert_eq!(with_results.violations_found, 5);
+    }
+
+    #[test]
+    fn test_violation_crud() {
+        let (_temp_dir, conn) = setup_test_db();
+
+        let project_id = insert_project(&conn, "test", "/path", None).unwrap();
+        let scan_id = insert_scan(&conn, project_id).unwrap();
+
+        let violation = Violation::new(
+            scan_id,
+            "CC6.1".to_string(),
+            Severity::Critical,
+            "Missing auth".to_string(),
+            "app/views.py".to_string(),
+            42,
+            "def view():".to_string(),
+        );
+
+        let viol_id = insert_violation(&conn, &violation).unwrap();
+        assert!(viol_id > 0);
+
+        let stored = select_violation(&conn, viol_id).unwrap().unwrap();
+        assert_eq!(stored.control_id, "CC6.1");
+        assert_eq!(stored.severity, "critical");
+
+        update_violation_status(&conn, viol_id, "fixed").unwrap();
+        let fixed = select_violation(&conn, viol_id).unwrap().unwrap();
+        assert_eq!(fixed.status, "fixed");
+    }
+
+    #[test]
+    fn test_control_queries() {
+        let (_temp_dir, conn) = setup_test_db();
+
+        let controls = select_controls(&conn).unwrap();
+        assert_eq!(controls.len(), 4);
+
+        let cc6_1 = select_control(&conn, "CC6.1").unwrap();
+        assert!(cc6_1.is_some());
+        let control = cc6_1.unwrap();
+        assert_eq!(control.id, "CC6.1");
+    }
+
+    #[test]
+    fn test_settings_crud() {
+        let (_temp_dir, conn) = setup_test_db();
+
+        insert_or_update_setting(&conn, "theme", "dark").unwrap();
+        let theme = select_setting(&conn, "theme").unwrap();
+        assert!(theme.is_some());
+        assert_eq!(theme.unwrap().value, "dark");
+
+        insert_or_update_setting(&conn, "theme", "light").unwrap();
+        let updated = select_setting(&conn, "theme").unwrap().unwrap();
+        assert_eq!(updated.value, "light");
+
+        delete_setting(&conn, "theme").unwrap();
+        let deleted = select_setting(&conn, "theme").unwrap();
+        assert!(deleted.is_none());
+    }
+}
