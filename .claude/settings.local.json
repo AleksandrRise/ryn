@@ -17,7 +17,8 @@
       "Bash(git push:*)",
       "Bash(gh pr create:*)",
       "Bash(pkill:*)",
-      "Bash(sqlite3 src-tauri/data/ryn.db \"SELECT id, name, path FROM projects LIMIT 5;\")"
+      "Bash(sqlite3 src-tauri/data/ryn.db \"SELECT id, name, path FROM projects LIMIT 5;\")",
+      "Bash(sqlite3:*)"
     ],
     "deny": []
   }
