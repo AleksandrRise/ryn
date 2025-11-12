@@ -22,6 +22,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <link rel="stylesheet" href="/css/line-awesome.min.css" />
+      </head>
       <body className={inter.className}>
         <McpInit />
         <WaterBackground />
