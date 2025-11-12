@@ -166,3 +166,4 @@ Per project guidelines, all context7 library documentation should be stored in `
 - use docs folder in .claude folder to always store documentation from context7. dont add any redundant files in docs.
 - use context7 to fetch any documentation you might need in order to satisfy the "no
  guessing/assuming" doctrine
+- commit often
