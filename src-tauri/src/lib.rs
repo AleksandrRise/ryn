@@ -11,14 +11,14 @@ pub mod fix_generator;
 pub mod git;
 pub mod utils;
 
-// Re-export commonly used types
-pub use models::{
-    Violation, ViolationStatus, Severity,
-    Fix, Scan, Project, AuditEvent, Control, Settings
-};
-
-pub use db::{init_db, get_db_path};
-pub use scanner::{Framework, FileWatcher, CodeParser};
-pub use rules::{AccessControlRule, SecretsManagementRule, LoggingRule, ResilienceRule};
-pub use fix_generator::ClaudeClient;
-pub use git::GitOperations;
+// Re-export commonly used types (types added in later phases)
+// pub use models::{
+//     Violation, ViolationStatus, Severity,
+//     Fix, Scan, Project, AuditEvent, Control, Settings
+// };
+//
+// pub use db::{init_db, get_db_path};
+// pub use scanner::{Framework, FileWatcher, CodeParser};
+// pub use rules::{AccessControlRule, SecretsManagementRule, LoggingRule, ResilienceRule};
+// pub use fix_generator::ClaudeClient;
+// pub use git::GitOperations;
