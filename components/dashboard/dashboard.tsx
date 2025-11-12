@@ -1,18 +1,41 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { useProjectStore } from "@/lib/stores/project-store"
+import {
+  get_scans,
+  get_violations,
+  get_audit_events,
+  type Violation,
+  type ScanResult,
+  type AuditEvent,
+} from "@/lib/tauri/commands"
+import { handleTauriError } from "@/lib/utils/error-handler"
 
 export function Dashboard() {
-  const complianceScore = 73
-  const violations = {
-    critical: 3,
-    high: 5,
-    medium: 8,
-    low: 12,
-  }
+  const router = useRouter()
+  const { selectedProject } = useProjectStore()
+  const [isLoading, setIsLoading] = useState(true)
+  const [lastScan, setLastScan] = useState<ScanResult | null>(null)
+  const [violations, setViolations] = useState({
+    critical: 0,
+    high: 0,
+    medium: 0,
+    low: 0,
+  })
+  const [recentActivity, setRecentActivity] = useState<AuditEvent[]>([])
+  const [totalScansCount, setTotalScansCount] = useState(0)
+  const [fixesAppliedCount, setFixesAppliedCount] = useState(0)
+
   const totalViolations = violations.critical + violations.high + violations.medium + violations.low
+
+  // Calculate compliance score from violation counts
+  const complianceScore = lastScan
+    ? Math.max(0, Math.min(100, Math.round((1 - totalViolations / Math.max(1, lastScan.total_violations || totalViolations || 1)) * 100)))
+    : 0
 
   // Track mouse position for each card
   const [mousePos, setMousePos] = useState<{ [key: string]: { x: number; y: number } }>({
@@ -29,18 +52,124 @@ export function Dashboard() {
     setMousePos(prev => ({ ...prev, [card]: { x, y } }))
   }
 
-  const recentActivity = [
-    { type: "scan", message: "Completed full scan", time: "2 minutes ago" },
-    { type: "fix", message: "Applied fix to auth/views.py", time: "15 minutes ago" },
-    { type: "violation", message: "New critical violation detected", time: "1 hour ago" },
-    { type: "scan", message: "Started monitoring session", time: "3 hours ago" },
-  ]
+  // Load dashboard data on mount or when project changes
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      if (!selectedProject) {
+        setIsLoading(false)
+        return
+      }
 
-  const stats = [
-    { label: "Total Scans", value: "142", change: "+12%", trend: "up" },
-    { label: "Fixes Applied", value: "89", change: "+8%", trend: "up" },
-    { label: "Avg Fix Time", value: "4.2m", change: "-15%", trend: "down" },
-  ]
+      try {
+        setIsLoading(true)
+
+        // Fetch latest scan for the project
+        const scans = await get_scans(selectedProject.id)
+        const latestScan = scans.length > 0 ? scans[0] : null
+        setLastScan(latestScan)
+        setTotalScansCount(scans.length)
+
+        if (latestScan) {
+          // Fetch violations from latest scan
+          const allViolations = await get_violations(latestScan.id, {})
+
+          // Count violations by severity
+          const violationCounts = {
+            critical: allViolations.filter(v => v.severity === "critical").length,
+            high: allViolations.filter(v => v.severity === "high").length,
+            medium: allViolations.filter(v => v.severity === "medium").length,
+            low: allViolations.filter(v => v.severity === "low").length,
+          }
+          setViolations(violationCounts)
+        }
+
+        // Fetch recent audit events (limit to 4)
+        const events = await get_audit_events({ limit: 4 })
+        setRecentActivity(events)
+
+        // Count fixes applied from audit events
+        const fixEvents = events.filter(e => e.event_type === "fix_applied")
+        setFixesAppliedCount(fixEvents.length)
+      } catch (error) {
+        handleTauriError(error, "Failed to load dashboard data")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadDashboardData()
+  }, [selectedProject])
+
+  // Format timestamp to relative time
+  const formatRelativeTime = (timestamp: string): string => {
+    const now = new Date()
+    const past = new Date(timestamp)
+    const diffMs = now.getTime() - past.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffMins < 1) return "just now"
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? "s" : ""} ago`
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`
+    return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`
+  }
+
+  // Map event type to icon and message
+  const getActivityDisplay = (event: AuditEvent) => {
+    const typeMap: Record<string, { icon: string; color: string }> = {
+      scan_completed: { icon: "scan", color: "bg-blue-500" },
+      fix_applied: { icon: "fix", color: "bg-green-500" },
+      violation_detected: { icon: "violation", color: "bg-red-500" },
+      violation_dismissed: { icon: "violation", color: "bg-yellow-500" },
+    }
+    const display = typeMap[event.event_type] || { icon: "scan", color: "bg-blue-500" }
+    return {
+      type: display.icon,
+      message: event.description,
+      time: formatRelativeTime(event.created_at),
+      color: display.color,
+    }
+  }
+
+  const handleRunScan = () => {
+    router.push("/scan")
+  }
+
+  const handleViewReport = () => {
+    router.push("/audit")
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="px-8 py-8 max-w-[1800px] mx-auto flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 rounded-lg border border-white/10">
+            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            <span className="text-sm text-white/70">Loading dashboard data...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Empty state when no project selected
+  if (!selectedProject) {
+    return (
+      <div className="px-8 py-8 max-w-[1800px] mx-auto flex items-center justify-center min-h-[60vh]">
+        <div className="text-center max-w-md">
+          <i className="las la-folder-open text-6xl text-white/20 mb-4"></i>
+          <h2 className="text-2xl font-bold mb-2">No Project Selected</h2>
+          <p className="text-white/60 mb-6">Select a project from the header to view compliance metrics</p>
+          <Button onClick={() => router.push("/scan")} className="gap-2">
+            <i className="las la-folder text-base"></i>
+            Select Project
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="px-8 py-8 max-w-[1800px] mx-auto">
@@ -54,11 +183,11 @@ export function Dashboard() {
             <p className="text-lg text-white/60">SOC 2 Compliance Score</p>
           </div>
           <div className="flex gap-3">
-            <Button size="lg" className="gap-2">
+            <Button onClick={handleRunScan} size="lg" className="gap-2">
               <i className="las la-play text-base"></i>
               Run Scan
             </Button>
-            <Button size="lg" variant="outline" className="gap-2">
+            <Button onClick={handleViewReport} size="lg" variant="outline" className="gap-2">
               <i className="las la-search text-base"></i>
               View Report
             </Button>
@@ -79,10 +208,12 @@ export function Dashboard() {
             <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
             <span className="text-sm font-medium text-white/70">{totalViolations} violations</span>
           </div>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
-            <i className="las la-clock text-sm text-white/50"></i>
-            <span className="text-sm font-medium text-white/50">2m ago</span>
-          </div>
+          {lastScan && (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
+              <i className="las la-clock text-sm text-white/50"></i>
+              <span className="text-sm font-medium text-white/50">{formatRelativeTime(lastScan.created_at)}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -245,17 +376,24 @@ export function Dashboard() {
           <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
             <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-6">Performance</h3>
             <div className="space-y-5">
-              {stats.map((stat) => (
-                <div key={stat.label} className="flex items-center justify-between">
-                  <span className="text-sm text-white/70">{stat.label}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl font-bold tabular-nums">{stat.value}</span>
-                    <span className={`text-xs font-medium ${stat.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                      {stat.change}
-                    </span>
-                  </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-white/70">Total Scans</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xl font-bold tabular-nums">{totalScansCount}</span>
                 </div>
-              ))}
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-white/70">Fixes Applied</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xl font-bold tabular-nums">{fixesAppliedCount}</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-white/70">Open Violations</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xl font-bold tabular-nums">{totalViolations}</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -268,22 +406,29 @@ export function Dashboard() {
               </Link>
             </div>
             <div className="space-y-4">
-              {recentActivity.map((activity, i) => (
-                <div key={`${activity.type}-${activity.time}`} className="group cursor-pointer">
-                  <div className="flex items-start gap-3 pb-4 border-b border-white/5">
-                    <div className={`mt-0.5 w-2 h-2 rounded-full ${
-                      activity.type === 'violation' ? 'bg-red-500' :
-                      activity.type === 'fix' ? 'bg-green-500' : 'bg-blue-500'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white/90 group-hover:text-white transition-colors truncate">
-                        {activity.message}
-                      </p>
-                      <p className="text-xs text-white/40 mt-1">{activity.time}</p>
-                    </div>
-                  </div>
+              {recentActivity.length === 0 ? (
+                <div className="text-center py-4">
+                  <i className="las la-inbox text-2xl text-white/20 mb-2"></i>
+                  <p className="text-sm text-white/40">No recent activity</p>
                 </div>
-              ))}
+              ) : (
+                recentActivity.map((event) => {
+                  const display = getActivityDisplay(event)
+                  return (
+                    <div key={event.id} className="group cursor-pointer">
+                      <div className="flex items-start gap-3 pb-4 border-b border-white/5 last:border-0">
+                        <div className={`mt-0.5 w-2 h-2 rounded-full ${display.color}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white/90 group-hover:text-white transition-colors truncate">
+                            {display.message}
+                          </p>
+                          <p className="text-xs text-white/40 mt-1">{display.time}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
             </div>
           </div>
 
