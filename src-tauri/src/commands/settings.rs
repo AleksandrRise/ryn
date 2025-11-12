@@ -79,27 +79,30 @@ fn create_audit_event(
 }
 
 #[cfg(test)]
+    use crate::db::test_helpers::TestDbGuard;
 mod tests {
     use super::*;
     use tempfile::TempDir;
 
     fn setup_test_env() -> TempDir {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempfile::TempDir::new().unwrap();
         std::env::set_var("RYN_DATA_DIR", temp_dir.path());
         temp_dir
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_settings_empty() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = get_settings().await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0);
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_update_settings_new() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = update_settings("scan_interval".to_string(), "3600".to_string()).await;
         assert!(result.is_ok());
 
@@ -111,8 +114,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_update_settings_existing() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         // Create initial setting
         let _ = update_settings("scan_interval".to_string(), "3600".to_string()).await;
@@ -128,15 +132,17 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_update_settings_empty_key() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = update_settings("".to_string(), "value".to_string()).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_update_settings_multiple() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         // Create multiple settings
         let _ = update_settings("scan_interval".to_string(), "3600".to_string()).await;
@@ -149,8 +155,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_settings_after_update() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         let _ = update_settings("key1".to_string(), "value1".to_string()).await;
         let _ = update_settings("key2".to_string(), "value2".to_string()).await;
@@ -164,8 +171,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_update_settings_creates_audit_event() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         let _ = update_settings("test_key".to_string(), "test_value".to_string()).await;
 
@@ -179,8 +187,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_settings_persistence() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         // Create setting
         let _ = update_settings("persistent_key".to_string(), "persistent_value".to_string()).await;
@@ -197,8 +206,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_update_settings_with_special_characters() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         let result = update_settings(
             "json_config".to_string(),
@@ -212,8 +222,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_update_settings_empty_value() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         // Should allow empty value
         let result = update_settings("optional_setting".to_string(), "".to_string()).await;
@@ -225,8 +236,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_settings_updated_at_timestamp() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         let _ = update_settings("test".to_string(), "value".to_string()).await;
 
@@ -235,8 +247,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_update_settings_overwrites_value() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         let _ = update_settings("key".to_string(), "old_value".to_string()).await;
         let _ = update_settings("key".to_string(), "new_value".to_string()).await;
@@ -248,8 +261,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_settings_ordering() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         let _ = update_settings("zebra".to_string(), "z".to_string()).await;
         let _ = update_settings("apple".to_string(), "a".to_string()).await;
