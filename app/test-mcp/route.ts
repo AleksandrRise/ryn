@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
 
+// Configure for static export
+export const dynamic = 'force-static'
+
 /**
  * Test endpoint to verify MCP execute_js functionality
  * This endpoint demonstrates using execute_js to modify gray text colors

@@ -37,9 +37,9 @@ pub async fn detect_framework(path: String) -> Result<Option<String>, String> {
 /// # Arguments
 /// * `project_id` - ID of the project to scan
 ///
-/// Returns: Scan ID for tracking progress or error
+/// Returns: Complete Scan object with severity counts or error
 #[tauri::command]
-pub async fn scan_project(project_id: i64) -> Result<i64, String> {
+pub async fn scan_project(project_id: i64) -> Result<Scan, String> {
     let conn = db::init_db()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
@@ -119,7 +119,21 @@ pub async fn scan_project(project_id: i64) -> Result<i64, String> {
         let _ = queries::insert_audit_event(&conn, &event);
     }
 
-    Ok(scan_id)
+    // Fetch complete scan with severity counts
+    let mut scan = queries::select_scan(&conn, scan_id)
+        .map_err(|e| format!("Failed to fetch scan: {}", e))?
+        .ok_or_else(|| "Scan was created but could not be retrieved".to_string())?;
+
+    // Calculate severity counts
+    let (critical, high, medium, low) = queries::get_severity_counts(&conn, scan_id)
+        .unwrap_or((0, 0, 0, 0));
+
+    scan.critical_count = critical;
+    scan.high_count = high;
+    scan.medium_count = medium;
+    scan.low_count = low;
+
+    Ok(scan)
 }
 
 /// Get scan progress
@@ -129,40 +143,26 @@ pub async fn scan_project(project_id: i64) -> Result<i64, String> {
 /// # Arguments
 /// * `scan_id` - ID of the scan to check
 ///
-/// Returns: Scan progress object with status and violation counts
+/// Returns: Complete Scan object with severity counts
 #[tauri::command]
-pub async fn get_scan_progress(scan_id: i64) -> Result<ScanProgress, String> {
+pub async fn get_scan_progress(scan_id: i64) -> Result<Scan, String> {
     let conn = db::init_db()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
-    let scan = queries::select_scan(&conn, scan_id)
+    let mut scan = queries::select_scan(&conn, scan_id)
         .map_err(|e| format!("Failed to fetch scan: {}", e))?
         .ok_or_else(|| format!("Scan not found: {}", scan_id))?;
 
-    // Count violations by status
-    let mut stmt = conn
-        .prepare(
-            "SELECT status, COUNT(*) FROM violations WHERE scan_id = ? GROUP BY status",
-        )
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+    // Calculate severity counts
+    let (critical, high, medium, low) = queries::get_severity_counts(&conn, scan_id)
+        .unwrap_or((0, 0, 0, 0));
 
-    let violations_by_status: std::collections::HashMap<String, i32> = stmt
-        .query_map([scan_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?))
-        })
-        .map_err(|e| format!("Failed to query violations: {}", e))?
-        .filter_map(|r| r.ok())
-        .collect();
+    scan.critical_count = critical;
+    scan.high_count = high;
+    scan.medium_count = medium;
+    scan.low_count = low;
 
-    Ok(ScanProgress {
-        scan_id,
-        status: scan.status,
-        files_scanned: scan.files_scanned,
-        violations_found: scan.violations_found,
-        violations_dismissed: violations_by_status.get("dismissed").copied().unwrap_or(0),
-        violations_fixed: violations_by_status.get("fixed").copied().unwrap_or(0),
-        completed_at: scan.completed_at,
-    })
+    Ok(scan)
 }
 
 /// Get all scans for a project

@@ -18,15 +18,15 @@ export interface Project {
 export interface ScanResult {
   id: number
   project_id: number
-  framework?: string
   status: string
-  total_violations: number
+  started_at: string
+  completed_at?: string
+  files_scanned: number
+  violations_found: number
   critical_count: number
   high_count: number
   medium_count: number
   low_count: number
-  started_at: string
-  completed_at?: string
 }
 
 export interface Violation {

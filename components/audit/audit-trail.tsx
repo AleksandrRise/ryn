@@ -8,10 +8,10 @@ import {
   export_data,
   type AuditEvent,
 } from "@/lib/tauri/commands"
-import { handleTauriError, showSuccess, showInfo } from "@/lib/error-handler"
+import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
 import { save } from "@tauri-apps/plugin-dialog"
 import { writeTextFile } from "@tauri-apps/plugin-fs"
-import { useProjectStore } from "@/lib/store/project-store"
+import { useProjectStore } from "@/lib/stores/project-store"
 
 // Display event interface (mapped from backend AuditEvent)
 interface DisplayEvent {

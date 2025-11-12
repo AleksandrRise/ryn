@@ -40,6 +40,10 @@ pub struct Scan {
     pub files_scanned: i32,
     pub violations_found: i32,
     pub status: String,
+    pub critical_count: i32,
+    pub high_count: i32,
+    pub medium_count: i32,
+    pub low_count: i32,
 }
 
 impl Scan {
@@ -52,6 +56,10 @@ impl Scan {
             files_scanned: 0,
             violations_found: 0,
             status: ScanStatus::Running.as_str().to_string(),
+            critical_count: 0,
+            high_count: 0,
+            medium_count: 0,
+            low_count: 0,
         }
     }
 

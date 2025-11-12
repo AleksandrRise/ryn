@@ -34,7 +34,7 @@ export function Dashboard() {
 
   // Calculate compliance score from violation counts
   const complianceScore = lastScan
-    ? Math.max(0, Math.min(100, Math.round((1 - totalViolations / Math.max(1, lastScan.total_violations || totalViolations || 1)) * 100)))
+    ? Math.max(0, Math.min(100, Math.round((1 - totalViolations / Math.max(1, lastScan.violations_found || totalViolations || 1)) * 100)))
     : 0
 
   // Track mouse position for each card

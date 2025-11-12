@@ -103,6 +103,10 @@ pub fn select_scans(conn: &Connection, project_id: i64) -> Result<Vec<Scan>> {
                 files_scanned: row.get(4)?,
                 violations_found: row.get(5)?,
                 status: row.get(6)?,
+                critical_count: 0,
+                high_count: 0,
+                medium_count: 0,
+                low_count: 0,
             })
         })
         .context("Failed to map scans from query")?
@@ -127,6 +131,10 @@ pub fn select_scan(conn: &Connection, id: i64) -> Result<Option<Scan>> {
                 files_scanned: row.get(4)?,
                 violations_found: row.get(5)?,
                 status: row.get(6)?,
+                critical_count: 0,
+                high_count: 0,
+                medium_count: 0,
+                low_count: 0,
             })
         })
         .optional()
@@ -508,6 +516,10 @@ pub fn select_all_scans(conn: &Connection) -> Result<Vec<Scan>> {
             violations_found: row.get(4)?,
             started_at: row.get(5)?,
             completed_at: row.get(6)?,
+            critical_count: 0,
+            high_count: 0,
+            medium_count: 0,
+            low_count: 0,
         })
     })
     .context("Failed to query all scans")?
@@ -596,6 +608,37 @@ pub fn select_all_audit_events(conn: &Connection) -> Result<Vec<AuditEvent>> {
     .context("Failed to collect all audit events")?;
 
     Ok(events)
+}
+
+/// Get violation counts by severity for a scan
+///
+/// Returns tuple of (critical, high, medium, low) counts
+pub fn get_severity_counts(conn: &Connection, scan_id: i64) -> Result<(i32, i32, i32, i32)> {
+    let mut stmt = conn.prepare(
+        "SELECT severity, COUNT(*) FROM violations WHERE scan_id = ? GROUP BY severity"
+    ).context("Failed to prepare severity counts query")?;
+
+    let mut critical = 0;
+    let mut high = 0;
+    let mut medium = 0;
+    let mut low = 0;
+
+    let rows = stmt.query_map([scan_id], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?))
+    }).context("Failed to query severity counts")?;
+
+    for result in rows {
+        let (severity, count) = result.context("Failed to process severity row")?;
+        match severity.as_str() {
+            "critical" => critical = count,
+            "high" => high = count,
+            "medium" => medium = count,
+            "low" => low = count,
+            _ => {}
+        }
+    }
+
+    Ok((critical, high, medium, low))
 }
 
 #[cfg(test)]
