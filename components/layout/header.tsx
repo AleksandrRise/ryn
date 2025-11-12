@@ -2,22 +2,51 @@
 
 import { Folder, Play, Circle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useRouter } from "next/navigation"
+import { open } from "@tauri-apps/plugin-dialog"
+import { create_project, detect_framework } from "@/lib/tauri/commands"
+import { useProjectStore } from "@/lib/stores/project-store"
+import { handleTauriError, showSuccess } from "@/lib/utils/error-handler"
+import { useState } from "react"
 
 export function Header() {
-  // Mock project state - will be connected to Tauri backend
-  const projectName = "my-startup-app"
-  const projectPath = "/Users/dev/projects/my-startup-app"
-  const framework = "Django"
-  const isScanning = false
+  const router = useRouter()
+  const { selectedProject, setSelectedProject } = useProjectStore()
+  const [isScanning, setIsScanning] = useState(false)
 
-  const handleSelectProject = () => {
-    // TODO: Connect to Tauri file picker
-    console.log("[v0] Select project clicked")
+  const handleSelectProject = async () => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Select Project Folder",
+      })
+
+      if (selected && typeof selected === "string") {
+        // Detect framework
+        const framework = await detect_framework(selected)
+
+        // Create project in database
+        const project = await create_project(selected, undefined, framework)
+
+        // Update global state
+        setSelectedProject(project)
+
+        showSuccess(`Project "${project.name}" loaded successfully`)
+      }
+    } catch (error) {
+      handleTauriError(error, "Failed to select project")
+    }
   }
 
   const handleScanNow = () => {
-    // TODO: Connect to Tauri scan_project command
-    console.log("[v0] Scan now clicked")
+    if (!selectedProject) {
+      handleTauriError("No project selected", "Please select a project first")
+      return
+    }
+
+    // Navigate to scan page
+    router.push("/scan")
   }
 
   return (
@@ -30,15 +59,21 @@ export function Header() {
         >
           <Folder className="w-4 h-4 text-muted-foreground" />
           <div className="flex flex-col items-start">
-            <span className="text-sm font-medium text-foreground">{projectName}</span>
-            <span className="text-xs text-muted-foreground">{projectPath}</span>
+            <span className="text-sm font-medium text-foreground">
+              {selectedProject?.name || "Select Project"}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {selectedProject?.path || "No project selected"}
+            </span>
           </div>
         </button>
 
         {/* Framework Badge */}
-        <div className="px-3 py-1 rounded-full bg-primary-bg border border-primary/20">
-          <span className="text-xs font-medium text-primary">{framework}</span>
-        </div>
+        {selectedProject?.framework && (
+          <div className="px-3 py-1 rounded-full bg-primary-bg border border-primary/20">
+            <span className="text-xs font-medium text-primary">{selectedProject.framework}</span>
+          </div>
+        )}
       </div>
 
       {/* Actions */}
