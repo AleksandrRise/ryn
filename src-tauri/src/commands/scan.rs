@@ -6,6 +6,7 @@ use crate::db::{self, queries};
 use crate::models::{Violation, Scan};
 use crate::scanner::framework_detector::FrameworkDetector;
 use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12ResilienceRule};
+use crate::security::path_validation;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -47,6 +48,10 @@ pub async fn scan_project(project_id: i64) -> Result<Scan, String> {
     let project = queries::select_project(&conn, project_id)
         .map_err(|e| format!("Failed to fetch project: {}", e))?
         .ok_or_else(|| format!("Project not found: {}", project_id))?;
+
+    // Validate project path to prevent scanning system directories
+    path_validation::validate_project_path(Path::new(&project.path))
+        .map_err(|e| format!("Security: Invalid project path: {}", e))?;
 
     // Create scan record
     let scan_id = queries::insert_scan(&conn, project_id)

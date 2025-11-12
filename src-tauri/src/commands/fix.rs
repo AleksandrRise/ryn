@@ -6,6 +6,7 @@ use crate::db::{self, queries};
 use crate::models::Fix;
 use crate::fix_generator::claude_client::ClaudeClient;
 use crate::git::GitOperations;
+use crate::security::path_validation;
 use std::path::Path;
 
 /// Generate a fix for a violation using Claude AI
@@ -36,8 +37,12 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
         .map_err(|e| format!("Failed to fetch project: {}", e))?
         .ok_or_else(|| "Project not found".to_string())?;
 
-    // Read file content
-    let file_path = Path::new(&project.path).join(&violation.file_path);
+    // Validate and read file content with path traversal protection
+    let file_path = path_validation::validate_file_path(
+        Path::new(&project.path),
+        &violation.file_path
+    ).map_err(|e| format!("Security: Invalid file path: {}", e))?;
+
     let _file_content = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
@@ -128,15 +133,20 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
         return Err("Project is not a git repository".to_string());
     }
 
+    // Validate file path with path traversal protection
+    let file_path = path_validation::validate_file_path(
+        repo_path,
+        &violation.file_path
+    ).map_err(|e| format!("Security: Invalid file path: {}", e))?;
+
     // Apply fix to file
-    let file_path = repo_path.join(&violation.file_path);
     let file_content = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
     // Replace original code with fixed code
     let updated_content = file_content.replace(&fix.original_code, &fix.fixed_code);
 
-    // Write updated file
+    // Write updated file (path already validated)
     std::fs::write(&file_path, &updated_content)
         .map_err(|e| format!("Failed to write fixed file: {}", e))?;
 

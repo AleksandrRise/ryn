@@ -10,6 +10,7 @@ pub mod rules;
 pub mod fix_generator;
 pub mod git;
 pub mod utils;
+pub mod security;
 
 // Re-export commonly used types (types added in later phases)
 // pub use models::{
