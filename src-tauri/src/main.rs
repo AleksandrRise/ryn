@@ -16,9 +16,17 @@ use ryn::commands::{
 };
 
 fn main() {
-    // Initialize database on startup
+    // Initialize database - REQUIRED for app to function properly
+    // If database initialization fails, the app cannot operate correctly
     if let Err(e) = ryn::db::init_db() {
-        eprintln!("[ryn] Warning: Failed to initialize database: {}", e);
+        eprintln!("[ryn] FATAL ERROR: Failed to initialize database");
+        eprintln!("[ryn] Error details: {}", e);
+        eprintln!("[ryn] The application cannot run without a working database.");
+        eprintln!("[ryn] Please check:");
+        eprintln!("[ryn]   - File system permissions in the data directory");
+        eprintln!("[ryn]   - Available disk space");
+        eprintln!("[ryn]   - SQLite installation");
+        std::process::exit(1);
     }
 
     let mut builder = tauri::Builder::default()
@@ -37,7 +45,9 @@ fn main() {
         ));
     }
 
-    builder
+    // Run the Tauri application
+    // If this fails, log detailed error and exit gracefully
+    if let Err(e) = builder
         .invoke_handler(tauri::generate_handler![
             // Project Commands (3)
             project::select_project_folder,
@@ -64,5 +74,13 @@ fn main() {
             settings::export_data,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    {
+        eprintln!("[ryn] FATAL ERROR: Application failed to start");
+        eprintln!("[ryn] Error details: {}", e);
+        eprintln!("[ryn] This may be due to:");
+        eprintln!("[ryn]   - Port conflicts (if another instance is running)");
+        eprintln!("[ryn]   - Missing system dependencies");
+        eprintln!("[ryn]   - Incompatible OS version");
+        std::process::exit(1);
+    }
 }

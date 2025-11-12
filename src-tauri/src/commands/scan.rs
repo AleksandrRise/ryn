@@ -255,18 +255,6 @@ fn create_audit_event(
     })
 }
 
-/// Scan progress response structure
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-pub struct ScanProgress {
-    pub scan_id: i64,
-    pub status: String,
-    pub files_scanned: i32,
-    pub violations_found: i32,
-    pub violations_dismissed: i32,
-    pub violations_fixed: i32,
-    pub completed_at: Option<String>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -348,8 +336,8 @@ mod tests {
         let result = scan_project(project_id).await;
         assert!(result.is_ok());
 
-        let scan_id = result.unwrap();
-        assert!(scan_id > 0);
+        let scan = result.unwrap();
+        assert!(scan.id > 0);
     }
 
     #[tokio::test]
@@ -369,8 +357,8 @@ def get_user(user_id):
         let result = scan_project(project_id).await;
         assert!(result.is_ok());
 
-        let scan_id = result.unwrap();
-        assert!(scan_id > 0);
+        let scan = result.unwrap();
+        assert!(scan.id > 0);
     }
 
     #[tokio::test]
@@ -397,13 +385,13 @@ def get_user(user_id):
         let result = scan_project(project_id).await;
         assert!(result.is_ok());
 
-        let scan_id = result.unwrap();
-        assert!(scan_id > 0);
+        let scan = result.unwrap();
+        assert!(scan.id > 0);
 
         // Verify scan exists in database
         let conn = db::init_db().unwrap();
-        let scan = queries::select_scan(&conn, scan_id).unwrap();
-        assert!(scan.is_some());
+        let db_scan = queries::select_scan(&conn, scan.id).unwrap();
+        assert!(db_scan.is_some());
     }
 
     #[tokio::test]
@@ -420,10 +408,10 @@ def get_user(user_id):
         let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
-        let scan_id = scan_project(project_id).await.unwrap();
-        let progress = get_scan_progress(scan_id).await.unwrap();
+        let scan = scan_project(project_id).await.unwrap();
+        let progress = get_scan_progress(scan.id).await.unwrap();
 
-        assert_eq!(progress.scan_id, scan_id);
+        assert_eq!(progress.id, scan.id);
         assert_eq!(progress.status, "completed");
         assert!(progress.files_scanned >= 0);
         assert!(progress.violations_found >= 0);
@@ -466,8 +454,8 @@ api_key = "sk-1234567890abcdef"
 "#;
         fs::write(project_dir.path().join("config.py"), py_content).unwrap();
 
-        let scan_id = scan_project(project_id).await.unwrap();
-        let progress = get_scan_progress(scan_id).await.unwrap();
+        let scan = scan_project(project_id).await.unwrap();
+        let progress = get_scan_progress(scan.id).await.unwrap();
 
         assert!(progress.violations_found >= 0);
     }
@@ -478,15 +466,18 @@ api_key = "sk-1234567890abcdef"
         let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
-        let scan_id = scan_project(project_id).await.unwrap();
-        let progress = get_scan_progress(scan_id).await.unwrap();
+        let scan_result = scan_project(project_id).await.unwrap();
+        let progress = get_scan_progress(scan_result.id).await.unwrap();
 
-        assert_eq!(progress.scan_id, scan_id);
+        assert_eq!(progress.id, scan_result.id);
+        assert_eq!(progress.project_id, project_id);
         assert!(!progress.status.is_empty());
         assert!(progress.files_scanned >= 0);
         assert!(progress.violations_found >= 0);
-        assert!(progress.violations_dismissed >= 0);
-        assert!(progress.violations_fixed >= 0);
+        assert!(progress.critical_count >= 0);
+        assert!(progress.high_count >= 0);
+        assert!(progress.medium_count >= 0);
+        assert!(progress.low_count >= 0);
     }
 
     #[tokio::test]
