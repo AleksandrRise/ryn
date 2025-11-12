@@ -55,7 +55,14 @@ CREATE TABLE IF NOT EXISTS fixes (
 -- Audit events table - track all actions for compliance audit trail
 CREATE TABLE IF NOT EXISTS audit_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_type TEXT NOT NULL CHECK(event_type IN ('scan', 'violation', 'fix', 'project_selected', 'settings_changed')),
+    event_type TEXT NOT NULL CHECK(event_type IN (
+        'scan_started', 'scan_completed', 'scan_failed',
+        'violation_detected', 'violation_dismissed',
+        'fix_generated', 'fix_applied',
+        'project_created', 'project_selected', 'project_deleted',
+        'settings_updated', 'settings_changed',
+        'scan', 'violation', 'fix'  -- Legacy/test event types
+    )),
     project_id INTEGER,
     violation_id INTEGER,
     fix_id INTEGER,
