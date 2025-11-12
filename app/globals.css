@@ -39,6 +39,122 @@ body {
   background-color: transparent;
   color: #fff;
   overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  letter-spacing: -0.02em;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+/* Global cursor pointer for all interactive elements */
+button,
+[role="button"],
+[type="button"],
+[type="submit"],
+[type="reset"],
+a[href],
+summary,
+select,
+.cursor-pointer {
+  cursor: pointer !important;
+}
+
+/* Typography System */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: #ffffff;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+h1 {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+h2 {
+  font-size: 2.25rem;
+  font-weight: 700;
+}
+
+h3 {
+  font-size: 1.875rem;
+  font-weight: 600;
+}
+
+h4 {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+h5 {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+h6 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Text utilities */
+.text-display {
+  font-size: 4rem;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  text-shadow: 0 0 30px rgba(255, 255, 255, 0.15);
+}
+
+.text-glow {
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+}
+
+.text-muted {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Numbers and metrics - tabular for alignment */
+.tabular-nums {
+  font-feature-settings: "tnum" 1, "kern" 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Links and interactive text */
+a {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
+/* Card hover effects */
+[data-slot="card"]:hover {
+  transform: translateY(-1px);
+  transition: transform 0.2s ease;
+}
+
+/* Smooth transitions for all interactive elements */
+button,
+[role="button"],
+a,
+[role="tab"],
+[role="menuitem"],
+summary {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Better focus states */
+*:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.3);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 @keyframes fadeInUp {

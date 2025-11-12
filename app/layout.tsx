@@ -4,7 +4,11 @@ import "./globals.css"
 import { WaterBackground } from "@/components/ui/water-background"
 import { McpInit } from "@/components/mcp-init"
 
-const inter = Inter({ subsets: ["latin"] })
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   title: "Ryn - SOC 2 Compliance Tool",
@@ -21,7 +25,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <McpInit />
         <WaterBackground />
-        <div className="fixed inset-0 bg-black/70 z-[5]" />
+        <div className="fixed inset-0 bg-black/85 z-[5]" />
         <div className="relative z-10">{children}</div>
       </body>
     </html>
