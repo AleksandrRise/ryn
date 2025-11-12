@@ -192,12 +192,13 @@ fn create_audit_event(
 }
 
 #[cfg(test)]
+    use crate::db::test_helpers::TestDbGuard;
 mod tests {
     use super::*;
     use tempfile::TempDir;
 
     fn setup_test_env() -> TempDir {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempfile::TempDir::new().unwrap();
         std::env::set_var("RYN_DATA_DIR", temp_dir.path());
         temp_dir
     }
@@ -226,7 +227,7 @@ mod tests {
     }
 
     fn create_test_project() -> i64 {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempfile::TempDir::new().unwrap();
         let path = temp_dir.path().to_string_lossy().to_string();
         let conn = db::init_db().unwrap();
         let project_id = queries::insert_project(&conn, "test-project", &path, None).unwrap();
@@ -235,8 +236,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_violations_empty_scan() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
@@ -246,8 +248,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_violations_returns_all() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
@@ -262,8 +265,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_violations_filter_by_severity() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
@@ -301,8 +305,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_violations_sorted_by_severity() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
@@ -336,15 +341,17 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_violation_not_found() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = get_violation(999).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_violation_detail() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
         let violation_id = create_test_violation(scan_id);
@@ -358,8 +365,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_violation_includes_scan_info() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
         let violation_id = create_test_violation(scan_id);
@@ -373,8 +381,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_dismiss_violation_success() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
         let violation_id = create_test_violation(scan_id);
@@ -391,15 +400,17 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_dismiss_nonexistent_violation() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = dismiss_violation(999).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_dismiss_violation_creates_audit_event() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
         let violation_id = create_test_violation(scan_id);
@@ -416,8 +427,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_violations_filter_by_control() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
@@ -455,8 +467,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_violations_filter_by_status() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
@@ -494,8 +507,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_violations_multiple_filters() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
@@ -528,8 +542,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_violations_no_match_filters() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
         let _v = create_test_violation(scan_id);

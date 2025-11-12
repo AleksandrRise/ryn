@@ -197,32 +197,30 @@ fn create_audit_event(
 }
 
 #[cfg(test)]
+    use crate::db::test_helpers::TestDbGuard;
 mod tests {
     use super::*;
     use tempfile::TempDir;
     use std::fs;
 
     fn setup_test_env() -> TempDir {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = tempfile::TempDir::new().unwrap();
         std::env::set_var("RYN_DATA_DIR", temp_dir.path());
         temp_dir
     }
 
-    fn create_test_project_with_git() -> (TempDir, i64) {
-        let _temp_env = setup_test_env();
-        let project_dir = TempDir::new().unwrap();
+    fn create_test_project_with_git() -> (tempfile::TempDir, i64) {
+        let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
         // Initialize git repo
         let repo = git2::Repository::init(&path).unwrap();
         let signature = git2::Signature::now("test", "test@example.com").unwrap();
 
-        // Create initial commit
-        {
-            let mut index = repo.index().unwrap();
-            index.write_tree().unwrap();
-        }
+        // Create a dummy file for git to index
+        std::fs::write(project_dir.path().join("dummy"), "test content").unwrap();
 
+        // Create initial commit
         let tree_id = {
             let mut index = repo.index().unwrap();
             index.add_path(std::path::Path::new("dummy")).unwrap();
@@ -278,15 +276,17 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_generate_fix_nonexistent_violation() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = generate_fix(999).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_generate_fix_creates_fix_record() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_git();
         let (_scan_id, violation_id) = create_test_violation_with_file(project_id);
 
@@ -298,16 +298,18 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_apply_fix_nonexistent_fix() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = apply_fix(999).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_apply_fix_requires_git_repo() {
-        let _temp_env = setup_test_env();
-        let project_dir = TempDir::new().unwrap();
+        let _guard = TestDbGuard::new();
+        let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
         // Create project without git
@@ -348,8 +350,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_generate_fix_trust_level() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_git();
         let (_scan_id, violation_id) = create_test_violation_with_file(project_id);
 
@@ -363,8 +366,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_generate_fix_creates_audit_event() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_git();
         let (_scan_id, violation_id) = create_test_violation_with_file(project_id);
 
@@ -380,8 +384,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_apply_fix_creates_audit_event() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_git();
         let (_scan_id, violation_id) = create_test_violation_with_file(project_id);
 
@@ -412,8 +417,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_apply_fix_updates_violation_status() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_git();
         let (_scan_id, violation_id) = create_test_violation_with_file(project_id);
 
@@ -439,8 +445,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_generate_fix_includes_violation_details() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_git();
         let (_scan_id, violation_id) = create_test_violation_with_file(project_id);
 
