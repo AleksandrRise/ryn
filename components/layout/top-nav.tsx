@@ -2,9 +2,11 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useProjectStore } from "@/lib/stores/project-store"
 
 export function TopNav() {
   const pathname = usePathname()
+  const { selectedProject } = useProjectStore()
 
   const links = [
     { href: "/", label: "Dashboard" },
@@ -43,9 +45,15 @@ export function TopNav() {
 
         {/* Right side - project info */}
         <div className="ml-auto flex items-center gap-4 text-xs font-medium text-white/40">
-          <span>~/my-project</span>
-          <span>•</span>
-          <span>Django 4.2</span>
+          {selectedProject ? (
+            <>
+              <span>{selectedProject.name}</span>
+              <span>•</span>
+              <span>{selectedProject.framework || "Unknown framework"}</span>
+            </>
+          ) : (
+            <span>No project selected</span>
+          )}
         </div>
       </div>
     </nav>
