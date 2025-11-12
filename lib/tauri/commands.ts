@@ -47,8 +47,26 @@ export interface Fix {
   violation_id: number
   original_code: string
   fixed_code: string
-  applied: boolean
-  created_at: string
+  explanation: string
+  trust_level: string
+  applied_at: string | null
+  applied_by: string
+  git_commit_sha: string | null
+}
+
+export interface Control {
+  id: string
+  name: string
+  description: string
+  requirement: string
+  category: string
+}
+
+export interface ViolationDetail {
+  violation: Violation
+  control: Control | null
+  fix: Fix | null
+  scan: ScanResult | null
 }
 
 export interface AuditEvent {
@@ -168,8 +186,8 @@ export async function get_violations(
  */
 export async function get_violation(
   violationId: number
-): Promise<Violation> {
-  return await invoke<Violation>("get_violation", {
+): Promise<ViolationDetail> {
+  return await invoke<ViolationDetail>("get_violation", {
     violation_id: violationId,
   })
 }

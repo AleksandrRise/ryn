@@ -1,8 +1,10 @@
 "use client"
 
-import { useState, memo, useMemo } from "react"
+import { useState, memo, useMemo, useEffect } from "react"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { get_violation, generate_fix, apply_fix, dismiss_violation, type ViolationDetail } from "@/lib/tauri/commands"
+import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
 
 interface ViolationDetailProps {
   violationId: number
@@ -95,61 +97,128 @@ const MemoizedDiffBlock = memo(function MemoizedDiffBlock({
 export function ViolationDetail({ violationId }: ViolationDetailProps) {
   const [showDiff, setShowDiff] = useState(false)
   const [showApplyConfirm, setShowApplyConfirm] = useState(false)
+  const [violationDetail, setViolationDetail] = useState<ViolationDetail | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isGeneratingFix, setIsGeneratingFix] = useState(false)
+  const [isApplying, setIsApplying] = useState(false)
 
-  const violation = {
-    id: 1,
-    severity: "critical",
-    control: "CC6.7",
-    title: "Hardcoded API key in settings.py",
-    description:
-      "Storing secrets directly in source code violates SOC 2 CC6.7 (Restricted Access). API keys must be stored in environment variables or secure vaults.",
-    file: "config/settings.py",
-    line: 47,
-    language: "python",
-    confidence: "high",
-    currentCode: `# config/settings.py
-API_KEY = "sk_live_51H8x9dKj3..."
-STRIPE_SECRET = "sk_test_4eC39H..."
-
-def get_api_credentials():
-    return API_KEY`,
-    proposedFix: `# config/settings.py
-import os
-
-API_KEY = os.environ.get("API_KEY")
-STRIPE_SECRET = os.environ.get("STRIPE_SECRET")
-
-def get_api_credentials():
-    if not API_KEY:
-        raise ValueError("API_KEY not set")
-    return API_KEY`,
-    explanation:
-      "Move secrets to environment variables. This ensures credentials are never committed to version control and can be rotated without code changes.",
-    trustLevel: "review",
-    controlInfo: {
-      id: "CC6.7",
-      name: "Restricted Access - Encryption & Secrets",
-      description:
-        "The entity uses encryption to protect data at rest and in transit. Cryptographic keys and secrets must be securely stored, rotated regularly, and never hardcoded in source code.",
-      requirement:
-        "Ensure all API keys, passwords, and sensitive credentials are stored in secure vaults or environment variables, not in source code.",
-    },
-  }
-
-  const getConfidenceBadge = (confidence: string) => {
-    const colors = {
-      high: "bg-[#10b981] text-black",
-      medium: "bg-[#eab308] text-black",
-      low: "bg-[#ef4444] text-white",
+  // Fetch violation detail on mount
+  useEffect(() => {
+    const loadViolation = async () => {
+      try {
+        setIsLoading(true)
+        const detail = await get_violation(violationId)
+        setViolationDetail(detail)
+      } catch (error) {
+        handleTauriError(error, "Failed to load violation details")
+      } finally {
+        setIsLoading(false)
+      }
     }
-    return colors[confidence as keyof typeof colors] || colors.medium
+
+    loadViolation()
+  }, [violationId])
+
+  // Derive language from file extension
+  const getLanguage = (filePath: string): string => {
+    const ext = filePath.split(".").pop()?.toLowerCase() || ""
+    const langMap: Record<string, string> = {
+      py: "python",
+      js: "javascript",
+      ts: "typescript",
+      tsx: "typescript",
+      jsx: "javascript",
+      rs: "rust",
+      go: "go",
+      java: "java",
+      rb: "ruby",
+      php: "php",
+      cs: "csharp",
+      cpp: "cpp",
+      c: "c",
+    }
+    return langMap[ext] || "text"
   }
 
-  const handleApplyFix = () => {
-    // Placeholder - will connect to backend
-    console.log("Applying fix for violation:", violationId)
-    setShowApplyConfirm(false)
+  const getConfidenceBadge = (trustLevel: string) => {
+    const colors = {
+      auto: "bg-[#10b981] text-black",
+      review: "bg-[#eab308] text-black",
+      manual: "bg-[#ef4444] text-white",
+    }
+    return colors[trustLevel as keyof typeof colors] || colors.review
   }
+
+  const handleGenerateFix = async () => {
+    if (!violationDetail) return
+
+    try {
+      setIsGeneratingFix(true)
+      showInfo("Generating fix with AI...")
+      const fix = await generate_fix(violationId)
+      setViolationDetail({
+        ...violationDetail,
+        fix,
+      })
+      showSuccess("Fix generated successfully!")
+      setShowDiff(true) // Auto-show diff when fix is ready
+    } catch (error) {
+      handleTauriError(error, "Failed to generate fix")
+    } finally {
+      setIsGeneratingFix(false)
+    }
+  }
+
+  const handleApplyFix = async () => {
+    if (!violationDetail?.fix) return
+
+    try {
+      setIsApplying(true)
+      showInfo("Applying fix...")
+      await apply_fix(violationDetail.fix.id)
+      showSuccess("Fix applied successfully!")
+      setShowApplyConfirm(false)
+      // Reload violation to get updated status
+      const detail = await get_violation(violationId)
+      setViolationDetail(detail)
+    } catch (error) {
+      handleTauriError(error, "Failed to apply fix")
+    } finally {
+      setIsApplying(false)
+    }
+  }
+
+  const handleDismiss = async () => {
+    try {
+      await dismiss_violation(violationId)
+      showSuccess("Violation dismissed")
+      // Could navigate back to scan results here
+    } catch (error) {
+      handleTauriError(error, "Failed to dismiss violation")
+    }
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="px-8 py-12 flex items-center justify-center">
+        <p className="text-[14px] text-[#aaaaaa]">Loading violation details...</p>
+      </div>
+    )
+  }
+
+  // Error state
+  if (!violationDetail) {
+    return (
+      <div className="px-8 py-12 flex items-center justify-center">
+        <p className="text-[14px] text-[#ef4444]">Failed to load violation details</p>
+      </div>
+    )
+  }
+
+  const { violation, control, fix } = violationDetail
+  const language = getLanguage(violation.file_path)
+  const trustLevel = fix?.trust_level || "review"
 
   return (
     <div className="px-8 py-12">
@@ -157,69 +226,95 @@ def get_api_credentials():
         {/* Left column - Main content */}
         <div>
           {/* Violation header */}
-          <div className="mb-12 pb-8 border-b border-[#1a1a1a]">
+          <div className="mb-12 pb-8 border-[#1a1a1a]">
             <div className="flex items-baseline gap-4 mb-3">
-              <span className="text-[11px] uppercase tracking-wider text-[#ef4444] font-medium">Critical</span>
-              <span className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">{violation.control}</span>
               <span
-                className={`text-[11px] uppercase tracking-wider px-2 py-1 ${getConfidenceBadge(violation.confidence)}`}
+                className={`text-[11px] uppercase tracking-wider font-medium ${
+                  violation.severity === "critical"
+                    ? "text-[#ef4444]"
+                    : violation.severity === "high"
+                      ? "text-[#f97316]"
+                      : violation.severity === "medium"
+                        ? "text-[#eab308]"
+                        : "text-[#525252]"
+                }`}
               >
-                {violation.confidence} confidence
+                {violation.severity}
+              </span>
+              <span className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">{violation.control_id}</span>
+              <span className={`text-[11px] uppercase tracking-wider px-2 py-1 ${getConfidenceBadge(trustLevel)}`}>
+                {trustLevel} trust
               </span>
             </div>
-            <h1 className="text-[42px] font-bold leading-tight tracking-tight mb-3">{violation.title}</h1>
+            <h1 className="text-[42px] font-bold leading-tight tracking-tight mb-3">{violation.description}</h1>
             <p className="text-[13px] text-[#aaaaaa] font-mono">
-              {violation.file}:{violation.line}
+              {violation.file_path}:{violation.line_number}
             </p>
           </div>
 
           {/* Toggle between current code and diff */}
-          <div className="mb-6 flex gap-4 text-[12px]">
-            <button
-              onClick={() => setShowDiff(false)}
-              className={`uppercase tracking-wider ${!showDiff ? "text-white" : "text-[#aaaaaa] hover:text-[#aaaaaa]"}`}
-            >
-              Current
-            </button>
-            <button
-              onClick={() => setShowDiff(true)}
-              className={`uppercase tracking-wider ${showDiff ? "text-white" : "text-[#aaaaaa] hover:text-[#aaaaaa]"}`}
-            >
-              Proposed Fix
-            </button>
-          </div>
+          {fix && (
+            <div className="mb-6 flex gap-4 text-[12px]">
+              <button
+                onClick={() => setShowDiff(false)}
+                className={`uppercase tracking-wider ${!showDiff ? "text-white" : "text-[#aaaaaa] hover:text-[#aaaaaa]"}`}
+              >
+                Current
+              </button>
+              <button
+                onClick={() => setShowDiff(true)}
+                className={`uppercase tracking-wider ${showDiff ? "text-white" : "text-[#aaaaaa] hover:text-[#aaaaaa]"}`}
+              >
+                Proposed Fix
+              </button>
+            </div>
+          )}
 
           {/* Code display with syntax highlighting */}
           <div className="mb-8">
-            {!showDiff ? (
-              <MemoizedCodeBlock code={violation.currentCode} language={violation.language} />
+            {!showDiff || !fix ? (
+              <MemoizedCodeBlock code={violation.code_snippet} language={language} />
             ) : (
               <MemoizedDiffBlock
-                beforeCode={violation.currentCode}
-                afterCode={violation.proposedFix}
-                language={violation.language}
+                beforeCode={fix.original_code}
+                afterCode={fix.fixed_code}
+                language={language}
               />
             )}
           </div>
 
           {/* Fix explanation */}
-          {showDiff && (
+          {showDiff && fix && (
             <div className="mb-8">
               <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Why This Fix Works</h3>
-              <p className="text-[14px] leading-relaxed">{violation.explanation}</p>
+              <p className="text-[14px] leading-relaxed">{fix.explanation}</p>
             </div>
           )}
 
           {/* Actions */}
           <div className="flex gap-4">
+            {!fix ? (
+              <button
+                onClick={handleGenerateFix}
+                disabled={isGeneratingFix}
+                className="px-6 py-3 bg-white text-black text-[13px] font-medium hover:bg-[#e5e5e5] transition-colors disabled:opacity-50"
+              >
+                {isGeneratingFix ? "Generating..." : "Generate Fix"}
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowApplyConfirm(true)}
+                disabled={isApplying || fix.applied_at !== null}
+                className="px-6 py-3 bg-white text-black text-[13px] font-medium hover:bg-[#e5e5e5] transition-colors disabled:opacity-50"
+              >
+                {fix.applied_at !== null ? "Already Applied" : "Apply Fix"}
+              </button>
+            )}
             <button
-              onClick={() => setShowApplyConfirm(true)}
-              className="px-6 py-3 bg-white text-black text-[13px] font-medium hover:bg-[#e5e5e5] transition-colors"
+              onClick={handleDismiss}
+              className="px-6 py-3 border border-[#1a1a1a] text-[13px] hover:bg-[#0a0a0a] transition-colors"
             >
-              Apply Fix
-            </button>
-            <button className="px-6 py-3 border border-[#1a1a1a] text-[13px] hover:bg-[#0a0a0a] transition-colors">
-              Reject
+              Dismiss
             </button>
           </div>
         </div>
@@ -227,57 +322,73 @@ def get_api_credentials():
         {/* Right column - Context sidebar */}
         <div>
           {/* SOC 2 Control Explanation */}
-          <div className="mb-8 p-6 border border-[#1a1a1a] bg-[#050505]">
-            <div className="flex items-baseline gap-2 mb-3">
-              <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">SOC 2 Control</h3>
-              <span className="text-[11px] font-mono text-white">{violation.controlInfo.id}</span>
+          {control && (
+            <div className="mb-8 p-6 border border-[#1a1a1a] bg-[#050505]">
+              <div className="flex items-baseline gap-2 mb-3">
+                <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">SOC 2 Control</h3>
+                <span className="text-[11px] font-mono text-white">{control.id}</span>
+              </div>
+              <h4 className="text-[14px] font-medium mb-2">{control.name}</h4>
+              <p className="text-[12px] leading-relaxed text-[#aaaaaa] mb-4">{control.description}</p>
+              <div className="pt-4 border-t border-[#1a1a1a]">
+                <p className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-2">Requirement</p>
+                <p className="text-[12px] text-[#aaaaaa]">{control.requirement}</p>
+              </div>
             </div>
-            <h4 className="text-[14px] font-medium mb-2">{violation.controlInfo.name}</h4>
-            <p className="text-[12px] leading-relaxed text-[#aaaaaa] mb-4">{violation.controlInfo.description}</p>
-            <div className="pt-4 border-t border-[#1a1a1a]">
-              <p className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-2">Requirement</p>
-              <p className="text-[12px] text-[#aaaaaa]">{violation.controlInfo.requirement}</p>
-            </div>
-          </div>
+          )}
 
           <div className="mb-8">
-            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Why This Matters</h3>
+            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Violation Details</h3>
             <p className="text-[13px] leading-relaxed text-[#aaaaaa]">{violation.description}</p>
           </div>
 
           <div className="mb-8">
             <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Trust Level</h3>
-            <p className="text-[13px]">Requires review before applying</p>
+            <p className="text-[13px]">
+              {trustLevel === "auto"
+                ? "Can be applied automatically"
+                : trustLevel === "review"
+                  ? "Requires review before applying"
+                  : "Manual intervention required"}
+            </p>
           </div>
 
           <div>
-            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Impact</h3>
+            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Severity Impact</h3>
             <p className="text-[13px] text-[#aaaaaa]">
-              High - Exposed credentials could lead to unauthorized system access
+              {violation.severity === "critical"
+                ? "Critical - Immediate attention required"
+                : violation.severity === "high"
+                  ? "High - Should be resolved soon"
+                  : violation.severity === "medium"
+                    ? "Medium - Address when possible"
+                    : "Low - Minor issue"}
             </p>
           </div>
         </div>
       </div>
 
       {/* Apply Fix Confirmation Dialog */}
-      {showApplyConfirm && (
+      {showApplyConfirm && fix && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-8 max-w-md">
             <h3 className="text-[24px] font-bold mb-4">Apply Fix?</h3>
             <p className="text-[14px] text-[#aaaaaa] mb-6">
-              This will modify <span className="font-mono text-white">{violation.file}</span> and apply the proposed
-              changes. You can review the changes before committing.
+              This will modify <span className="font-mono text-white">{violation.file_path}</span> and apply the
+              proposed changes. A git commit will be created automatically.
             </p>
             <div className="flex gap-4">
               <button
                 onClick={handleApplyFix}
-                className="flex-1 px-6 py-3 bg-white text-black text-[13px] font-medium hover:bg-[#e5e5e5] transition-colors"
+                disabled={isApplying}
+                className="flex-1 px-6 py-3 bg-white text-black text-[13px] font-medium hover:bg-[#e5e5e5] transition-colors disabled:opacity-50"
               >
-                Apply
+                {isApplying ? "Applying..." : "Apply"}
               </button>
               <button
                 onClick={() => setShowApplyConfirm(false)}
-                className="flex-1 px-6 py-3 border border-[#1a1a1a] text-[13px] hover:bg-[#050505] transition-colors"
+                disabled={isApplying}
+                className="flex-1 px-6 py-3 border border-[#1a1a1a] text-[13px] hover:bg-[#050505] transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
