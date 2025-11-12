@@ -1,10 +1,7 @@
 import { TopNav } from "@/components/layout/top-nav"
 import { ViolationDetail } from "@/components/violation/violation-detail"
 
-export function generateStaticParams() {
-  return [{ id: '1' }]
-}
-
+// No generateStaticParams needed - Tauri apps don't use static export
 export default function ViolationPage({ params }: { params: { id: string } }) {
   return (
     <>
