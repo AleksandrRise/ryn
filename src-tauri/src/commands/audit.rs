@@ -73,13 +73,7 @@ pub async fn get_audit_events(filters: Option<AuditFilters>) -> Result<Vec<Audit
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
-
-    fn setup_test_env() -> TempDir {
-        let temp_dir = TempDir::new().unwrap();
-        std::env::set_var("RYN_DATA_DIR", temp_dir.path());
-        temp_dir
-    }
+    use crate::db::test_helpers::TestDbGuard;
 
     fn create_test_project(project_id: i64) -> i64 {
         let conn = db::init_db().unwrap();
@@ -116,16 +110,18 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_audit_events_empty() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = get_audit_events(None).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0);
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_audit_events_all() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         // Create multiple events with valid event types
         let _e1 = create_test_audit_event("scan", Some(1));
@@ -138,8 +134,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_audit_events_filter_by_type() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         // Create events of different types
         let _e1 = create_test_audit_event("scan", Some(1));
@@ -163,8 +160,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_audit_events_filter_by_project() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         // Create events for different projects
         let _e1 = create_test_audit_event("scan", Some(1));
@@ -188,19 +186,21 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_audit_events_filter_by_date_range() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
+
+        // Capture time BEFORE creating the event
+        let past = (chrono::Utc::now() - chrono::Duration::minutes(1)).to_rfc3339();
+        let future = (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339();
 
         // Create events
         let _e1 = create_test_audit_event("scan", Some(1));
 
-        let now = chrono::Utc::now().to_rfc3339();
-        let future = (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339();
-
         let filters = AuditFilters {
             event_type: None,
             project_id: None,
-            start_date: Some(now),
+            start_date: Some(past),
             end_date: Some(future),
             limit: None,
         };
@@ -211,8 +211,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_audit_events_filter_multiple() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         // Create events
         let _e1 = create_test_audit_event("scan", Some(1));
@@ -237,8 +238,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_audit_events_with_limit() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         // Create many events with valid event types
         for i in 0..5 {
@@ -264,8 +266,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_audit_events_ordered_newest_first() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         // Create events with known order
         let _e1 = create_test_audit_event("scan", Some(1));
@@ -286,8 +289,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_audit_events_includes_all_fields() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let _e = create_test_audit_event("scan", Some(1));
 
         let result = get_audit_events(None).await;
@@ -304,8 +308,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_audit_events_no_match_filters() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         let _e1 = create_test_audit_event("scan", Some(1));
 
@@ -323,8 +328,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_audit_events_filter_multiple_event_types() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
 
         let _e1 = create_test_audit_event("scan", Some(1));
         let _e2 = create_test_audit_event("violation", Some(1));
