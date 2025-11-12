@@ -3,7 +3,8 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-// Import modules from lib.rs
+// Import modules from lib.rs (Phase 1 stub - actual modules implemented in later phases)
+#[allow(unused_imports)]
 use ryn::{commands, models, db, scanner, langgraph, rules, fix_generator, git, utils};
 
 // Placeholder command structures
