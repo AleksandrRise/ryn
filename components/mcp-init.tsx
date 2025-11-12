@@ -6,45 +6,11 @@ export function McpInit() {
   const [status, setStatus] = useState<string>("initializing")
 
   useEffect(() => {
-    // Only run in browser
-    if (typeof window === "undefined") {
-      return
-    }
-
-    // Check if we're in Tauri context
-    const isTauri = typeof (window as any).__TAURI__ !== "undefined"
-    console.log("[MCP Init] Tauri context:", isTauri)
-
-    if (!isTauri) {
-      console.log("[MCP Init] Not running in Tauri, skipping MCP setup")
-      setStatus("browser mode (no MCP)")
-      return
-    }
-
-    // Setup MCP plugin event listeners
-    let cleanupFn: (() => Promise<void>) | null = null
-
-    ;(async () => {
-      try {
-        const { setupPluginListeners, cleanupPluginListeners } = await import("tauri-plugin-mcp")
-        await setupPluginListeners()
-        cleanupFn = cleanupPluginListeners
-        console.log("[MCP Init] Plugin listeners setup complete")
-        setStatus("ready")
-      } catch (error) {
-        console.error("[MCP Init] Failed to setup plugin listeners:", error)
-        setStatus("error")
-      }
-    })()
-
-    // Cleanup on unmount
-    return () => {
-      if (cleanupFn) {
-        cleanupFn().then(() => {
-          console.log("[MCP Init] Plugin listeners cleaned up")
-        })
-      }
-    }
+    // MCP plugin initialization disabled to avoid Next.js build warnings
+    // The plugin is only used for development debugging via /tmp/tauri-mcp.sock
+    // Backend MCP functionality works independently of this frontend component
+    setStatus("disabled")
+    console.log("[MCP Init] Frontend MCP listener disabled (backend still active)")
   }, [])
 
   // Show status in development
