@@ -265,18 +265,11 @@ pub struct ScanProgress {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
+    use crate::db::test_helpers::TestDbGuard;
     use std::fs;
 
-    fn setup_test_env() -> TempDir {
-        let temp_dir = TempDir::new().unwrap();
-        std::env::set_var("RYN_DATA_DIR", temp_dir.path());
-        temp_dir
-    }
-
-    fn create_test_project() -> (TempDir, i64) {
-        let _temp_dir = setup_test_env();
-        let project_dir = TempDir::new().unwrap();
+    fn create_test_project_with_guard(guard: &TestDbGuard) -> (tempfile::TempDir, i64) {
+        let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
         let conn = db::init_db().unwrap();
@@ -291,9 +284,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_detect_framework_empty_directory() {
-        let _temp_dir = setup_test_env();
-        let project_dir = TempDir::new().unwrap();
+        let _guard = TestDbGuard::new();
+        let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
         let result = detect_framework(path).await;
@@ -302,9 +296,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_detect_framework_django() {
-        let _temp_env = setup_test_env();
-        let project_dir = TempDir::new().unwrap();
+        let _guard = TestDbGuard::new();
+        let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
         // Create manage.py to signal Django
@@ -316,9 +311,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_detect_framework_express() {
-        let _temp_env = setup_test_env();
-        let project_dir = TempDir::new().unwrap();
+        let _guard = TestDbGuard::new();
+        let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
         // Create package.json with express
@@ -331,16 +327,18 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_scan_project_nonexistent_project() {
-        let _temp_dir = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = scan_project(999).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_scan_project_empty_directory() {
-        let _temp_env = setup_test_env();
-        let (_project_dir, project_id) = create_test_project();
+        let _guard = TestDbGuard::new();
+        let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         let result = scan_project(project_id).await;
         assert!(result.is_ok());
@@ -350,9 +348,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_scan_project_with_python_file() {
-        let _temp_env = setup_test_env();
-        let (project_dir, project_id) = create_test_project();
+        let _guard = TestDbGuard::new();
+        let (project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         // Create a simple Python file
         let py_content = r#"
@@ -370,9 +369,10 @@ def get_user(user_id):
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_scan_project_skips_node_modules() {
-        let _temp_env = setup_test_env();
-        let (project_dir, project_id) = create_test_project();
+        let _guard = TestDbGuard::new();
+        let (project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         // Create node_modules directory with files
         let node_modules = project_dir.path().join("node_modules");
@@ -384,9 +384,10 @@ def get_user(user_id):
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_scan_project_returns_valid_scan_id() {
-        let _temp_env = setup_test_env();
-        let (_project_dir, project_id) = create_test_project();
+        let _guard = TestDbGuard::new();
+        let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         let result = scan_project(project_id).await;
         assert!(result.is_ok());
@@ -401,16 +402,18 @@ def get_user(user_id):
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_scan_progress_nonexistent_scan() {
-        let _temp_env = setup_test_env();
+        let _guard = TestDbGuard::new();
         let result = get_scan_progress(999).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_scan_progress_after_scan_complete() {
-        let _temp_env = setup_test_env();
-        let (_project_dir, project_id) = create_test_project();
+        let _guard = TestDbGuard::new();
+        let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         let scan_id = scan_project(project_id).await.unwrap();
         let progress = get_scan_progress(scan_id).await.unwrap();
@@ -422,9 +425,10 @@ def get_user(user_id):
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_scans_for_project() {
-        let _temp_env = setup_test_env();
-        let (_project_dir, project_id) = create_test_project();
+        let _guard = TestDbGuard::new();
+        let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         // Create multiple scans
         let _scan_id_1 = scan_project(project_id).await.unwrap();
@@ -435,18 +439,20 @@ def get_user(user_id):
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_get_scans_empty() {
-        let _temp_env = setup_test_env();
-        let (_project_dir, project_id) = create_test_project();
+        let _guard = TestDbGuard::new();
+        let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         let scans = get_scans(project_id).await.unwrap();
         assert_eq!(scans.len(), 0);
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_scan_project_detects_violations() {
-        let _temp_env = setup_test_env();
-        let (project_dir, project_id) = create_test_project();
+        let _guard = TestDbGuard::new();
+        let (project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         // Create a file with a violation (hardcoded secret)
         let py_content = r#"
@@ -462,9 +468,10 @@ api_key = "sk-1234567890abcdef"
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_scan_progress_includes_all_fields() {
-        let _temp_env = setup_test_env();
-        let (_project_dir, project_id) = create_test_project();
+        let _guard = TestDbGuard::new();
+        let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         let scan_id = scan_project(project_id).await.unwrap();
         let progress = get_scan_progress(scan_id).await.unwrap();
@@ -496,10 +503,11 @@ api_key = "sk-1234567890abcdef"
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_scan_multiple_projects_independent() {
-        let _temp_env = setup_test_env();
-        let (project_dir_1, project_id_1) = create_test_project();
-        let (project_dir_2, project_id_2) = create_test_project();
+        let _guard = TestDbGuard::new();
+        let (project_dir_1, project_id_1) = create_test_project_with_guard(&_guard);
+        let (project_dir_2, project_id_2) = create_test_project_with_guard(&_guard);
 
         fs::write(project_dir_1.path().join("file1.py"), "x = 1").unwrap();
         fs::write(project_dir_2.path().join("file2.py"), "y = 2").unwrap();
@@ -517,9 +525,10 @@ api_key = "sk-1234567890abcdef"
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_scan_updates_project_framework() {
-        let _temp_env = setup_test_env();
-        let (project_dir, project_id) = create_test_project();
+        let _guard = TestDbGuard::new();
+        let (project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         fs::write(project_dir.path().join("manage.py"), "#!/usr/bin/env python").unwrap();
 
