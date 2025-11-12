@@ -171,9 +171,9 @@ export function ScanResults() {
 
       showInfo("Starting scan...")
 
-      // Start scan
-      const scan = await scan_project(selectedProject.id)
-      setCurrentScanId(scan.id)
+      // Start scan - scan_project returns the scan_id directly (number), not an object
+      const scanId = await scan_project(selectedProject.id)
+      setCurrentScanId(scanId)
 
       // Polling starts via useEffect
     } catch (error) {

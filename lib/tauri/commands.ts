@@ -115,11 +115,12 @@ export async function detect_framework(path: string): Promise<string> {
 
 /**
  * Start scanning a project for violations
+ * Returns the scan_id directly (number) - scanning happens in background
  */
 export async function scan_project(
   projectId: number
-): Promise<ScanResult> {
-  return await invoke<ScanResult>("scan_project", { projectId })
+): Promise<number> {
+  return await invoke<number>("scan_project", { projectId })
 }
 
 /**
