@@ -119,7 +119,7 @@ export async function detect_framework(path: string): Promise<string> {
 export async function scan_project(
   projectId: number
 ): Promise<ScanResult> {
-  return await invoke<ScanResult>("scan_project", { project_id: projectId })
+  return await invoke<ScanResult>("scan_project", { projectId })
 }
 
 /**
@@ -128,7 +128,7 @@ export async function scan_project(
 export async function get_scan_progress(
   scanId: number
 ): Promise<ScanResult> {
-  return await invoke<ScanResult>("get_scan_progress", { scan_id: scanId })
+  return await invoke<ScanResult>("get_scan_progress", { scanId })
 }
 
 /**
@@ -137,7 +137,7 @@ export async function get_scan_progress(
 export async function get_scans(
   projectId: number
 ): Promise<ScanResult[]> {
-  return await invoke<ScanResult[]>("get_scans", { project_id: projectId })
+  return await invoke<ScanResult[]>("get_scans", { projectId })
 }
 
 // ============================================================================
@@ -158,7 +158,7 @@ export async function get_violations(
   filters?: ViolationFilters
 ): Promise<Violation[]> {
   return await invoke<Violation[]>("get_violations", {
-    scan_id: scanId,
+    scanId,
     filters,
   })
 }
@@ -170,7 +170,7 @@ export async function get_violation(
   violationId: number
 ): Promise<Violation> {
   return await invoke<Violation>("get_violation", {
-    violation_id: violationId,
+    violationId,
   })
 }
 
@@ -180,7 +180,7 @@ export async function get_violation(
 export async function dismiss_violation(
   violationId: number
 ): Promise<void> {
-  await invoke<void>("dismiss_violation", { violation_id: violationId })
+  await invoke<void>("dismiss_violation", { violationId })
 }
 
 // ============================================================================
@@ -193,14 +193,14 @@ export async function dismiss_violation(
 export async function generate_fix(
   violationId: number
 ): Promise<Fix> {
-  return await invoke<Fix>("generate_fix", { violation_id: violationId })
+  return await invoke<Fix>("generate_fix", { violationId })
 }
 
 /**
  * Apply a fix to the actual file and create a git commit
  */
 export async function apply_fix(fixId: number): Promise<void> {
-  await invoke<void>("apply_fix", { fix_id: fixId })
+  await invoke<void>("apply_fix", { fixId })
 }
 
 // ============================================================================
@@ -208,10 +208,10 @@ export async function apply_fix(fixId: number): Promise<void> {
 // ============================================================================
 
 export interface AuditFilters {
-  event_type?: string[]
-  project_id?: number
-  start_date?: string
-  end_date?: string
+  eventType?: string[]
+  projectId?: number
+  startDate?: string
+  endDate?: string
   limit?: number
 }
 
