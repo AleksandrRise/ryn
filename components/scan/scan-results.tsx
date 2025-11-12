@@ -1,15 +1,34 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import type { Severity } from "@/lib/types/violation"
 import { open } from "@tauri-apps/plugin-dialog"
 import { Button } from "@/components/ui/button"
 import { Play, Folder, Check, FileSearch, AlertCircle, Shield } from "lucide-react"
+import { useProjectStore } from "@/lib/stores/project-store"
+import { create_project, detect_framework, scan_project, get_scan_progress, get_violations, get_scans } from "@/lib/tauri/commands"
+import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
+
+interface Violation {
+  id: number
+  severity: string
+  control_id: string
+  description: string
+  file_path: string
+  line_number: number
+  status: string
+}
+
+interface ScanResult {
+  id: number
+  status: string
+  created_at: string
+}
 
 export function ScanResults() {
+  const { selectedProject, setSelectedProject } = useProjectStore()
   const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
-  const [projectPath, setProjectPath] = useState("/path/to/project")
   const [selectedControls, setSelectedControls] = useState({
     "CC6.1": true,
     "CC6.7": true,
@@ -17,12 +36,103 @@ export function ScanResults() {
     "A1.2": true,
   })
   const [isScanning, setIsScanning] = useState(false)
+  const [currentScanId, setCurrentScanId] = useState<number | null>(null)
   const [scanProgress, setScanProgress] = useState({
     percentage: 0,
     currentFile: "",
     filesScanned: 0,
     totalFiles: 0,
   })
+  const [violations, setViolations] = useState<Violation[]>([])
+  const [lastScan, setLastScan] = useState<ScanResult | null>(null)
+  const [lastScanStats, setLastScanStats] = useState({
+    filesScanned: 0,
+    violationsFound: 0,
+    completedAt: "",
+  })
+
+  // Load last scan on mount
+  useEffect(() => {
+    if (selectedProject) {
+      loadLastScan()
+    }
+  }, [selectedProject])
+
+  // Poll scan progress when scanning
+  useEffect(() => {
+    if (!isScanning || !currentScanId) return
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const progress = await get_scan_progress(currentScanId)
+
+        // Update progress
+        setScanProgress({
+          percentage: Math.round((progress.files_scanned / Math.max(progress.files_scanned + 1, 1)) * 100),
+          currentFile: "",
+          filesScanned: progress.files_scanned,
+          totalFiles: progress.files_scanned + 1,
+        })
+
+        // Check if completed
+        if (progress.status === "completed") {
+          setIsScanning(false)
+          clearInterval(pollInterval)
+
+          // Load violations
+          await loadViolations(currentScanId)
+          await loadLastScan()
+
+          showSuccess(`Scan completed! Found ${progress.critical + progress.high + progress.medium + progress.low} violations`)
+        } else if (progress.status === "failed") {
+          setIsScanning(false)
+          clearInterval(pollInterval)
+          handleTauriError("Scan failed", "Scan failed. Please try again.")
+        }
+      } catch (error) {
+        clearInterval(pollInterval)
+        setIsScanning(false)
+        handleTauriError(error, "Failed to get scan progress")
+      }
+    }, 2000) // Poll every 2 seconds
+
+    return () => clearInterval(pollInterval)
+  }, [isScanning, currentScanId])
+
+  const loadLastScan = async () => {
+    if (!selectedProject) return
+
+    try {
+      const scans = await get_scans(selectedProject.id)
+      if (scans.length > 0) {
+        const latest = scans[0]
+        setLastScan(latest)
+
+        // Load violations for stats
+        const viols = await get_violations(latest.id, {})
+        setLastScanStats({
+          filesScanned: 0, // Backend doesn't track this in scan table
+          violationsFound: viols.length,
+          completedAt: new Date(latest.created_at).toLocaleString(),
+        })
+
+        // Load violations for display
+        await loadViolations(latest.id)
+      }
+    } catch (error) {
+      // Silent fail - no scans yet is OK
+      console.log("No previous scans found")
+    }
+  }
+
+  const loadViolations = async (scanId: number) => {
+    try {
+      const viols = await get_violations(scanId, {})
+      setViolations(viols as unknown as Violation[])
+    } catch (error) {
+      handleTauriError(error, "Failed to load violations")
+    }
+  }
 
   const handleSelectFolder = async () => {
     try {
@@ -33,18 +143,43 @@ export function ScanResults() {
       })
 
       if (selected && typeof selected === "string") {
-        setProjectPath(selected)
-        console.log("Selected folder:", selected)
+        // Detect framework
+        const framework = await detect_framework(selected)
+
+        // Create project in database
+        const project = await create_project(selected, undefined, framework)
+
+        // Update global state
+        setSelectedProject(project)
+
+        showSuccess(`Project "${project.name}" loaded successfully`)
       }
     } catch (error) {
-      console.error("Error opening folder dialog:", error)
+      handleTauriError(error, "Failed to select project")
     }
   }
 
-  const handleStartScan = () => {
-    setIsScanning(true)
-    // Placeholder - will connect to backend scan command
-    console.log("Starting scan with controls:", selectedControls)
+  const handleStartScan = async () => {
+    if (!selectedProject) {
+      handleTauriError("No project selected", "Please select a project first")
+      return
+    }
+
+    try {
+      setIsScanning(true)
+      setScanProgress({ percentage: 0, currentFile: "", filesScanned: 0, totalFiles: 0 })
+
+      showInfo("Starting scan...")
+
+      // Start scan
+      const scan = await scan_project(selectedProject.id)
+      setCurrentScanId(scan.id)
+
+      // Polling starts via useEffect
+    } catch (error) {
+      setIsScanning(false)
+      handleTauriError(error, "Failed to start scan")
+    }
   }
 
   const toggleControl = (control: string) => {
@@ -53,54 +188,6 @@ export function ScanResults() {
       [control]: !prev[control as keyof typeof prev]
     }))
   }
-
-  const violations = [
-    {
-      id: 1,
-      severity: "critical",
-      control: "CC6.7",
-      description: "Hardcoded API key in settings.py",
-      file: "config/settings.py",
-      line: 47,
-      hasFixAvailable: true,
-    },
-    {
-      id: 2,
-      severity: "critical",
-      control: "CC6.1",
-      description: "Missing authentication decorator on admin endpoint",
-      file: "api/admin/views.py",
-      line: 23,
-      hasFixAvailable: true,
-    },
-    {
-      id: 3,
-      severity: "critical",
-      control: "CC7.2",
-      description: "No audit logging for database mutations",
-      file: "models/user.py",
-      line: 89,
-      hasFixAvailable: false,
-    },
-    {
-      id: 4,
-      severity: "high",
-      control: "CC6.7",
-      description: "Database password stored in plaintext",
-      file: ".env",
-      line: 12,
-      hasFixAvailable: true,
-    },
-    {
-      id: 5,
-      severity: "high",
-      control: "CC6.1",
-      description: "Weak password policy implementation",
-      file: "auth/validators.py",
-      line: 34,
-      hasFixAvailable: true,
-    },
-  ]
 
   const filteredViolations =
     selectedSeverity === "all" ? violations : violations.filter((v) => v.severity === selectedSeverity)
@@ -142,10 +229,10 @@ export function ScanResults() {
             <div className="flex gap-3">
               <input
                 type="text"
-                value={projectPath}
-                onChange={(e) => setProjectPath(e.target.value)}
+                value={selectedProject?.path || ""}
+                readOnly
                 className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-white/30 transition-colors"
-                placeholder="/path/to/project"
+                placeholder="No project selected"
               />
               <Button onClick={handleSelectFolder} variant="outline" size="lg" className="gap-2">
                 <Folder className="w-4 h-4" />
@@ -194,20 +281,24 @@ export function ScanResults() {
           {/* Quick Stats */}
           <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
             <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-6">Last Scan</h3>
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs text-white/40 mb-1">Completed</p>
-                <p className="text-lg font-bold">2 minutes ago</p>
+            {lastScan ? (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs text-white/40 mb-1">Completed</p>
+                  <p className="text-lg font-bold">{lastScanStats.completedAt || "Unknown"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-white/40 mb-1">Files Scanned</p>
+                  <p className="text-lg font-bold tabular-nums">{lastScanStats.filesScanned || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-white/40 mb-1">Violations Found</p>
+                  <p className="text-lg font-bold tabular-nums">{lastScanStats.violationsFound}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-white/40 mb-1">Files Scanned</p>
-                <p className="text-lg font-bold tabular-nums">247</p>
-              </div>
-              <div>
-                <p className="text-xs text-white/40 mb-1">Violations Found</p>
-                <p className="text-lg font-bold tabular-nums">28</p>
-              </div>
-            </div>
+            ) : (
+              <p className="text-sm text-white/40">No scans yet</p>
+            )}
           </div>
 
           {/* Action Button */}
@@ -303,7 +394,7 @@ export function ScanResults() {
                   </td>
                   <td className="px-6 py-4">
                     <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white/5 text-xs font-mono font-medium">
-                      {violation.control}
+                      {violation.control_id}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -311,8 +402,8 @@ export function ScanResults() {
                   </td>
                   <td className="px-6 py-4">
                     <p className="text-xs text-white/60 font-mono">
-                      {violation.file}
-                      <span className="text-white/40">:{violation.line}</span>
+                      {violation.file_path}
+                      <span className="text-white/40">:{violation.line_number}</span>
                     </p>
                   </td>
                   <td className="px-6 py-4 text-right">
