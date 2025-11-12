@@ -3,6 +3,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { WaterBackground } from "@/components/ui/water-background"
 import { McpInit } from "@/components/mcp-init"
+import { Toaster } from "sonner"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -30,6 +31,7 @@ export default function RootLayout({
         <WaterBackground />
         <div className="fixed inset-0 bg-black/65 z-[5]" />
         <div className="relative z-10">{children}</div>
+        <Toaster theme="dark" richColors />
       </body>
     </html>
   )
