@@ -25,7 +25,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <McpInit />
         <WaterBackground />
-        <div className="fixed inset-0 bg-black/85 z-[5]" />
+        <div className="fixed inset-0 bg-black/65 z-[5]" />
         <div className="relative z-10">{children}</div>
       </body>
     </html>
