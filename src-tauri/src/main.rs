@@ -57,9 +57,11 @@ fn main() {
             fix::apply_fix,
             // Audit Commands (1)
             audit::get_audit_events,
-            // Settings Commands (2)
+            // Settings Commands (4)
             settings::get_settings,
             settings::update_settings,
+            settings::clear_database,
+            settings::export_data,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

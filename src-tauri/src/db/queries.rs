@@ -486,6 +486,118 @@ pub fn delete_setting(conn: &Connection, key: &str) -> Result<()> {
     Ok(())
 }
 
+// Export queries - fetch all data across all projects
+
+pub fn select_all_projects(conn: &Connection) -> Result<Vec<Project>> {
+    select_projects(conn)
+}
+
+pub fn select_all_scans(conn: &Connection) -> Result<Vec<Scan>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, project_id, status, files_scanned, violations_found, started_at, completed_at
+         FROM scans
+         ORDER BY started_at DESC"
+    ).context("Failed to prepare select all scans statement")?;
+
+    let scans = stmt.query_map([], |row| {
+        Ok(Scan {
+            id: row.get(0)?,
+            project_id: row.get(1)?,
+            status: row.get(2)?,
+            files_scanned: row.get(3)?,
+            violations_found: row.get(4)?,
+            started_at: row.get(5)?,
+            completed_at: row.get(6)?,
+        })
+    })
+    .context("Failed to query all scans")?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .context("Failed to collect all scans")?;
+
+    Ok(scans)
+}
+
+pub fn select_all_violations(conn: &Connection) -> Result<Vec<Violation>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at
+         FROM violations
+         ORDER BY detected_at DESC"
+    ).context("Failed to prepare select all violations statement")?;
+
+    let violations = stmt.query_map([], |row| {
+        Ok(Violation {
+            id: row.get(0)?,
+            scan_id: row.get(1)?,
+            control_id: row.get(2)?,
+            severity: row.get(3)?,
+            description: row.get(4)?,
+            file_path: row.get(5)?,
+            line_number: row.get(6)?,
+            code_snippet: row.get(7)?,
+            status: row.get(8)?,
+            detected_at: row.get(9)?,
+        })
+    })
+    .context("Failed to query all violations")?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .context("Failed to collect all violations")?;
+
+    Ok(violations)
+}
+
+pub fn select_all_fixes(conn: &Connection) -> Result<Vec<Fix>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, violation_id, original_code, fixed_code, explanation, trust_level, applied_at, applied_by, git_commit_sha
+         FROM fixes
+         ORDER BY id DESC"
+    ).context("Failed to prepare select all fixes statement")?;
+
+    let fixes = stmt.query_map([], |row| {
+        Ok(Fix {
+            id: row.get(0)?,
+            violation_id: row.get(1)?,
+            original_code: row.get(2)?,
+            fixed_code: row.get(3)?,
+            explanation: row.get(4)?,
+            trust_level: row.get(5)?,
+            applied_at: row.get(6)?,
+            applied_by: row.get(7)?,
+            git_commit_sha: row.get(8)?,
+        })
+    })
+    .context("Failed to query all fixes")?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .context("Failed to collect all fixes")?;
+
+    Ok(fixes)
+}
+
+pub fn select_all_audit_events(conn: &Connection) -> Result<Vec<AuditEvent>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, event_type, project_id, violation_id, fix_id, description, metadata, created_at
+         FROM audit_events
+         ORDER BY created_at DESC"
+    ).context("Failed to prepare select all audit events statement")?;
+
+    let events = stmt.query_map([], |row| {
+        Ok(AuditEvent {
+            id: row.get(0)?,
+            event_type: row.get(1)?,
+            project_id: row.get(2)?,
+            violation_id: row.get(3)?,
+            fix_id: row.get(4)?,
+            description: row.get(5)?,
+            metadata: row.get(6)?,
+            created_at: row.get(7)?,
+        })
+    })
+    .context("Failed to query all audit events")?
+    .collect::<rusqlite::Result<Vec<_>>>()
+    .context("Failed to collect all audit events")?;
+
+    Ok(events)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -55,6 +55,102 @@ pub async fn update_settings(key: String, value: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Clear all database data (scan history, violations, fixes, audit events)
+///
+/// WARNING: This is destructive and cannot be undone
+///
+/// Returns: Success or error
+#[tauri::command]
+pub async fn clear_database() -> Result<(), String> {
+    let conn = db::init_db()
+        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+
+    // Clear all tables in reverse dependency order
+    conn.execute("DELETE FROM fixes", [])
+        .map_err(|e| format!("Failed to clear fixes: {}", e))?;
+
+    conn.execute("DELETE FROM violations", [])
+        .map_err(|e| format!("Failed to clear violations: {}", e))?;
+
+    conn.execute("DELETE FROM scans", [])
+        .map_err(|e| format!("Failed to clear scans: {}", e))?;
+
+    conn.execute("DELETE FROM audit_events", [])
+        .map_err(|e| format!("Failed to clear audit events: {}", e))?;
+
+    // Note: We DON'T clear projects or settings tables
+
+    // Log audit event for clearing database
+    if let Ok(event) = create_audit_event(
+        &conn,
+        "database_cleared",
+        None,
+        None,
+        None,
+        "Database cleared - all scan history and violations removed",
+    ) {
+        let _ = queries::insert_audit_event(&conn, &event);
+    }
+
+    Ok(())
+}
+
+/// Export all database data to JSON format
+///
+/// Returns: JSON string containing all projects, scans, violations, fixes, and settings
+#[tauri::command]
+pub async fn export_data() -> Result<String, String> {
+    use serde_json::json;
+
+    let conn = db::init_db()
+        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+
+    // Fetch all data from all tables
+    let projects = queries::select_all_projects(&conn)
+        .map_err(|e| format!("Failed to fetch projects: {}", e))?;
+
+    let scans = queries::select_all_scans(&conn)
+        .map_err(|e| format!("Failed to fetch scans: {}", e))?;
+
+    let violations = queries::select_all_violations(&conn)
+        .map_err(|e| format!("Failed to fetch violations: {}", e))?;
+
+    let fixes = queries::select_all_fixes(&conn)
+        .map_err(|e| format!("Failed to fetch fixes: {}", e))?;
+
+    let audit_events = queries::select_all_audit_events(&conn)
+        .map_err(|e| format!("Failed to fetch audit events: {}", e))?;
+
+    let settings = queries::select_all_settings(&conn)
+        .map_err(|e| format!("Failed to fetch settings: {}", e))?;
+
+    // Build JSON export
+    let export = json!({
+        "version": "1.0",
+        "exported_at": chrono::Utc::now().to_rfc3339(),
+        "data": {
+            "projects": projects,
+            "scans": scans,
+            "violations": violations,
+            "fixes": fixes,
+            "audit_events": audit_events,
+            "settings": settings,
+        },
+        "counts": {
+            "projects": projects.len(),
+            "scans": scans.len(),
+            "violations": violations.len(),
+            "fixes": fixes.len(),
+            "audit_events": audit_events.len(),
+            "settings": settings.len(),
+        }
+    });
+
+    // Convert to pretty JSON string
+    serde_json::to_string_pretty(&export)
+        .map_err(|e| format!("Failed to serialize export data: {}", e))
+}
+
 /// Helper function to create audit events
 fn create_audit_event(
     _conn: &rusqlite::Connection,

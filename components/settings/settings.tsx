@@ -3,8 +3,16 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Save, Download } from "lucide-react"
-import { get_settings, update_settings, type Settings as SettingsType } from "@/lib/tauri/commands"
+import {
+  get_settings,
+  update_settings,
+  clear_database,
+  export_data,
+  type Settings as SettingsType,
+} from "@/lib/tauri/commands"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
+import { save } from "@tauri-apps/plugin-dialog"
+import { writeTextFile } from "@tauri-apps/plugin-fs"
 
 // Settings state type
 interface SettingsState {
@@ -138,9 +146,52 @@ export function Settings() {
     }
   }
 
-  // Handle export (placeholder for now - needs backend command)
-  const handleExport = () => {
-    showInfo("Export functionality coming soon")
+  // Handle export - export all data to JSON file
+  const handleExport = async () => {
+    try {
+      showInfo("Exporting data...")
+      const jsonData = await export_data()
+
+      // Open save dialog
+      const filePath = await save({
+        filters: [
+          {
+            name: "JSON",
+            extensions: ["json"],
+          },
+        ],
+        defaultPath: `ryn-export-${new Date().toISOString().split("T")[0]}.json`,
+      })
+
+      if (filePath) {
+        await writeTextFile(filePath, jsonData)
+        showSuccess(`Data exported successfully to ${filePath}`)
+      }
+    } catch (error) {
+      handleTauriError(error, "Failed to export data")
+    }
+  }
+
+  // Handle clear database
+  const handleClearDatabase = async () => {
+    const confirmed = window.confirm(
+      "WARNING: This will permanently delete all scan history, violations, fixes, and audit events. Projects and settings will be preserved. This action cannot be undone!\n\nAre you sure you want to continue?"
+    )
+
+    if (!confirmed) return
+
+    try {
+      showInfo("Clearing database...")
+      await clear_database()
+      showSuccess("Database cleared successfully!")
+    } catch (error) {
+      handleTauriError(error, "Failed to clear database")
+    }
+  }
+
+  // Handle export all data (from inline buttons)
+  const handleExportAll = async () => {
+    await handleExport()
   }
 
   // Update individual setting in state
@@ -334,9 +385,13 @@ export function Settings() {
             </div>
 
             <div className="space-y-4">
-              <button className="text-[13px] hover:underline">Clear scan history</button>
+              <button onClick={handleClearDatabase} className="text-[13px] hover:underline">
+                Clear scan history
+              </button>
               <span className="text-[#aaaaaa] mx-2">•</span>
-              <button className="text-[13px] hover:underline">Export all data</button>
+              <button onClick={handleExportAll} className="text-[13px] hover:underline">
+                Export all data
+              </button>
             </div>
           </div>
         </section>

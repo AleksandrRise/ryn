@@ -262,3 +262,19 @@ export async function update_settings(
 ): Promise<Settings> {
   return await invoke<Settings>("update_settings", { key, value })
 }
+
+/**
+ * Clear all database data (scan history, violations, fixes, audit events)
+ * WARNING: This is destructive and cannot be undone
+ */
+export async function clear_database(): Promise<void> {
+  await invoke<void>("clear_database")
+}
+
+/**
+ * Export all database data to JSON format
+ * Returns a JSON string containing all projects, scans, violations, fixes, and settings
+ */
+export async function export_data(): Promise<string> {
+  return await invoke<string>("export_data")
+}

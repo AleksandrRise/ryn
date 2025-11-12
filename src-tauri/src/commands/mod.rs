@@ -25,9 +25,11 @@
 //! Audit Commands (1):
 //! - get_audit_events: Retrieve audit trail with filters
 //!
-//! Settings Commands (2):
+//! Settings Commands (4):
 //! - get_settings: Retrieve all settings
 //! - update_settings: Create or update a setting
+//! - clear_database: Clear all scan history (destructive)
+//! - export_data: Export all data to JSON
 
 pub mod project;
 pub mod scan;
@@ -42,4 +44,4 @@ pub use scan::{detect_framework, scan_project, get_scan_progress, get_scans};
 pub use violation::{get_violations, get_violation, dismiss_violation};
 pub use fix::{generate_fix, apply_fix};
 pub use audit::get_audit_events;
-pub use settings::{get_settings, update_settings};
+pub use settings::{get_settings, update_settings, clear_database, export_data};
