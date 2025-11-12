@@ -3,6 +3,9 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+// Import modules from lib.rs
+use ryn::{commands, models, db, scanner, langgraph, rules, fix_generator, git, utils};
+
 // Placeholder command structures
 #[derive(serde::Serialize)]
 struct ScanResult {
