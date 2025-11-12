@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Save, Download } from "lucide-react"
+import { Save, Download, Code } from "lucide-react"
 import {
   get_settings,
   update_settings,
