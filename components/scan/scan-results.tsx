@@ -4,6 +4,8 @@ import { useState } from "react"
 import Link from "next/link"
 import type { Severity } from "@/lib/types/violation"
 import { open } from "@tauri-apps/plugin-dialog"
+import { Button } from "@/components/ui/button"
+import { Play, Folder, Check, FileSearch, AlertCircle, Shield } from "lucide-react"
 
 export function ScanResults() {
   const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
@@ -119,58 +121,63 @@ export function ScanResults() {
   }
 
   return (
-    <div className="px-8 py-12">
-      <div className="mb-12 animate-fade-in-up">
-        <h1 className="text-[48px] font-bold leading-none tracking-tighter mb-3">Scan Configuration</h1>
-        <p className="text-[14px] text-[#f0f0f0]">Configure and run compliance scans</p>
+    <div className="px-8 py-8 max-w-[1800px] mx-auto">
+      <div className="mb-8 animate-fade-in-up">
+        <h1 className="text-5xl font-bold leading-none tracking-tight mb-3">Scan Results</h1>
+        <p className="text-lg text-white/60">Configure, run, and review compliance scans</p>
       </div>
 
       {/* Scan Configuration Panel */}
-      <div className="mb-16 p-8 border border-[#1a1a1a] bg-[#050505] animate-fade-in-up delay-200">
-        <div className="grid grid-cols-2 gap-8 mb-8">
-          {/* Left: Project Selection */}
-          <div>
-            <h3 className="text-[13px] uppercase tracking-wider text-[#f0f0f0] mb-4">Project Location</h3>
-            <div className="flex gap-4">
+      <div className="mb-8 grid grid-cols-12 gap-6 animate-fade-in-up delay-100">
+        {/* Left: Project & Controls - 8 cols */}
+        <div className="col-span-8 space-y-6">
+          {/* Project Location */}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-white/5 rounded-lg">
+                <Folder className="w-5 h-5 text-white/60" />
+              </div>
+              <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Project Location</h3>
+            </div>
+            <div className="flex gap-3">
               <input
                 type="text"
                 value={projectPath}
                 onChange={(e) => setProjectPath(e.target.value)}
-                className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] font-mono focus:outline-none focus:border-white"
+                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-white/30 transition-colors"
                 placeholder="/path/to/project"
               />
-              <button
-                onClick={handleSelectFolder}
-                className="px-6 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-colors"
-              >
-                Browse...
-              </button>
+              <Button onClick={handleSelectFolder} variant="outline" size="lg" className="gap-2">
+                <Folder className="w-4 h-4" />
+                Browse
+              </Button>
             </div>
           </div>
 
-          {/* Right: SOC 2 Controls */}
-          <div>
-            <h3 className="text-[13px] uppercase tracking-wider text-[#f0f0f0] mb-4">SOC 2 Controls</h3>
-            <div className="grid grid-cols-2 gap-3">
+          {/* SOC 2 Controls */}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-white/5 rounded-lg">
+                <Shield className="w-5 h-5 text-white/60" />
+              </div>
+              <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">SOC 2 Controls</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               {Object.entries(selectedControls).map(([control, checked]) => (
                 <button
                   key={control}
                   onClick={() => toggleControl(control)}
-                  className={`px-4 py-3 text-left transition-all border ${
+                  className={`relative overflow-hidden rounded-xl px-5 py-4 text-left transition-all duration-300 border-2 ${
                     checked
-                      ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                      : "bg-[#0a0a0a] text-[#666] border-[#1a1a1a] hover:border-[#333]"
+                      ? "bg-white/20 text-white border-white/30 shadow-lg"
+                      : "bg-black/40 text-white/60 border-white/10 hover:border-white/20"
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-[13px] font-medium tracking-wide">{control}</p>
-                    <span className={`text-[10px] font-bold tracking-widest ${
-                      checked ? "text-black" : "text-[#333]"
-                    }`}>
-                      {checked ? "ON" : "OFF"}
-                    </span>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-bold tracking-wide">{control}</p>
+                    {checked && <Check className="w-4 h-4" />}
                   </div>
-                  <p className={`text-[11px] ${checked ? "opacity-70" : "opacity-50"}`}>
+                  <p className={`text-xs ${checked ? "text-white/70" : "text-white/40"}`}>
                     {control === "CC6.1" && "Access Controls"}
                     {control === "CC6.7" && "Encryption & Secrets"}
                     {control === "CC7.2" && "Logging & Monitoring"}
@@ -182,102 +189,149 @@ export function ScanResults() {
           </div>
         </div>
 
-        {/* Start Scan Button */}
-        <button
-          onClick={handleStartScan}
-          disabled={isScanning}
-          className="px-8 py-3 bg-[#b3b3b3] text-black text-[13px] font-medium hover:bg-[#999] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isScanning ? "Scanning..." : "Start Scan"}
-        </button>
+        {/* Right: Quick Stats & Actions - 4 cols */}
+        <div className="col-span-4 space-y-6">
+          {/* Quick Stats */}
+          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+            <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-6">Last Scan</h3>
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs text-white/40 mb-1">Completed</p>
+                <p className="text-lg font-bold">2 minutes ago</p>
+              </div>
+              <div>
+                <p className="text-xs text-white/40 mb-1">Files Scanned</p>
+                <p className="text-lg font-bold tabular-nums">247</p>
+              </div>
+              <div>
+                <p className="text-xs text-white/40 mb-1">Violations Found</p>
+                <p className="text-lg font-bold tabular-nums">28</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <Button
+            onClick={handleStartScan}
+            disabled={isScanning}
+            size="lg"
+            className="w-full gap-2 h-14"
+          >
+            <Play className="w-5 h-5" />
+            {isScanning ? "Scanning..." : "Start New Scan"}
+          </Button>
+        </div>
       </div>
 
       {/* Scan Progress Indicator */}
       {isScanning && (
-        <div className="mb-12 p-8 border border-[#1a1a1a] bg-[#050505]">
-          <div className="mb-4">
-            <div className="flex items-baseline justify-between mb-2">
-              <h3 className="text-[13px] uppercase tracking-wider text-[#f0f0f0]">Scanning...</h3>
-              <span className="text-[24px] font-bold tabular-nums">{scanProgress.percentage}%</span>
+        <div className="mb-8 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 animate-fade-in-up delay-200">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="p-3 bg-blue-500/20 rounded-xl animate-pulse">
+              <FileSearch className="w-6 h-6 text-blue-400" />
             </div>
-            <div className="h-1 bg-[#1a1a1a] overflow-hidden">
-              <div
-                className="h-full bg-white transition-all duration-300"
-                style={{ width: `${scanProgress.percentage}%` }}
-              />
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold mb-1">Scanning in progress...</h3>
+              <p className="text-sm text-white/60 font-mono truncate">{scanProgress.currentFile || "Initializing scan..."}</p>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold tabular-nums">{scanProgress.percentage}%</div>
+              <p className="text-xs text-white/40">{scanProgress.filesScanned} / {scanProgress.totalFiles} files</p>
             </div>
           </div>
-          <div className="flex justify-between text-[12px] text-[#f0f0f0]">
-            <span className="font-mono">{scanProgress.currentFile || "Initializing scan..."}</span>
-            <span>
-              {scanProgress.filesScanned} / {scanProgress.totalFiles} files
-            </span>
+          <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-300"
+              style={{ width: `${scanProgress.percentage}%` }}
+            />
           </div>
         </div>
       )}
 
-      {/* Scan Results */}
-      <div className="mb-12 animate-fade-in-up delay-400">
-        <h2 className="text-[36px] font-bold leading-none tracking-tighter mb-3">Scan Results</h2>
-        <div className="flex gap-4 text-[13px] text-[#fafafa]">
-          <span>Completed 2 minutes ago</span>
-          <span>•</span>
-          <span>247 files scanned</span>
-          <span>•</span>
-          <span>28 violations found</span>
+      {/* Results Header */}
+      <div className="mb-6 animate-fade-in-up delay-300">
+        <h2 className="text-3xl font-bold leading-none tracking-tight mb-2">Violations</h2>
+        <p className="text-white/60">{filteredViolations.length} violations found</p>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="mb-6 flex gap-3 animate-fade-in-up delay-400">
+        {(["all", "critical", "high", "medium", "low"] as const).map((severity) => {
+          const count = severity === "all" ? violations.length : violations.filter(v => v.severity === severity).length
+          return (
+            <button
+              key={severity}
+              onClick={() => setSelectedSeverity(severity as Severity | "all")}
+              className={`px-4 py-2.5 rounded-xl text-sm font-semibold uppercase tracking-wide transition-all ${
+                selectedSeverity === severity
+                  ? "bg-white/20 text-white shadow-lg"
+                  : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80"
+              }`}
+            >
+              {severity} <span className="ml-2 opacity-60">({count})</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Violations Table */}
+      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden animate-fade-in-up delay-500">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Severity</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Control</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Description</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Location</th>
+                <th className="text-right px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredViolations.map((violation, i) => (
+                <tr key={violation.id} className="group border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                      violation.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                      violation.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                      violation.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-white/10 text-white/60'
+                    }`}>
+                      {violation.severity === 'critical' && <AlertCircle className="w-3 h-3" />}
+                      {violation.severity}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white/5 text-xs font-mono font-medium">
+                      {violation.control}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <p className="text-sm text-white/90">{violation.description}</p>
+                  </td>
+                  <td className="px-6 py-4">
+                    <p className="text-xs text-white/60 font-mono">
+                      {violation.file}
+                      <span className="text-white/40">:{violation.line}</span>
+                    </p>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <Link
+                      href={`/violation/${violation.id}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-white/60 hover:text-white transition-colors"
+                    >
+                      View details
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
-
-      <div className="flex gap-6 mb-8 text-[13px] border-b border-[#1a1a1a] animate-fade-in-up delay-500">
-        {(["all", "critical", "high", "medium", "low"] as const).map((severity) => (
-          <button
-            key={severity}
-            onClick={() => setSelectedSeverity(severity as Severity | "all")}
-            className={`uppercase tracking-wider pb-3 transition-all ${
-              selectedSeverity === severity
-                ? "text-white border-b-2 border-white"
-                : "text-[#f5f5f5] hover:text-[#fafafa] border-b-2 border-transparent"
-            }`}
-          >
-            {severity}
-          </button>
-        ))}
-      </div>
-
-      <table className="w-full animate-fade-in-up delay-600">
-        <thead>
-          <tr>
-            <th className="w-24">Severity</th>
-            <th className="w-24">Control</th>
-            <th>Description</th>
-            <th className="w-80">Location</th>
-            <th className="w-32"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredViolations.map((violation) => (
-            <tr key={violation.id} className="group hover:bg-[#0a0a0a]">
-              <td>
-                <span
-                  className={`text-[13px] uppercase tracking-wider font-medium ${getSeverityColor(violation.severity)}`}
-                >
-                  {violation.severity}
-                </span>
-              </td>
-              <td className="text-[13px] text-[#f0f0f0]">{violation.control}</td>
-              <td className="text-[14px]">{violation.description}</td>
-              <td className="text-[12px] text-[#f0f0f0] font-mono">
-                {violation.file}:{violation.line}
-              </td>
-              <td className="text-right">
-                <Link href={`/violation/${violation.id}`} className="text-[12px] text-white hover:underline">
-                  View details →
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   )
 }

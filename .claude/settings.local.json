@@ -9,7 +9,11 @@
       "Bash(cd:*)",
       "Bash(pnpm install:*)",
       "Bash(pnpm tauri dev:*)",
-      "Bash(pnpm add:*)"
+      "Bash(pnpm add:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }

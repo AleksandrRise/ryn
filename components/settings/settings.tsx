@@ -1,6 +1,8 @@
 "use client"
 
 import { useReducer } from "react"
+import { Button } from "@/components/ui/button"
+import { Save, Download, Code, Database, Bell, Zap } from "lucide-react"
 
 // Settings state type
 interface SettingsState {
@@ -76,42 +78,76 @@ function settingsReducer(state: SettingsState, action: SettingsAction): Settings
   }
 }
 
+// Modern Toggle Component
+function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void }) {
+  return (
+    <button
+      onClick={onChange}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+        enabled ? "bg-white" : "bg-white/20"
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+          enabled ? "translate-x-6 bg-black" : "translate-x-1 bg-white/60"
+        }`}
+      />
+    </button>
+  )
+}
+
 export function Settings() {
   const [state, dispatch] = useReducer(settingsReducer, initialState)
 
   return (
-    <div className="px-8 py-12 max-w-4xl">
-      <h1 className="text-[48px] font-bold leading-none tracking-tighter mb-16 animate-fade-in-up">Settings</h1>
+    <div className="px-8 py-8 max-w-[1400px] mx-auto">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-8 animate-fade-in-up">
+        <div>
+          <h1 className="text-5xl font-bold leading-none tracking-tight mb-3">Settings</h1>
+          <p className="text-lg text-white/60">Configure compliance scanning and integrations</p>
+        </div>
+        <div className="flex gap-3">
+          <Button size="lg" variant="outline" className="gap-2">
+            <Download className="w-4 h-4" />
+            Export
+          </Button>
+          <Button size="lg" className="gap-2">
+            <Save className="w-4 h-4" />
+            Save Changes
+          </Button>
+        </div>
+      </div>
 
-      <div className="space-y-16">
-        {/* Framework Detection */}
-        <section className="animate-fade-in-up delay-200">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Framework</h2>
-          <div className="space-y-6">
-            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
+      {/* Settings Grid */}
+      <div className="grid grid-cols-2 gap-6 animate-fade-in-up delay-100">
+        {/* Framework Detection Card */}
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-white/5 rounded-lg">
+              <Code className="w-5 h-5 text-white/60" />
+            </div>
+            <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Framework</h2>
+          </div>
+          <div className="space-y-5">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-[14px] mb-1">Auto-detect framework</p>
-                <p className="text-[12px] text-[#aaaaaa]">Automatically identify your project framework</p>
+                <p className="text-sm font-medium mb-1">Auto-detect framework</p>
+                <p className="text-xs text-white/50">Automatically identify your project</p>
               </div>
-              <button
-                onClick={() => dispatch({ type: "SET_AUTO_DETECT_FRAMEWORK", payload: !state.autoDetectFramework })}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
-                  state.autoDetectFramework
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
-                }`}
-              >
-                {state.autoDetectFramework ? "ON" : "OFF"}
-              </button>
+              <Toggle
+                enabled={state.autoDetectFramework}
+                onChange={() => dispatch({ type: "SET_AUTO_DETECT_FRAMEWORK", payload: !state.autoDetectFramework })}
+              />
             </div>
 
             {!state.autoDetectFramework && (
-              <div className="py-4 border-b border-[#1a1a1a]">
-                <label className="block mb-2 text-[14px]">Select framework</label>
+              <div>
+                <label className="block mb-2 text-sm font-medium">Select framework</label>
                 <select
                   value={state.framework}
                   onChange={(e) => dispatch({ type: "SET_FRAMEWORK", payload: e.target.value })}
-                  className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] focus:outline-none focus:border-white"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-white/30 transition-colors"
                 >
                   <option value="Django">Django</option>
                   <option value="Flask">Flask</option>
@@ -124,7 +160,7 @@ export function Settings() {
               </div>
             )}
           </div>
-        </section>
+        </div>
 
         {/* Trust Levels */}
         <section className="animate-fade-in-up delay-300">
