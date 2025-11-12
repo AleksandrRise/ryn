@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_detect_stripe_live_key() {
-        let code = "STRIPE_KEY = 'sk_live_abcdef1234567890abcdef'";
+        let code = "STRIPE_KEY = 'sk_live_testkey0000000000'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect Stripe live key");
         assert_eq!(violations[0].severity, "critical");
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_detect_stripe_test_key() {
-        let code = "STRIPE_TEST_KEY = 'sk_test_abcdef1234567890abcdef'";
+        let code = "STRIPE_TEST_KEY = 'sk_test_testkey0000000000'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect Stripe test key");
         // Test keys are high severity, live keys are critical
@@ -477,7 +477,7 @@ mod tests {
 
     #[test]
     fn test_detect_github_token() {
-        let code = "GITHUB_TOKEN = 'ghp_abcdefghijklmnopqrstuvwxyz123456789'";
+        let code = "GITHUB_TOKEN = 'ghp_testtoken0000000000000000000'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect GitHub token");
         assert_eq!(violations[0].severity, "critical");
@@ -486,14 +486,14 @@ mod tests {
 
     #[test]
     fn test_detect_github_oauth_token() {
-        let code = "GITHUB_OAUTH = 'gho_abcdefghijklmnopqrstuvwxyz123456789'";
+        let code = "GITHUB_OAUTH = 'gho_testtoken0000000000000000000'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect GitHub OAuth token");
     }
 
     #[test]
     fn test_detect_aws_access_key() {
-        let code = "aws_access_key_id = AKIAIOSFODNN7EXAMPLE";
+        let code = "aws_access_key_id = AKIATESTKEY0000000000";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect AWS access key");
         assert_eq!(violations[0].severity, "critical");
@@ -501,7 +501,7 @@ mod tests {
 
     #[test]
     fn test_detect_hardcoded_password() {
-        let code = "password = 'mySecurePassword123'";
+        let code = "password = '[placeholder_password]'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect hardcoded password");
         assert_eq!(violations[0].description, "Hardcoded password or secret in code");
@@ -509,7 +509,7 @@ mod tests {
 
     #[test]
     fn test_detect_database_credentials() {
-        let code = "db_url = 'postgresql://admin:password123@localhost:5432/mydb'";
+        let code = "db_url = 'postgresql://testuser:testpass@localhost:5432/mydb'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect database credentials");
         assert!(violations[0].description.contains("credentials"));
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn test_detect_mongodb_credentials() {
-        let code = "MONGO_URL = 'mongodb://user:secret@cluster.mongodb.net/db'";
+        let code = "MONGO_URL = 'mongodb://testuser:testpass@cluster0.mongodb.net/testdb'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(
             !violations.is_empty(),
@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn test_detect_jwt_token() {
-        let code = "bearer_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'";
+        let code = "bearer_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6InRlc3QifQ.eyJzdWIiOiJ0ZXN0In0.test'";
         let violations = CC67SecretsRule::analyze(code, "auth.py", 1).unwrap();
         // JWT-like tokens may or may not be flagged depending on context detection
         // This test verifies the detection runs without error
@@ -616,7 +616,7 @@ mod tests {
 
     #[test]
     fn test_detect_generic_api_key() {
-        let code = "api_key = 'sk_1234567890abcdefghij'";
+        let code = "api_key = 'sk_abc123def456ghi789jkl'";
         let violations = CC67SecretsRule::analyze(code, "service.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect generic API key");
     }
@@ -634,7 +634,7 @@ mod tests {
 
     #[test]
     fn test_detect_twilio_account_sid() {
-        let code = "TWILIO_ACCOUNT_SID = 'AC0123456789abcdef0123456789abcd'";
+        let code = "TWILIO_ACCOUNT_SID = 'ACTestSID0123456789abcdef'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         // Twilio detection is challenging due to pattern matching complexity
         // This test verifies the overall system works without panicking
@@ -655,28 +655,28 @@ mod tests {
 
     #[test]
     fn test_multiple_secrets_detected() {
-        let code = "stripe_key = 'sk_live_test'\ngithub_token = 'ghp_abcdefghijklmnopqrstuvwxyz123456789'\npassword = 'secret123'";
+        let code = "stripe_key = 'sk_live_testkey0000'\ngithub_token = 'ghp_testtoken0000000000000000000'\npassword = 'testsecret'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(violations.len() >= 2, "Should detect multiple secrets");
     }
 
     #[test]
     fn test_mysql_credentials() {
-        let code = "connection = mysql://root:password@localhost:3306/db";
+        let code = "connection = mysql://testuser:testpass@localhost:3306/db";
         let violations = CC67SecretsRule::analyze(code, "database.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect MySQL credentials");
     }
 
     #[test]
     fn test_oracle_credentials() {
-        let code = "connection = oracle://admin:password123@host:1521/ORCL";
+        let code = "connection = oracle://testadmin:testpass@host:1521/ORCL";
         let violations = CC67SecretsRule::analyze(code, "database.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect Oracle credentials");
     }
 
     #[test]
     fn test_redaction_preserves_readability() {
-        let code = "stripe_key = 'sk_live_test123456789'";
+        let code = "stripe_key = 'sk_live_testkey0000'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         if !violations.is_empty() {
             // The code snippet should be redacted
@@ -686,7 +686,7 @@ mod tests {
 
     #[test]
     fn test_aws_secret_key() {
-        let code = "aws_secret_key = \"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\"";
+        let code = "aws_secret_key = \"wJalrXUtnFEMI/K7MDENGtest1234EXAMPLEKEY\"";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect AWS secret key");
     }
@@ -701,14 +701,14 @@ mod tests {
 
     #[test]
     fn test_stripe_public_key() {
-        let code = "stripe_public_key = 'pk_live_abcdef1234567890'";
+        let code = "stripe_public_key = 'pk_live_testkey0000000000'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect Stripe public key");
     }
 
     #[test]
     fn test_square_api_key() {
-        let code = "square_key = 'sq0atp_abcdefghijklmnopqrstuvwxyz1234567890'";
+        let code = "square_key = 'sq0atp_testkey0000000000000000'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(
             !violations.is_empty(),
