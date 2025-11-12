@@ -52,11 +52,26 @@ pub async fn scan_project(project_id: i64) -> Result<i64, String> {
     let scan_id = queries::insert_scan(&conn, project_id)
         .map_err(|e| format!("Failed to create scan: {}", e))?;
 
+    // Return scan_id immediately and scan in background
+    let project_path = project.path.clone();
+    tokio::spawn(async move {
+        if let Err(e) = perform_scan_in_background(scan_id, project_path).await {
+            eprintln!("[scan] Background scan failed: {}", e);
+        }
+    });
+
+    Ok(scan_id)
+}
+
+async fn perform_scan_in_background(scan_id: i64, project_path: String) -> Result<(), String> {
+    let conn = db::init_db()
+        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+
     // Walk through project files
     let mut files_scanned = 0;
     let mut violations_found = 0;
 
-    for entry in WalkDir::new(&project.path)
+    for entry in WalkDir::new(&project_path)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
@@ -76,7 +91,7 @@ pub async fn scan_project(project_id: i64) -> Result<i64, String> {
                 // Detect language
                 if let Some(_language) = FrameworkDetector::detect_language(file_path) {
                     let relative_path = file_path
-                        .strip_prefix(&project.path)
+                        .strip_prefix(&project_path)
                         .unwrap_or(file_path)
                         .to_string_lossy()
                         .to_string();
@@ -107,19 +122,9 @@ pub async fn scan_project(project_id: i64) -> Result<i64, String> {
     queries::update_scan_results(&conn, scan_id, files_scanned, violations_found)
         .map_err(|e| format!("Failed to update scan results: {}", e))?;
 
-    // Log audit event
-    if let Ok(event) = create_audit_event(
-        &conn,
-        "scan_completed",
-        Some(project_id),
-        None,
-        None,
-        &format!("Scanned {} files, found {} violations", files_scanned, violations_found),
-    ) {
-        let _ = queries::insert_audit_event(&conn, &event);
-    }
+    println!("[scan] Completed scan {}: {} files scanned, {} violations found", scan_id, files_scanned, violations_found);
 
-    Ok(scan_id)
+    Ok(())
 }
 
 /// Get scan progress
