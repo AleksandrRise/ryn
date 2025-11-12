@@ -1,8 +1,10 @@
 "use client"
 
-import { useReducer } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Save, Download, Code, Database, Bell, Zap } from "lucide-react"
+import { Save, Download } from "lucide-react"
+import { get_settings, update_settings, type Settings as SettingsType } from "@/lib/tauri/commands"
+import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
 
 // Settings state type
 interface SettingsState {
@@ -19,22 +21,8 @@ interface SettingsState {
   slackWebhook: string
 }
 
-// Action types
-type SettingsAction =
-  | { type: "SET_AUTO_APPLY_LOW"; payload: boolean }
-  | { type: "SET_AUTO_APPLY_MEDIUM"; payload: boolean }
-  | { type: "SET_CONTINUOUS_MONITORING"; payload: boolean }
-  | { type: "SET_AUTO_DETECT_FRAMEWORK"; payload: boolean }
-  | { type: "SET_FRAMEWORK"; payload: string }
-  | { type: "SET_SCAN_FREQUENCY"; payload: string }
-  | { type: "SET_DATABASE_TYPE"; payload: string }
-  | { type: "SET_CONNECTION_STRING"; payload: string }
-  | { type: "SET_DESKTOP_NOTIFICATIONS"; payload: boolean }
-  | { type: "SET_EMAIL_ALERTS"; payload: boolean }
-  | { type: "SET_SLACK_WEBHOOK"; payload: string }
-
-// Initial state
-const initialState: SettingsState = {
+// Default state values
+const defaultState: SettingsState = {
   autoApplyLow: true,
   autoApplyMedium: false,
   continuousMonitoring: true,
@@ -48,34 +36,43 @@ const initialState: SettingsState = {
   slackWebhook: "",
 }
 
-// Reducer function
-function settingsReducer(state: SettingsState, action: SettingsAction): SettingsState {
-  switch (action.type) {
-    case "SET_AUTO_APPLY_LOW":
-      return { ...state, autoApplyLow: action.payload }
-    case "SET_AUTO_APPLY_MEDIUM":
-      return { ...state, autoApplyMedium: action.payload }
-    case "SET_CONTINUOUS_MONITORING":
-      return { ...state, continuousMonitoring: action.payload }
-    case "SET_AUTO_DETECT_FRAMEWORK":
-      return { ...state, autoDetectFramework: action.payload }
-    case "SET_FRAMEWORK":
-      return { ...state, framework: action.payload }
-    case "SET_SCAN_FREQUENCY":
-      return { ...state, scanFrequency: action.payload }
-    case "SET_DATABASE_TYPE":
-      return { ...state, databaseType: action.payload }
-    case "SET_CONNECTION_STRING":
-      return { ...state, connectionString: action.payload }
-    case "SET_DESKTOP_NOTIFICATIONS":
-      return { ...state, desktopNotifications: action.payload }
-    case "SET_EMAIL_ALERTS":
-      return { ...state, emailAlerts: action.payload }
-    case "SET_SLACK_WEBHOOK":
-      return { ...state, slackWebhook: action.payload }
-    default:
-      return state
-  }
+// Map frontend state keys to backend storage keys
+const settingsKeyMap: Record<keyof SettingsState, string> = {
+  autoApplyLow: "auto_apply_low",
+  autoApplyMedium: "auto_apply_medium",
+  continuousMonitoring: "continuous_monitoring",
+  autoDetectFramework: "auto_detect_framework",
+  framework: "framework",
+  scanFrequency: "scan_frequency",
+  databaseType: "database_type",
+  connectionString: "connection_string",
+  desktopNotifications: "desktop_notifications",
+  emailAlerts: "email_alerts",
+  slackWebhook: "slack_webhook",
+}
+
+// Helper: Convert backend settings array to state object
+function settingsArrayToState(settings: SettingsType[]): SettingsState {
+  const state = { ...defaultState }
+
+  settings.forEach((setting) => {
+    // Find the state key that maps to this backend key
+    const stateKey = Object.entries(settingsKeyMap).find(
+      ([_k, backendKey]) => backendKey === setting.key
+    )?.[0] as keyof SettingsState | undefined
+
+    if (stateKey) {
+      const value = setting.value
+      // Parse boolean strings
+      if (value === "true" || value === "false") {
+        (state as any)[stateKey] = value === "true"
+      } else {
+        (state as any)[stateKey] = value
+      }
+    }
+  })
+
+  return state
 }
 
 // Modern Toggle Component
@@ -97,7 +94,73 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void 
 }
 
 export function Settings() {
-  const [state, dispatch] = useReducer(settingsReducer, initialState)
+  const [state, setState] = useState<SettingsState>(defaultState)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+
+  // Load settings from backend on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        setIsLoading(true)
+        const settings = await get_settings()
+        const loadedState = settingsArrayToState(settings)
+        setState(loadedState)
+      } catch (error) {
+        handleTauriError(error, "Failed to load settings")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadSettings()
+  }, [])
+
+  // Save all settings to backend
+  const handleSaveChanges = async () => {
+    try {
+      setIsSaving(true)
+      showInfo("Saving settings...")
+
+      // Save each setting to backend
+      const savePromises = Object.entries(state).map(([key, value]) => {
+        const backendKey = settingsKeyMap[key as keyof SettingsState]
+        const stringValue = typeof value === "boolean" ? value.toString() : value
+        return update_settings(backendKey, stringValue)
+      })
+
+      await Promise.all(savePromises)
+      showSuccess("Settings saved successfully!")
+    } catch (error) {
+      handleTauriError(error, "Failed to save settings")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // Handle export (placeholder for now - needs backend command)
+  const handleExport = () => {
+    showInfo("Export functionality coming soon")
+  }
+
+  // Update individual setting in state
+  const updateSetting = (key: keyof SettingsState, value: any) => {
+    setState((prev) => ({ ...prev, [key]: value }))
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="px-8 py-8 max-w-[1400px] mx-auto flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 rounded-lg border border-white/10">
+            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            <span className="text-sm text-white/70">Loading settings...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="px-8 py-8 max-w-[1400px] mx-auto">
@@ -108,13 +171,13 @@ export function Settings() {
           <p className="text-lg text-white/60">Configure compliance scanning and integrations</p>
         </div>
         <div className="flex gap-3">
-          <Button size="lg" variant="outline" className="gap-2">
+          <Button onClick={handleExport} size="lg" variant="outline" className="gap-2" disabled={isSaving}>
             <Download className="w-4 h-4" />
             Export
           </Button>
-          <Button size="lg" className="gap-2">
+          <Button onClick={handleSaveChanges} size="lg" className="gap-2" disabled={isSaving}>
             <Save className="w-4 h-4" />
-            Save Changes
+            {isSaving ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </div>
@@ -137,7 +200,7 @@ export function Settings() {
               </div>
               <Toggle
                 enabled={state.autoDetectFramework}
-                onChange={() => dispatch({ type: "SET_AUTO_DETECT_FRAMEWORK", payload: !state.autoDetectFramework })}
+                onChange={() => updateSetting("autoDetectFramework", !state.autoDetectFramework)}
               />
             </div>
 
@@ -146,7 +209,7 @@ export function Settings() {
                 <label className="block mb-2 text-sm font-medium">Select framework</label>
                 <select
                   value={state.framework}
-                  onChange={(e) => dispatch({ type: "SET_FRAMEWORK", payload: e.target.value })}
+                  onChange={(e) => updateSetting("framework", e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-white/30 transition-colors"
                 >
                   <option value="Django">Django</option>
@@ -172,7 +235,7 @@ export function Settings() {
                 <p className="text-[12px] text-[#aaaaaa]">Automatically apply fixes with minimal impact</p>
               </div>
               <button
-                onClick={() => dispatch({ type: "SET_AUTO_APPLY_LOW", payload: !state.autoApplyLow })}
+                onClick={() => updateSetting("autoApplyLow", !state.autoApplyLow)}
                 className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
                   state.autoApplyLow
                     ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
@@ -189,7 +252,7 @@ export function Settings() {
                 <p className="text-[12px] text-[#aaaaaa]">Requires preview before applying</p>
               </div>
               <button
-                onClick={() => dispatch({ type: "SET_AUTO_APPLY_MEDIUM", payload: !state.autoApplyMedium })}
+                onClick={() => updateSetting("autoApplyMedium", !state.autoApplyMedium)}
                 className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
                   state.autoApplyMedium
                     ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
@@ -212,7 +275,7 @@ export function Settings() {
                 <p className="text-[12px] text-[#aaaaaa]">Automatically scan files when they change</p>
               </div>
               <button
-                onClick={() => dispatch({ type: "SET_CONTINUOUS_MONITORING", payload: !state.continuousMonitoring })}
+                onClick={() => updateSetting("continuousMonitoring", !state.continuousMonitoring)}
                 className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
                   state.continuousMonitoring
                     ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
@@ -227,7 +290,7 @@ export function Settings() {
               <label className="block mb-2 text-[14px]">Scan frequency</label>
               <select
                 value={state.scanFrequency}
-                onChange={(e) => dispatch({ type: "SET_SCAN_FREQUENCY", payload: e.target.value })}
+                onChange={(e) => updateSetting("scanFrequency", e.target.value)}
                 className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] focus:outline-none focus:border-white"
               >
                 <option value="on-commit">On every commit</option>
@@ -248,7 +311,7 @@ export function Settings() {
               <label className="block mb-2 text-[14px]">Database type</label>
               <select
                 value={state.databaseType}
-                onChange={(e) => dispatch({ type: "SET_DATABASE_TYPE", payload: e.target.value })}
+                onChange={(e) => updateSetting("databaseType", e.target.value)}
                 className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] focus:outline-none focus:border-white"
               >
                 <option value="PostgreSQL">PostgreSQL</option>
@@ -263,7 +326,7 @@ export function Settings() {
               <input
                 type="text"
                 value={state.connectionString}
-                onChange={(e) => dispatch({ type: "SET_CONNECTION_STRING", payload: e.target.value })}
+                onChange={(e) => updateSetting("connectionString", e.target.value)}
                 placeholder="postgresql://user:password@localhost:5432/dbname"
                 className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] font-mono focus:outline-none focus:border-white"
               />
@@ -288,7 +351,7 @@ export function Settings() {
                 <p className="text-[12px] text-[#aaaaaa]">Show alerts for new violations and scan completion</p>
               </div>
               <button
-                onClick={() => dispatch({ type: "SET_DESKTOP_NOTIFICATIONS", payload: !state.desktopNotifications })}
+                onClick={() => updateSetting("desktopNotifications", !state.desktopNotifications)}
                 className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
                   state.desktopNotifications
                     ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
@@ -305,7 +368,7 @@ export function Settings() {
                 <p className="text-[12px] text-[#aaaaaa]">Receive critical violation alerts via email</p>
               </div>
               <button
-                onClick={() => dispatch({ type: "SET_EMAIL_ALERTS", payload: !state.emailAlerts })}
+                onClick={() => updateSetting("emailAlerts", !state.emailAlerts)}
                 className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
                   state.emailAlerts
                     ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
@@ -321,7 +384,7 @@ export function Settings() {
               <input
                 type="text"
                 value={state.slackWebhook}
-                onChange={(e) => dispatch({ type: "SET_SLACK_WEBHOOK", payload: e.target.value })}
+                onChange={(e) => updateSetting("slackWebhook", e.target.value)}
                 placeholder="https://hooks.slack.com/services/..."
                 className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] font-mono focus:outline-none focus:border-white"
               />
