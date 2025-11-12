@@ -79,8 +79,8 @@ fn create_audit_event(
 }
 
 #[cfg(test)]
-    use crate::db::test_helpers::TestDbGuard;
 mod tests {
+    use crate::db::test_helpers::TestDbGuard;
     use super::*;
     use tempfile::TempDir;
 
