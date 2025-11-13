@@ -97,6 +97,7 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
         applied_at: None,
         applied_by: "ryn-ai".to_string(),
         git_commit_sha: None,
+        backup_path: None,
     };
 
     let fix_id = queries::insert_fix(&conn, &fix)
@@ -203,6 +204,21 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
     // Reconstruct file content (preserving line endings)
     let updated_content = lines.join("\n");
 
+    // BACKUP: Create backup before modifying file
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    let backup_dir = repo_path.join(format!(".ryn-backups/{}", timestamp));
+    std::fs::create_dir_all(&backup_dir)
+        .map_err(|e| format!("Failed to create backup directory: {}", e))?;
+
+    let backup_file_name = file_path.file_name()
+        .ok_or_else(|| "Failed to extract filename from path".to_string())?;
+    let backup_path = backup_dir.join(backup_file_name);
+
+    std::fs::copy(&file_path, &backup_path)
+        .map_err(|e| format!("Failed to create backup: {}", e))?;
+
+    let backup_path_str = backup_path.to_string_lossy().to_string();
+
     // Write updated file (path already validated)
     std::fs::write(&file_path, &updated_content)
         .map_err(|e| format!("Failed to write fixed file: {}", e))?;
@@ -217,8 +233,8 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
     let commit_sha = GitOperations::commit_fix(repo_path, &file_path, &commit_message)
         .map_err(|e| format!("Failed to commit fix: {}", e))?;
 
-    // Update fix record
-    queries::update_fix_applied(&conn, fix_id, &commit_sha)
+    // Update fix record with git commit SHA and backup path
+    queries::update_fix_applied(&conn, fix_id, &commit_sha, Some(&backup_path_str))
         .map_err(|e| format!("Failed to update fix: {}", e))?;
 
     // Update violation status to fixed
@@ -408,6 +424,7 @@ mod tests {
             applied_at: None,
             applied_by: "ryn-ai".to_string(),
             git_commit_sha: None,
+            backup_path: None,
         };
         let fix_id = queries::insert_fix(&conn, &fix).unwrap();
 
@@ -469,6 +486,7 @@ mod tests {
             applied_at: None,
             applied_by: "ryn-ai".to_string(),
             git_commit_sha: None,
+            backup_path: None,
         };
         let fix_id = queries::insert_fix(&conn, &fix).unwrap();
 
@@ -501,6 +519,7 @@ mod tests {
             applied_at: None,
             applied_by: "ryn-ai".to_string(),
             git_commit_sha: None,
+            backup_path: None,
         };
         let fix_id = queries::insert_fix(&conn, &fix).unwrap();
 
@@ -589,6 +608,7 @@ mod tests {
             applied_at: None,
             applied_by: "ryn-ai".to_string(),
             git_commit_sha: None,
+            backup_path: None,
         };
         let fix_id = queries::insert_fix(&conn, &fix).unwrap();
 
@@ -655,6 +675,7 @@ mod tests {
             applied_at: None,
             applied_by: "ryn-ai".to_string(),
             git_commit_sha: None,
+            backup_path: None,
         };
         let fix_id = queries::insert_fix(&conn, &fix).unwrap();
 
@@ -706,6 +727,7 @@ mod tests {
             applied_at: None,
             applied_by: "ryn-ai".to_string(),
             git_commit_sha: None,
+            backup_path: None,
         };
         let fix_id = queries::insert_fix(&conn, &fix).unwrap();
 

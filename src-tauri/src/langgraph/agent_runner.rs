@@ -112,6 +112,7 @@ pub fn agent_to_fix(violation_id: i64, agent_fix: &AgentFix) -> Fix {
         applied_at: None,
         applied_by: "ryn-ai".to_string(),
         git_commit_sha: None,
+        backup_path: None,
     }
 }
 

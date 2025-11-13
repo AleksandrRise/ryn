@@ -265,7 +265,7 @@ pub fn insert_fix(conn: &Connection, fix: &Fix) -> Result<i64> {
 
 pub fn select_fix(conn: &Connection, id: i64) -> Result<Option<Fix>> {
     let mut stmt = conn
-        .prepare("SELECT id, violation_id, original_code, fixed_code, explanation, trust_level, applied_at, applied_by, git_commit_sha FROM fixes WHERE id = ?")
+        .prepare("SELECT id, violation_id, original_code, fixed_code, explanation, trust_level, applied_at, applied_by, git_commit_sha, backup_path FROM fixes WHERE id = ?")
         .context("Failed to prepare select fix query")?;
 
     let fix = stmt
@@ -280,6 +280,7 @@ pub fn select_fix(conn: &Connection, id: i64) -> Result<Option<Fix>> {
                 applied_at: row.get(6)?,
                 applied_by: row.get(7)?,
                 git_commit_sha: row.get(8)?,
+                backup_path: row.get(9)?,
             })
         })
         .optional()
@@ -290,7 +291,7 @@ pub fn select_fix(conn: &Connection, id: i64) -> Result<Option<Fix>> {
 
 pub fn select_fix_for_violation(conn: &Connection, violation_id: i64) -> Result<Option<Fix>> {
     let mut stmt = conn
-        .prepare("SELECT id, violation_id, original_code, fixed_code, explanation, trust_level, applied_at, applied_by, git_commit_sha FROM fixes WHERE violation_id = ? LIMIT 1")
+        .prepare("SELECT id, violation_id, original_code, fixed_code, explanation, trust_level, applied_at, applied_by, git_commit_sha, backup_path FROM fixes WHERE violation_id = ? LIMIT 1")
         .context("Failed to prepare select fix query")?;
 
     let fix = stmt
@@ -305,6 +306,7 @@ pub fn select_fix_for_violation(conn: &Connection, violation_id: i64) -> Result<
                 applied_at: row.get(6)?,
                 applied_by: row.get(7)?,
                 git_commit_sha: row.get(8)?,
+                backup_path: row.get(9)?,
             })
         })
         .optional()
@@ -313,11 +315,11 @@ pub fn select_fix_for_violation(conn: &Connection, violation_id: i64) -> Result<
     Ok(fix)
 }
 
-pub fn update_fix_applied(conn: &Connection, id: i64, git_commit_sha: &str) -> Result<()> {
+pub fn update_fix_applied(conn: &Connection, id: i64, git_commit_sha: &str, backup_path: Option<&str>) -> Result<()> {
     let applied_at = chrono::Utc::now().to_rfc3339();
     conn.execute(
-        "UPDATE fixes SET applied_at = ?, git_commit_sha = ? WHERE id = ?",
-        params![applied_at, git_commit_sha, id],
+        "UPDATE fixes SET applied_at = ?, git_commit_sha = ?, backup_path = ? WHERE id = ?",
+        params![applied_at, git_commit_sha, backup_path, id],
     ).context("Failed to update fix applied")?;
 
     Ok(())
@@ -562,7 +564,7 @@ pub fn select_all_violations(conn: &Connection) -> Result<Vec<Violation>> {
 
 pub fn select_all_fixes(conn: &Connection) -> Result<Vec<Fix>> {
     let mut stmt = conn.prepare(
-        "SELECT id, violation_id, original_code, fixed_code, explanation, trust_level, applied_at, applied_by, git_commit_sha
+        "SELECT id, violation_id, original_code, fixed_code, explanation, trust_level, applied_at, applied_by, git_commit_sha, backup_path
          FROM fixes
          ORDER BY id DESC"
     ).context("Failed to prepare select all fixes statement")?;
@@ -578,6 +580,7 @@ pub fn select_all_fixes(conn: &Connection) -> Result<Vec<Fix>> {
             applied_at: row.get(6)?,
             applied_by: row.get(7)?,
             git_commit_sha: row.get(8)?,
+            backup_path: row.get(9)?,
         })
     })
     .context("Failed to query all fixes")?

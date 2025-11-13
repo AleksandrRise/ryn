@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS fixes (
     applied_at TEXT,
     applied_by TEXT NOT NULL DEFAULT 'ryn-ai',
     git_commit_sha TEXT,
+    backup_path TEXT,
     FOREIGN KEY (violation_id) REFERENCES violations(id) ON DELETE CASCADE
 );
 

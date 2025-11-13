@@ -42,6 +42,7 @@ pub struct Fix {
     pub applied_at: Option<String>,
     pub applied_by: String,
     pub git_commit_sha: Option<String>,
+    pub backup_path: Option<String>,
 }
 
 impl Fix {
@@ -62,6 +63,7 @@ impl Fix {
             applied_at: None,
             applied_by: "ryn-ai".to_string(),
             git_commit_sha: None,
+            backup_path: None,
         }
     }
 
@@ -73,9 +75,10 @@ impl Fix {
         self.trust_level = level.as_str().to_string();
     }
 
-    pub fn apply(mut self, git_commit_sha: String) -> Self {
+    pub fn apply(mut self, git_commit_sha: String, backup_path: Option<String>) -> Self {
         self.applied_at = Some(chrono::Utc::now().to_rfc3339());
         self.git_commit_sha = Some(git_commit_sha);
+        self.backup_path = backup_path;
         self
     }
 
@@ -132,9 +135,10 @@ mod tests {
 
         assert!(!fix.is_applied());
 
-        let applied = fix.apply("abc123".to_string());
+        let applied = fix.apply("abc123".to_string(), Some("/backup/file.py".to_string()));
         assert!(applied.is_applied());
         assert_eq!(applied.git_commit_sha, Some("abc123".to_string()));
+        assert_eq!(applied.backup_path, Some("/backup/file.py".to_string()));
         assert!(applied.applied_at.is_some());
     }
 
