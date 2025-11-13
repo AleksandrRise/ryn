@@ -52,14 +52,11 @@ pub async fn create_project(
     // Extract project name from path if not provided
     let project_name = match name {
         Some(n) => n,
-        None => {
-            let path_obj = Path::new(&path);
-            let file_name = path_obj.file_name()
-                .ok_or_else(|| format!("Cannot extract project name from path: {}", path))?;
-            let name_str = file_name.to_str()
-                .ok_or_else(|| format!("Project path contains invalid UTF-8: {}", path))?;
-            name_str.to_string()
-        }
+        None => Path::new(&path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("untitled-project")
+            .to_string(),
     };
 
     // Get database connection

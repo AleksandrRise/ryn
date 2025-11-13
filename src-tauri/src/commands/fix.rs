@@ -60,10 +60,6 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
         .map_err(|e| format!("Failed to fetch project: {}", e))?
         .ok_or_else(|| "Project not found".to_string())?;
 
-    // Framework must be detected before generating fixes
-    let framework = project.framework.as_deref()
-        .ok_or_else(|| "Framework not detected. Please run framework detection first.".to_string())?;
-
     // Validate and read file content with path traversal protection
     let file_path = path_validation::validate_file_path(
         Path::new(&project.path),
@@ -85,7 +81,7 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
         &violation.control_id,
         &violation.description,
         &violation.code_snippet,
-        framework,
+        &project.framework.as_deref().unwrap_or("unknown"),
     )
     .await
     .map_err(|e| format!("Failed to generate fix: {}", e))?;
