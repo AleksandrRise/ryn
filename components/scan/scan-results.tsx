@@ -83,7 +83,7 @@ export function ScanResults() {
           await loadViolations(currentScanId)
           await loadLastScan()
 
-          showSuccess(`Scan completed! Found ${progress.critical + progress.high + progress.medium + progress.low} violations`)
+          showSuccess(`Scan completed! Found ${progress.violations_found} violations`)
         } else if (progress.status === "failed") {
           setIsScanning(false)
           clearInterval(pollInterval)
@@ -181,8 +181,12 @@ export function ScanResults() {
 
       showInfo("Starting scan...")
 
-      // Start scan - scan_project returns the scan_id directly (number), not an object
-      const scanId = await scan_project(selectedProject.id)
+      // Start scan with selected controls
+      const enabledControls = Object.entries(selectedControls)
+        .filter(([_, enabled]) => enabled)
+        .map(([control, _]) => control)
+
+      const scanId = await scan_project(selectedProject.id, enabledControls)
       setCurrentScanId(scanId)
 
       // Polling starts via useEffect

@@ -118,9 +118,10 @@ export async function detect_framework(path: string): Promise<string> {
  * Returns the scan_id directly (number) - scanning happens in background
  */
 export async function scan_project(
-  projectId: number
+  projectId: number,
+  enabledControls?: string[]
 ): Promise<number> {
-  return await invoke<number>("scan_project", { projectId })
+  return await invoke<number>("scan_project", { projectId, enabledControls })
 }
 
 /**
