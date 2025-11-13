@@ -57,13 +57,37 @@ pub async fn update_settings(key: String, value: String) -> Result<(), String> {
 
 /// Clear all database data (scan history, violations, fixes, audit events)
 ///
-/// WARNING: This is destructive and cannot be undone
+/// **IMPORTANT**: Creates backup before clearing
+/// Backup location: ~/.ryn/backups/db-backup-{timestamp}.sqlite
 ///
-/// Returns: Success or error
+/// Returns: Success message with backup location, or error
 #[tauri::command]
-pub async fn clear_database() -> Result<(), String> {
+pub async fn clear_database() -> Result<String, String> {
     let conn = db::init_db()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;
+
+    // Create backup directory
+    let home_dir = dirs::home_dir()
+        .ok_or_else(|| "Could not determine home directory".to_string())?;
+    let backup_dir = home_dir.join(".ryn/backups");
+    std::fs::create_dir_all(&backup_dir)
+        .map_err(|e| format!("Failed to create backup directory: {}", e))?;
+
+    // Create timestamped backup file
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    let backup_path = backup_dir.join(format!("db-backup-{}.sqlite", timestamp));
+
+    // Perform SQLite backup using rusqlite's backup API
+    let mut backup_conn = rusqlite::Connection::open(&backup_path)
+        .map_err(|e| format!("Failed to create backup file: {}", e))?;
+
+    let backup = rusqlite::backup::Backup::new(&conn, &mut backup_conn)
+        .map_err(|e| format!("Failed to initialize backup: {}", e))?;
+
+    backup.run_to_completion(5, std::time::Duration::from_millis(250), None)
+        .map_err(|e| format!("Failed to complete backup: {}", e))?;
+
+    let backup_path_str = backup_path.to_string_lossy().to_string();
 
     // Clear all tables in reverse dependency order
     conn.execute("DELETE FROM fixes", [])
@@ -87,12 +111,12 @@ pub async fn clear_database() -> Result<(), String> {
         None,
         None,
         None,
-        "Database cleared - all scan history and violations removed",
+        &format!("Database cleared - backup saved to {}", backup_path_str),
     ) {
         let _ = queries::insert_audit_event(&conn, &event);
     }
 
-    Ok(())
+    Ok(format!("Database cleared successfully. Backup saved to: {}", backup_path_str))
 }
 
 /// Export all database data to JSON format
