@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, memo, useMemo } from "react"
+import { useState, useEffect, memo, useMemo } from "react"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { get_violation, type Violation } from "@/lib/tauri/commands"
 
 interface ViolationDetailProps {
   violationId: number
@@ -95,54 +96,84 @@ const MemoizedDiffBlock = memo(function MemoizedDiffBlock({
 export function ViolationDetail({ violationId }: ViolationDetailProps) {
   const [showDiff, setShowDiff] = useState(false)
   const [showApplyConfirm, setShowApplyConfirm] = useState(false)
+  const [violation, setViolation] = useState<Violation | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const violation = {
-    id: 1,
-    severity: "critical",
-    control: "CC6.7",
-    title: "Hardcoded API key in settings.py",
-    description:
-      "Storing secrets directly in source code violates SOC 2 CC6.7 (Restricted Access). API keys must be stored in environment variables or secure vaults.",
-    file: "config/settings.py",
-    line: 47,
-    language: "python",
-    confidence: "high",
-    currentCode: `# config/settings.py
-API_KEY = "sk_live_51H8x9dKj3..."
-STRIPE_SECRET = "sk_test_4eC39H..."
+  useEffect(() => {
+    async function fetchViolation() {
+      try {
+        setIsLoading(true)
+        setError(null)
+        const data = await get_violation(violationId)
+        setViolation(data)
+      } catch (err) {
+        console.error("Failed to fetch violation:", err)
+        setError(err instanceof Error ? err.message : "Failed to load violation")
+      } finally {
+        setIsLoading(false)
+      }
+    }
 
-def get_api_credentials():
-    return API_KEY`,
-    proposedFix: `# config/settings.py
-import os
+    fetchViolation()
+  }, [violationId])
 
-API_KEY = os.environ.get("API_KEY")
-STRIPE_SECRET = os.environ.get("STRIPE_SECRET")
-
-def get_api_credentials():
-    if not API_KEY:
-        raise ValueError("API_KEY not set")
-    return API_KEY`,
-    explanation:
-      "Move secrets to environment variables. This ensures credentials are never committed to version control and can be rotated without code changes.",
-    trustLevel: "review",
-    controlInfo: {
-      id: "CC6.7",
-      name: "Restricted Access - Encryption & Secrets",
-      description:
-        "The entity uses encryption to protect data at rest and in transit. Cryptographic keys and secrets must be securely stored, rotated regularly, and never hardcoded in source code.",
-      requirement:
-        "Ensure all API keys, passwords, and sensitive credentials are stored in secure vaults or environment variables, not in source code.",
-    },
+  // Helper functions
+  const getLanguageFromPath = (path: string): string => {
+    const ext = path.split('.').pop()?.toLowerCase()
+    const languageMap: Record<string, string> = {
+      'py': 'python',
+      'js': 'javascript',
+      'jsx': 'javascript',
+      'ts': 'typescript',
+      'tsx': 'typescript',
+      'rs': 'rust',
+      'go': 'go',
+      'java': 'java',
+      'rb': 'ruby',
+      'php': 'php',
+    }
+    return languageMap[ext || ''] || 'text'
   }
 
-  const getConfidenceBadge = (confidence: string) => {
-    const colors = {
-      high: "bg-[#10b981] text-black",
-      medium: "bg-[#eab308] text-black",
-      low: "bg-[#ef4444] text-white",
+  const getControlInfo = (controlId: string) => {
+    const controls: Record<string, { name: string; description: string; requirement: string }> = {
+      'CC6.1': {
+        name: 'Logical and Physical Access Controls',
+        description: 'The entity implements controls to protect against unauthorized logical and physical access to systems and data.',
+        requirement: 'Implement proper authentication and authorization checks for all sensitive operations.',
+      },
+      'CC6.7': {
+        name: 'Restricted Access - Encryption & Secrets',
+        description: 'The entity uses encryption to protect data at rest and in transit. Cryptographic keys and secrets must be securely stored, rotated regularly, and never hardcoded in source code.',
+        requirement: 'Ensure all API keys, passwords, and sensitive credentials are stored in secure vaults or environment variables, not in source code.',
+      },
+      'CC7.2': {
+        name: 'System Monitoring - Logging',
+        description: 'The entity monitors system components and the operation of those components for anomalies that are indicative of malicious acts, natural disasters, and errors affecting the entity\'s ability to meet its objectives.',
+        requirement: 'Implement comprehensive audit logging for all security-relevant events and administrative actions.',
+      },
+      'A1.2': {
+        name: 'Availability - System Resilience',
+        description: 'The entity maintains, monitors, and evaluates system components to provide for the prevention and detection of component failures.',
+        requirement: 'Implement error handling, timeouts, and retry logic to ensure system resilience and prevent cascading failures.',
+      },
     }
-    return colors[confidence as keyof typeof colors] || colors.medium
+    return controls[controlId] || {
+      name: controlId,
+      description: 'Security control violation detected.',
+      requirement: 'Follow security best practices.',
+    }
+  }
+
+  const getSeverityColor = (severity: string) => {
+    const colors: Record<string, string> = {
+      critical: '#ef4444',
+      high: '#f97316',
+      medium: '#eab308',
+      low: '#525252',
+    }
+    return colors[severity.toLowerCase()] || colors.medium
   }
 
   const handleApplyFix = () => {
@@ -150,6 +181,32 @@ def get_api_credentials():
     console.log("Applying fix for violation:", violationId)
     setShowApplyConfirm(false)
   }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="px-8 py-12">
+        <div className="flex items-center justify-center h-96">
+          <p className="text-[#aaaaaa] text-[14px]">Loading violation details...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error || !violation) {
+    return (
+      <div className="px-8 py-12">
+        <div className="flex flex-col items-center justify-center h-96">
+          <p className="text-[#ef4444] text-[16px] font-medium mb-2">Failed to load violation</p>
+          <p className="text-[#aaaaaa] text-[13px]">{error || "Violation not found"}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const language = getLanguageFromPath(violation.file_path)
+  const controlInfo = getControlInfo(violation.control_id)
 
   return (
     <div className="px-8 py-12">
@@ -159,67 +216,43 @@ def get_api_credentials():
           {/* Violation header */}
           <div className="mb-12 pb-8 border-b border-[#1a1a1a]">
             <div className="flex items-baseline gap-4 mb-3">
-              <span className="text-[11px] uppercase tracking-wider text-[#ef4444] font-medium">Critical</span>
-              <span className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">{violation.control}</span>
               <span
-                className={`text-[11px] uppercase tracking-wider px-2 py-1 ${getConfidenceBadge(violation.confidence)}`}
+                className="text-[11px] uppercase tracking-wider font-medium"
+                style={{ color: getSeverityColor(violation.severity) }}
               >
-                {violation.confidence} confidence
+                {violation.severity}
               </span>
+              <span className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">{violation.control_id}</span>
             </div>
-            <h1 className="text-[42px] font-bold leading-tight tracking-tight mb-3">{violation.title}</h1>
+            <h1 className="text-[42px] font-bold leading-tight tracking-tight mb-3">{violation.description}</h1>
             <p className="text-[13px] text-[#aaaaaa] font-mono">
-              {violation.file}:{violation.line}
+              {violation.file_path}:{violation.line_number}
             </p>
-          </div>
-
-          {/* Toggle between current code and diff */}
-          <div className="mb-6 flex gap-4 text-[12px]">
-            <button
-              onClick={() => setShowDiff(false)}
-              className={`uppercase tracking-wider ${!showDiff ? "text-white" : "text-[#aaaaaa] hover:text-[#aaaaaa]"}`}
-            >
-              Current
-            </button>
-            <button
-              onClick={() => setShowDiff(true)}
-              className={`uppercase tracking-wider ${showDiff ? "text-white" : "text-[#aaaaaa] hover:text-[#aaaaaa]"}`}
-            >
-              Proposed Fix
-            </button>
           </div>
 
           {/* Code display with syntax highlighting */}
           <div className="mb-8">
-            {!showDiff ? (
-              <MemoizedCodeBlock code={violation.currentCode} language={violation.language} />
-            ) : (
-              <MemoizedDiffBlock
-                beforeCode={violation.currentCode}
-                afterCode={violation.proposedFix}
-                language={violation.language}
-              />
-            )}
+            <MemoizedCodeBlock code={violation.code_snippet} language={language} />
           </div>
 
-          {/* Fix explanation */}
-          {showDiff && (
-            <div className="mb-8">
-              <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Why This Fix Works</h3>
-              <p className="text-[14px] leading-relaxed">{violation.explanation}</p>
-            </div>
-          )}
+          {/* Explanation */}
+          <div className="mb-8">
+            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Why This Violates {violation.control_id}</h3>
+            <p className="text-[14px] leading-relaxed text-[#aaaaaa]">{controlInfo.requirement}</p>
+          </div>
 
           {/* Actions */}
           <div className="flex gap-4">
             <button
               onClick={() => setShowApplyConfirm(true)}
               className="px-6 py-3 bg-white text-black text-[13px] font-medium hover:bg-[#e5e5e5] transition-colors"
+              disabled
+              title="AI fix generation coming soon"
             >
-              Apply Fix
+              Generate Fix (Coming Soon)
             </button>
             <button className="px-6 py-3 border border-[#1a1a1a] text-[13px] hover:bg-[#0a0a0a] transition-colors">
-              Reject
+              Dismiss
             </button>
           </div>
         </div>
@@ -230,31 +263,32 @@ def get_api_credentials():
           <div className="mb-8 p-6 border border-[#1a1a1a] bg-[#050505]">
             <div className="flex items-baseline gap-2 mb-3">
               <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">SOC 2 Control</h3>
-              <span className="text-[11px] font-mono text-white">{violation.controlInfo.id}</span>
+              <span className="text-[11px] font-mono text-white">{violation.control_id}</span>
             </div>
-            <h4 className="text-[14px] font-medium mb-2">{violation.controlInfo.name}</h4>
-            <p className="text-[12px] leading-relaxed text-[#aaaaaa] mb-4">{violation.controlInfo.description}</p>
+            <h4 className="text-[14px] font-medium mb-2">{controlInfo.name}</h4>
+            <p className="text-[12px] leading-relaxed text-[#aaaaaa] mb-4">{controlInfo.description}</p>
             <div className="pt-4 border-t border-[#1a1a1a]">
               <p className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-2">Requirement</p>
-              <p className="text-[12px] text-[#aaaaaa]">{violation.controlInfo.requirement}</p>
+              <p className="text-[12px] text-[#aaaaaa]">{controlInfo.requirement}</p>
             </div>
           </div>
 
           <div className="mb-8">
-            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Why This Matters</h3>
-            <p className="text-[13px] leading-relaxed text-[#aaaaaa]">{violation.description}</p>
+            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Location</h3>
+            <p className="text-[13px] font-mono text-white mb-1">{violation.file_path}</p>
+            <p className="text-[11px] text-[#aaaaaa]">Line {violation.line_number}</p>
           </div>
 
           <div className="mb-8">
-            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Trust Level</h3>
-            <p className="text-[13px]">Requires review before applying</p>
+            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Severity</h3>
+            <p className="text-[13px]" style={{ color: getSeverityColor(violation.severity) }}>
+              {violation.severity.toUpperCase()}
+            </p>
           </div>
 
           <div>
-            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Impact</h3>
-            <p className="text-[13px] text-[#aaaaaa]">
-              High - Exposed credentials could lead to unauthorized system access
-            </p>
+            <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Status</h3>
+            <p className="text-[13px] text-[#aaaaaa]">{violation.status}</p>
           </div>
         </div>
       </div>
@@ -263,23 +297,17 @@ def get_api_credentials():
       {showApplyConfirm && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-8 max-w-md">
-            <h3 className="text-[24px] font-bold mb-4">Apply Fix?</h3>
+            <h3 className="text-[24px] font-bold mb-4">Generate Fix?</h3>
             <p className="text-[14px] text-[#aaaaaa] mb-6">
-              This will modify <span className="font-mono text-white">{violation.file}</span> and apply the proposed
-              changes. You can review the changes before committing.
+              AI-powered fix generation is coming soon. This feature will use Claude AI to analyze the violation and generate a secure, compliant fix for{" "}
+              <span className="font-mono text-white">{violation.file_path}</span>.
             </p>
             <div className="flex gap-4">
               <button
-                onClick={handleApplyFix}
+                onClick={() => setShowApplyConfirm(false)}
                 className="flex-1 px-6 py-3 bg-white text-black text-[13px] font-medium hover:bg-[#e5e5e5] transition-colors"
               >
-                Apply
-              </button>
-              <button
-                onClick={() => setShowApplyConfirm(false)}
-                className="flex-1 px-6 py-3 border border-[#1a1a1a] text-[13px] hover:bg-[#050505] transition-colors"
-              >
-                Cancel
+                Got It
               </button>
             </div>
           </div>
