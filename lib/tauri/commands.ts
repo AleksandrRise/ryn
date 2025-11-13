@@ -119,7 +119,7 @@ export async function detect_framework(path: string): Promise<string> {
  */
 export async function scan_project(
   projectId: number,
-  enabledControls?: string[]
+  enabledControls: string[]
 ): Promise<number> {
   return await invoke<number>("scan_project", { projectId, enabledControls })
 }

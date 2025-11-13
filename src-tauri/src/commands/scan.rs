@@ -36,12 +36,11 @@ pub async fn detect_framework(path: String) -> Result<Option<String>, String> {
 ///
 /// # Arguments
 /// * `project_id` - ID of the project to scan
-/// * `enabled_controls` - Optional list of control IDs to scan (e.g., ["CC6.1", "CC6.7"])
-///                        If None, all controls are scanned
+/// * `enabled_controls` - List of control IDs to check (e.g., ["CC6.1", "CC6.7"])
 ///
 /// Returns: Scan ID for tracking progress or error
 #[tauri::command]
-pub async fn scan_project(project_id: i64, enabled_controls: Option<Vec<String>>) -> Result<i64, String> {
+pub async fn scan_project(project_id: i64, enabled_controls: Vec<String>) -> Result<i64, String> {
     let conn = db::init_db()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
@@ -50,37 +49,20 @@ pub async fn scan_project(project_id: i64, enabled_controls: Option<Vec<String>>
         .map_err(|e| format!("Failed to fetch project: {}", e))?
         .ok_or_else(|| format!("Project not found: {}", project_id))?;
 
-    // Check if we can reuse a recent scan
-    if let Ok(recent_scans) = queries::select_scans(&conn, project_id) {
-        if let Some(last_scan) = recent_scans.first() {
-            // Only reuse if the scan was successful
-            if last_scan.status == "completed" {
-                // Check if any files were modified since the last scan
-                if let Some(completed_at) = &last_scan.completed_at {
-                    if !has_files_changed_since(&project.path, completed_at) {
-                        println!("[scan] No changes detected, reusing scan {}", last_scan.id);
-                        return Ok(last_scan.id);
-                    }
-                }
-            }
-        }
-    }
+    // Delete existing violations for this project to prevent duplicates
+    conn.execute(
+        "DELETE FROM violations WHERE scan_id IN (SELECT id FROM scans WHERE project_id = ?)",
+        [project_id],
+    ).map_err(|e| format!("Failed to clear old violations: {}", e))?;
 
-    // Create new scan record
+    // Create scan record
     let scan_id = queries::insert_scan(&conn, project_id)
         .map_err(|e| format!("Failed to create scan: {}", e))?;
 
     // Return scan_id immediately and scan in background
     let project_path = project.path.clone();
-    let controls = enabled_controls.unwrap_or_else(|| vec![
-        "CC6.1".to_string(),
-        "CC6.7".to_string(),
-        "CC7.2".to_string(),
-        "A1.2".to_string(),
-    ]);
-
     tokio::spawn(async move {
-        if let Err(e) = perform_scan_in_background(scan_id, project_path, controls).await {
+        if let Err(e) = perform_scan_in_background(scan_id, project_path, enabled_controls).await {
             eprintln!("[scan] Background scan failed: {}", e);
         }
     });
@@ -121,7 +103,7 @@ async fn perform_scan_in_background(scan_id: i64, project_path: String, enabled_
                         .to_string_lossy()
                         .to_string();
 
-                    // Run selected rule engines
+                    // Run selected rule engines based on enabled controls
                     let violations = run_selected_rules(&content, &relative_path, scan_id, &enabled_controls);
 
                     // Store violations in database
@@ -184,6 +166,21 @@ pub async fn get_scan_progress(scan_id: i64) -> Result<ScanProgress, String> {
         .filter_map(|r| r.ok())
         .collect();
 
+    // Count violations by severity
+    let mut severity_stmt = conn
+        .prepare(
+            "SELECT severity, COUNT(*) FROM violations WHERE scan_id = ? GROUP BY severity",
+        )
+        .map_err(|e| format!("Failed to prepare severity statement: {}", e))?;
+
+    let violations_by_severity: std::collections::HashMap<String, i32> = severity_stmt
+        .query_map([scan_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?))
+        })
+        .map_err(|e| format!("Failed to query severity violations: {}", e))?
+        .filter_map(|r| r.ok())
+        .collect();
+
     Ok(ScanProgress {
         scan_id,
         status: scan.status,
@@ -191,6 +188,10 @@ pub async fn get_scan_progress(scan_id: i64) -> Result<ScanProgress, String> {
         violations_found: scan.violations_found,
         violations_dismissed: violations_by_status.get("dismissed").copied().unwrap_or(0),
         violations_fixed: violations_by_status.get("fixed").copied().unwrap_or(0),
+        critical: violations_by_severity.get("critical").copied().unwrap_or(0),
+        high: violations_by_severity.get("high").copied().unwrap_or(0),
+        medium: violations_by_severity.get("medium").copied().unwrap_or(0),
+        low: violations_by_severity.get("low").copied().unwrap_or(0),
         completed_at: scan.completed_at,
     })
 }
@@ -209,7 +210,7 @@ pub async fn get_scans(project_id: i64) -> Result<Vec<Scan>, String> {
     Ok(scans)
 }
 
-/// Run selected rule engines on code
+/// Run selected rule engines based on enabled controls
 fn run_selected_rules(code: &str, file_path: &str, scan_id: i64, enabled_controls: &[String]) -> Vec<Violation> {
     let mut violations = Vec::new();
 
@@ -242,44 +243,6 @@ fn run_selected_rules(code: &str, file_path: &str, scan_id: i64, enabled_control
     }
 
     violations
-}
-
-/// Check if any files in the project have been modified since the given timestamp
-fn has_files_changed_since(project_path: &str, since: &str) -> bool {
-    use chrono::{DateTime, Utc};
-
-    // Parse the timestamp
-    let since_time = match DateTime::parse_from_rfc3339(since) {
-        Ok(dt) => dt.with_timezone(&Utc),
-        Err(_) => return true, // If we can't parse, assume changes
-    };
-
-    // Walk through project files
-    for entry in WalkDir::new(project_path)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-    {
-        let file_path = entry.path();
-
-        // Skip common non-source directories
-        if should_skip_path(file_path) {
-            continue;
-        }
-
-        // Check file modification time
-        if let Ok(metadata) = std::fs::metadata(file_path) {
-            if let Ok(modified) = metadata.modified() {
-                let modified_time: DateTime<Utc> = modified.into();
-                if modified_time > since_time {
-                    println!("[scan] File changed: {:?}", file_path);
-                    return true; // At least one file was modified
-                }
-            }
-        }
-    }
-
-    false // No files were modified
 }
 
 /// Determine if a path should be skipped during scanning
@@ -335,6 +298,10 @@ pub struct ScanProgress {
     pub violations_found: i32,
     pub violations_dismissed: i32,
     pub violations_fixed: i32,
+    pub critical: i32,
+    pub high: i32,
+    pub medium: i32,
+    pub low: i32,
     pub completed_at: Option<String>,
 }
 
