@@ -45,9 +45,8 @@ pub fn init_db() -> Result<Connection> {
     conn.execute("PRAGMA foreign_keys = ON", [])
         .context("Failed to enable foreign keys")?;
 
-    // Optimize for concurrent access
-    conn.execute("PRAGMA journal_mode = WAL", [])
-        .context("Failed to enable WAL mode")?;
+    // Optimize for concurrent access (non-fatal if it fails)
+    let _ = conn.execute("PRAGMA journal_mode = WAL", []);
 
     // Reduce blocking by setting busy timeout
     conn.busy_timeout(std::time::Duration::from_secs(5))?;
