@@ -29,21 +29,22 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init());
 
+    // MCP plugin disabled - causes crashes on file changes
     // Only include MCP plugin in development builds
-    #[cfg(debug_assertions)]
-    {
-        println!("[ryn] Development build detected, enabling MCP plugin");
-        builder = builder.plugin(tauri_plugin_mcp::init_with_config(
-            tauri_plugin_mcp::PluginConfig::new("ryn".to_string())
-                .start_socket_server(true)
-                .socket_path("/tmp/tauri-mcp.sock".into())
-        ));
-    }
+    // #[cfg(debug_assertions)]
+    // {
+    //     println!("[ryn] Development build detected, enabling MCP plugin");
+    //     builder = builder.plugin(tauri_plugin_mcp::init_with_config(
+    //         tauri_plugin_mcp::PluginConfig::new("ryn".to_string())
+    //             .start_socket_server(true)
+    //             .socket_path("/tmp/tauri-mcp.sock".into())
+    //     ));
+    // }
 
     // Run the Tauri application
     // If this fails, log detailed error and exit gracefully
