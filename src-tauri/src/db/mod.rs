@@ -12,12 +12,24 @@ pub use migrations::{run_migrations, seed_controls};
 pub use queries::*;
 
 /// Get the database file path
+///
+/// CRITICAL: Database MUST be outside src-tauri/ directory to prevent
+/// Tauri's file watcher from triggering rebuilds on database writes.
+/// SQLite creates temporary files (.db-journal, .db-shm, .db-wal) that
+/// change on every write, causing infinite rebuild loops.
 pub fn get_db_path() -> Result<PathBuf> {
     let data_dir = match std::env::var("RYN_DATA_DIR") {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => {
-            // Default to current directory for simplicity
-            PathBuf::from("./data")
+            // CRITICAL: Use project root data/ directory, NOT src-tauri/data/
+            // When running in development, working directory is src-tauri/
+            // Go up one level to project root
+            let project_root = std::env::current_dir()
+                .ok()
+                .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                .unwrap_or_else(|| PathBuf::from(".."));
+
+            project_root.join("data")
         }
     };
 
