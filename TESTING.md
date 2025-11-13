@@ -6,9 +6,6 @@
 # Set API key
 echo "ANTHROPIC_API_KEY=sk-ant-api03-xxxxx" >> .env
 
-# Create test project
-mkdir -p ~/ryn-test-project
-
 # Clean database
 rm -f ./data/ryn.db
 
@@ -18,17 +15,132 @@ pnpm tauri dev
 
 ---
 
+## Test Projects (Real GitHub Repos)
+
+Clone and test on real code instead of synthetic examples. Start small, increase complexity.
+
+### SMALL (50-200 files) - Start Here
+
+**1. Vulnerable Flask App**
+```bash
+git clone https://github.com/we45/Vulnerable-Flask-App ~/test-repos/vulnerable-flask
+```
+- Framework: Flask
+- Contains: Hardcoded credentials, missing auth, SQL injection
+- Good for: CC6.7 (Secrets), CC6.1 (Access Control)
+
+**2. Vulnerable Django App**
+```bash
+git clone https://github.com/lambrou/vulnerable-django-app ~/test-repos/vulnerable-django
+```
+- Framework: Django
+- Contains: Missing @login_required, weak auth, missing audit logs
+- Good for: CC6.1 (Access Control), CC7.2 (Logging)
+
+**3. Vulnerable Node.js Express**
+```bash
+git clone https://github.com/samoylenko/vulnerable-app-nodejs-express ~/test-repos/vulnerable-express
+```
+- Framework: Express
+- Contains: Multiple vulnerability patterns
+- Good for: All rule engines
+
+**4. Insecure Web App**
+```bash
+git clone https://github.com/BrenesRM/insecure-web ~/test-repos/insecure-web
+```
+- Framework: Flask + Docker
+- Contains: Explicit hardcoded admin credentials
+- Good for: CC6.7 (Secrets)
+
+### MEDIUM (200-500 files) - Scale Up
+
+**5. NodeGoat (OWASP)**
+```bash
+git clone https://github.com/OWASP/NodeGoat ~/test-repos/nodegoat
+```
+- Framework: Express
+- Contains: All OWASP Top 10, missing auth middleware, hardcoded secrets, poor error handling
+- Good for: All rule engines, official OWASP project
+
+**6. DVNA - Damn Vulnerable NodeJS**
+```bash
+git clone https://github.com/appsecco/dvna ~/test-repos/dvna
+```
+- Framework: Express + Passport + Sequelize
+- Contains: Real-world vulnerable patterns
+- Good for: CC6.1 (Access Control), A1.2 (Resilience)
+
+**7. Flask RealWorld Example**
+```bash
+git clone https://github.com/gothinkster/flask-realworld-example-app ~/test-repos/flask-realworld
+```
+- Framework: Flask
+- Contains: Medium.com clone, may have missing audit logs, incomplete error handling
+- Good for: CC7.2 (Logging), A1.2 (Resilience)
+
+**8. Django RealWorld Example**
+```bash
+git clone https://github.com/gothinkster/django-realworld-example-app ~/test-repos/django-realworld
+```
+- Framework: Django
+- Contains: Production-style code, missing access controls on some endpoints
+- Good for: CC6.1 (Access Control), CC7.2 (Logging)
+
+**9. Next.js RealWorld Example**
+```bash
+git clone https://github.com/reck1ess/next-realworld-example-app ~/test-repos/nextjs-realworld
+```
+- Framework: Next.js + TypeScript
+- Contains: Client-side auth gaps, potential API key exposure, missing error boundaries
+- Good for: CC6.7 (Secrets), A1.2 (Resilience)
+
+### MEDIUM-LARGE (500-1000 files) - Final Tests
+
+**10. Very Vulnerable Express App**
+```bash
+git clone https://github.com/SirAppSec/vuln-node.js-express.js-app ~/test-repos/very-vulnerable-express
+```
+- Framework: Express + TypeScript + Swagger
+- Contains: Multiple exploit chains, missing auth on APIs, weak error handling
+- Good for: All rule engines, comprehensive test
+
+**11. Flask Blog**
+```bash
+git clone https://github.com/bgtti/blog_flask ~/test-repos/flask-blog
+```
+- Framework: Flask
+- Contains: Full blog with admin dashboard, missing audit logs on admin actions
+- Good for: CC7.2 (Logging), CC6.1 (Access Control)
+
+**12. Next.js E-commerce**
+```bash
+git clone https://github.com/mohammadoftadeh/next-ecommerce-shopco ~/test-repos/nextjs-ecommerce
+```
+- Framework: Next.js + TypeScript + Redux
+- Contains: Complex state, may expose API keys, missing error boundaries
+- Good for: CC6.7 (Secrets), A1.2 (Resilience)
+
+### Testing Strategy
+
+**Week 1:** Test repos 1-4 (small, deliberately vulnerable)
+**Week 2:** Test repos 5-9 (medium, real-world examples)
+**Week 3:** Test repos 10-12 (larger, production-style)
+
+---
+
 ## 1. Project Management
 
 ### Create Project
-1. Click "Select Project" → choose `~/ryn-test-project`
-2. Enter name "Test Project"
-3. Click "Create Project"
+1. Clone a test repo (start with #1: Vulnerable Flask App)
+2. Click "Select Project" → choose `~/test-repos/vulnerable-flask`
+3. Enter name "Vulnerable Flask"
+4. Click "Create Project"
 
-**Expected:** Project listed, framework detected, database record created
+**Expected:** Project listed, framework detected as "flask", database record created
 
 ### List Projects
-1. Create 2-3 projects
+1. Add 2-3 repos from the list above
 2. View projects list
 
 **Expected:** All projects shown with correct names and frameworks
@@ -37,286 +149,86 @@ pnpm tauri dev
 
 ## 2. Framework Detection
 
-### Django
-```bash
-cd ~/ryn-test-project
-touch manage.py
-echo "INSTALLED_APPS = ['django']" > settings.py
-```
-**Expected:** Framework = "django"
+Test on the real repos - framework should auto-detect:
 
-### Flask
-```bash
-rm -f manage.py settings.py
-echo "from flask import Flask" > app.py
-echo "Flask==2.0" > requirements.txt
-```
-**Expected:** Framework = "flask"
-
-### Next.js
-```bash
-rm -f app.py requirements.txt
-echo '{"dependencies":{"next":"14.0","react":"19.0"}}' > package.json
-```
-**Expected:** Framework = "next"
-
-### Express
-```bash
-echo '{"dependencies":{"express":"4.18"}}' > package.json
-```
-**Expected:** Framework = "express"
+- `~/test-repos/vulnerable-flask` → Framework = "flask"
+- `~/test-repos/vulnerable-django` → Framework = "django"
+- `~/test-repos/vulnerable-express` → Framework = "express"
+- `~/test-repos/nextjs-realworld` → Framework = "next"
 
 ---
 
 ## 3. Code Scanning
 
 ### Run Scan
-1. Select project
+1. Select a project (e.g., "Vulnerable Flask")
 2. Click "Scan Project"
 3. Wait for completion
 
 **Expected:** Progress updates, scan completes, violations counted by severity
 
-### Scan Exclusions
-```bash
-mkdir -p node_modules .git
-echo "secret='test'" > node_modules/bad.js
-```
-
-**Expected:** Excluded directories skipped, no violations from `node_modules/`
+The real repos should trigger violations automatically. No need to create test files.
 
 ---
 
 ## 4. Violation Detection
 
-### CC6.1: Access Control
+Test on real repos to verify all rule engines work:
 
-**Test 1:** Missing @login_required (Django)
+### What to Expect from Test Repos
+
+**Vulnerable Flask App** should detect:
+- CC6.7: Hardcoded credentials, API keys
+- CC6.1: Missing authentication decorators
+- A1.2: Missing error handling
+
+**Vulnerable Django App** should detect:
+- CC6.1: Missing @login_required decorators
+- CC7.2: Missing audit logs on sensitive operations
+- CC6.7: Potential hardcoded secrets
+
+**NodeGoat (OWASP)** should detect:
+- CC6.1: Missing auth middleware on routes
+- CC6.7: Hardcoded secrets in config
+- CC7.2: Missing audit logs
+- A1.2: Poor error handling, missing timeouts
+
+**DVNA** should detect:
+- CC6.1: Authentication bypass vulnerabilities
+- A1.2: Missing try/catch blocks
+- CC7.2: Incomplete logging
+
+### Manual Test Cases (If Needed)
+
+If you want to test specific patterns, create a test file in any repo:
+
+**CC6.1: Access Control**
 ```python
-# views.py
+# test_access.py
 def user_profile(request):
-    return render(request, 'profile.html')
+    return render(request, 'profile.html')  # Missing @login_required
 ```
-**Expected:** High severity, "missing @login_required"
 
-**Test 2:** Hardcoded user ID
+**CC6.7: Secrets**
 ```python
-# admin.py
-def get_user_data(request):
-    user_id = 42
-    return User.objects.get(id=user_id)
+# test_secrets.py
+stripe_key = 'sk_live_testkey1234567890'  # Hardcoded key
 ```
-**Expected:** Medium severity, "hardcoded user_id"
 
-**Test 3:** Admin operation without permission
+**CC7.2: Logging**
 ```python
-# admin_views.py
-def delete_user(request, user_id):
-    User.objects.get(id=user_id).delete()
-```
-**Expected:** Critical/High severity, "permission check"
-
-**Test 4:** Express route without auth
-```javascript
-// routes.js
-router.get('/admin/users', (req, res) => {
-    res.json(User.all());
-});
-```
-**Expected:** High severity, "missing auth middleware"
-
-**Test 5:** FastAPI without Depends
-```python
-# api.py
-@app.get('/admin/users')
-def list_users(request):
-    return get_all_users()
-```
-**Expected:** High severity, "Depends" or "authorization"
-
----
-
-### CC6.7: Secrets
-
-**Test 1:** Stripe key
-```python
-# config.py
-stripe_key = 'sk_live_testkey1234567890'
-```
-**Expected:** Critical severity, "Stripe", code redacted
-
-**Test 2:** GitHub token
-```python
-# github_config.py
-github_token = 'ghp_1234567890abcdefghijklmnopqrst'
-```
-**Expected:** Critical severity, "GitHub token"
-
-**Test 3:** AWS credentials
-```python
-# aws_config.py
-aws_access_key = "AKIAIOSFODNN7EXAMPLE"
-aws_secret_key = "wJalrXUtnFEMI/K7MDENGtest1234EXAMPLEKEY"
-```
-**Expected:** 2 critical violations
-
-**Test 4:** Hardcoded password
-```python
-# database.py
-password = 'admin123'
-db_password = 'secret'
-```
-**Expected:** 1-2 high severity violations
-
-**Test 5:** Database connection string
-```python
-# db_config.py
-database_url = 'postgresql://user:pass123@localhost:5432/mydb'
-```
-**Expected:** Critical severity, "database credentials"
-
-**Test 6:** Insecure HTTP
-```python
-# api_client.py
-api_url = 'http://api.example.com/sensitive-data'
-```
-**Expected:** Medium severity, "use HTTPS"
-
-**Test 7:** Environment variables (should PASS)
-```python
-# good_config.py
-api_key = os.getenv('API_KEY')
-db_url = f'postgresql://user:{os.getenv("DB_PASSWORD")}@host/db'
-```
-**Expected:** NO violations
-
----
-
-### CC7.2: Logging
-
-**Test 1:** Save without audit log
-```python
-# models.py
+# test_logging.py
 def update_user(user_id, data):
-    user = User.objects.get(id=user_id)
-    user.email = data['email']
-    user.save()
+    user.save()  # Missing audit log
 ```
-**Expected:** Medium severity, "audit log"
 
-**Test 2:** Delete without logging
+**A1.2: Resilience**
 ```python
-# admin_actions.py
-def remove_account(account_id):
-    Account.objects.get(id=account_id).delete()
-```
-**Expected:** Medium severity
-
-**Test 3:** SQL without logging
-```python
-# database_ops.py
-def bulk_update():
-    cursor.execute("UPDATE users SET status='inactive'")
-```
-**Expected:** Medium severity
-
-**Test 4:** Logging password
-```python
-# bad_logger.py
-logger.info(f"User password: {user.password}")
-```
-**Expected:** Critical severity, "logging sensitive data"
-
-**Test 5:** Logging credit card
-```python
-# payment_logger.py
-print(f"Processing card: {card_number}")
-```
-**Expected:** Critical severity
-
-**Test 6:** Login without logging
-```python
-# auth.py
-def login(username, password):
-    if check_credentials(username, password):
-        return create_session(username)
-```
-**Expected:** High severity, "authentication event"
-
-**Test 7:** With logging (should PASS)
-```python
-# good_logging.py
-def update_user(user_id, data):
-    user = User.objects.get(id=user_id)
-    user.email = data['email']
-    user.save()
-    logger.info(f"User {user_id} updated by {current_user}")
-```
-**Expected:** NO violations
-
----
-
-### A1.2: Resilience
-
-**Test 1:** API call without error handling
-```python
-# api_service.py
+# test_resilience.py
 def fetch_data():
-    response = requests.get('https://api.example.com/data')
+    response = requests.get('https://api.example.com/data')  # No try/catch, no timeout
     return response.json()
 ```
-**Expected:** Medium severity, "error handling"
-
-**Test 2:** Request without timeout
-```python
-# http_client.py
-def get_user_data(user_id):
-    return requests.get(f'https://api.example.com/users/{user_id}')
-```
-**Expected:** 2 violations (no error handling + no timeout)
-
-**Test 3:** Fetch without catch
-```javascript
-// client.js
-async function loadData() {
-    const response = await fetch('https://api.example.com/data');
-    return response.json();
-}
-```
-**Expected:** Medium severity, "try/catch"
-
-**Test 4:** Database query without error handling
-```python
-# db_operations.py
-def get_record(id):
-    result = db.query('SELECT * FROM users WHERE id = ?', id)
-    return result
-```
-**Expected:** Medium severity
-
-**Test 5:** Missing retry logic
-```python
-# unreliable_service.py
-def call_external_api():
-    try:
-        return requests.get('https://flaky-api.com/endpoint')
-    except Exception as e:
-        raise e
-```
-**Expected:** Low severity, "retry logic"
-
-**Test 6:** With proper error handling (should PASS)
-```python
-# good_resilience.py
-def fetch_data():
-    try:
-        response = requests.get('https://api.example.com/data', timeout=5)
-        return response.json()
-    except requests.RequestException as e:
-        logger.error(f"API call failed: {e}")
-        return None
-```
-**Expected:** NO violations
 
 ---
 
@@ -358,14 +270,7 @@ def fetch_data():
 **Expected:** Fix generated (5-15 sec), contains `fixed_code` + `explanation`, diff shown, trust_level = "review"
 
 ### Apply Fix
-**Prerequisites:** Git repo initialized
-
-```bash
-cd ~/ryn-test-project
-git init
-git add .
-git commit -m "Initial commit"
-```
+**Prerequisites:** Git repo initialized (test repos already have git)
 
 1. Generate fix
 2. Review diff
@@ -376,7 +281,7 @@ git commit -m "Initial commit"
 
 Verify:
 ```bash
-cd ~/ryn-test-project
+cd ~/test-repos/vulnerable-flask  # or whichever repo you're testing
 git log --oneline
 git show HEAD
 ```
@@ -387,7 +292,7 @@ git show HEAD
 
 ### Dirty Git Repo
 ```bash
-cd ~/ryn-test-project
+cd ~/test-repos/vulnerable-flask
 echo "change" >> test.py
 ```
 
@@ -448,40 +353,30 @@ cat ~/Downloads/ryn-export-*.json | jq .
 ## 10. Edge Cases
 
 ### Invalid Path
-1. Create project with `/etc` or non-existent path
+1. Try to create project with `/etc` or non-existent path
 
 **Expected:** Validation error, no database record
 
 ### Empty Project
 ```bash
-mkdir -p ~/ryn-empty
+mkdir -p ~/test-repos/empty-project
 ```
+Test scanning empty directory
 
 **Expected:** Scan completes, 0 violations, no crashes
 
 ### Large Project
-```bash
-mkdir -p ~/ryn-large
-for i in {1..500}; do echo "def func_$i(): pass" > ~/ryn-large/file_$i.py; done
-```
+Test on larger repos (#10, #11, #12 from list above)
 
 **Expected:** Scan completes, progress updates smoothly
 
 ### Binary Files
-```bash
-echo -e '\x00\x01\x02' > ~/ryn-test-project/binary.dat
-```
+Real repos contain binary files (images, compiled files)
 
 **Expected:** Binary files skipped, no errors
 
 ### Unicode
-```python
-# unicode_test.py
-# 日本語コメント
-def test_函数():
-    password = "test123"  # Secret🔐
-    return "résultat"
-```
+Real repos may contain unicode comments/strings
 
 **Expected:** File scanned, violations detected, unicode preserved
 
@@ -493,8 +388,9 @@ def test_函数():
 
 ### File Permissions
 ```bash
-touch ~/ryn-test-project/readonly.py
-chmod 000 ~/ryn-test-project/readonly.py
+cd ~/test-repos/vulnerable-flask
+touch readonly_test.py
+chmod 000 readonly_test.py
 ```
 
 **Expected:** Scan handles gracefully, fix shows permission error
