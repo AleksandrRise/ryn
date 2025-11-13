@@ -71,9 +71,6 @@ pub async fn scan_project(project_id: i64, enabled_controls: Vec<String>) -> Res
 }
 
 async fn perform_scan_in_background(scan_id: i64, project_path: String, enabled_controls: Vec<String>) -> Result<(), String> {
-    println!("[scan] Starting background scan {} for project: {}", scan_id, project_path);
-    println!("[scan] Enabled controls: {:?}", enabled_controls);
-
     let conn = db::init_db()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
@@ -99,19 +96,15 @@ async fn perform_scan_in_background(scan_id: i64, project_path: String, enabled_
                 files_scanned += 1;
 
                 // Detect language
-                if let Some(language) = FrameworkDetector::detect_language(file_path) {
+                if let Some(_language) = FrameworkDetector::detect_language(file_path) {
                     let relative_path = file_path
                         .strip_prefix(&project_path)
                         .unwrap_or(file_path)
                         .to_string_lossy()
                         .to_string();
 
-                    println!("[scan] Scanning file: {} (language: {})", relative_path, language);
-
                     // Run selected rule engines based on enabled controls
                     let violations = run_selected_rules(&content, &relative_path, scan_id, &enabled_controls);
-
-                    println!("[scan]   Found {} violations in {}", violations.len(), relative_path);
 
                     // Store violations in database
                     for violation in violations {
@@ -121,9 +114,8 @@ async fn perform_scan_in_background(scan_id: i64, project_path: String, enabled_
                     }
                 }
             }
-            Err(e) => {
+            Err(_) => {
                 // Skip files that can't be read
-                println!("[scan] Skipping unreadable file: {} (error: {})", file_path.display(), e);
                 continue;
             }
         }
@@ -224,57 +216,29 @@ fn run_selected_rules(code: &str, file_path: &str, scan_id: i64, enabled_control
 
     // CC6.1 Access Control
     if enabled_controls.contains(&"CC6.1".to_string()) {
-        println!("[scan]     Running CC6.1 Access Control rule...");
-        match CC61AccessControlRule::analyze(code, file_path, scan_id) {
-            Ok(cc61_violations) => {
-                println!("[scan]     CC6.1: Found {} violations", cc61_violations.len());
-                violations.extend(cc61_violations);
-            }
-            Err(e) => {
-                println!("[scan]     CC6.1: Error - {}", e);
-            }
+        if let Ok(cc61_violations) = CC61AccessControlRule::analyze(code, file_path, scan_id) {
+            violations.extend(cc61_violations);
         }
     }
 
     // CC6.7 Secrets Management
     if enabled_controls.contains(&"CC6.7".to_string()) {
-        println!("[scan]     Running CC6.7 Secrets Management rule...");
-        match CC67SecretsRule::analyze(code, file_path, scan_id) {
-            Ok(cc67_violations) => {
-                println!("[scan]     CC6.7: Found {} violations", cc67_violations.len());
-                violations.extend(cc67_violations);
-            }
-            Err(e) => {
-                println!("[scan]     CC6.7: Error - {}", e);
-            }
+        if let Ok(cc67_violations) = CC67SecretsRule::analyze(code, file_path, scan_id) {
+            violations.extend(cc67_violations);
         }
     }
 
     // CC7.2 Logging
     if enabled_controls.contains(&"CC7.2".to_string()) {
-        println!("[scan]     Running CC7.2 Logging rule...");
-        match CC72LoggingRule::analyze(code, file_path, scan_id) {
-            Ok(cc72_violations) => {
-                println!("[scan]     CC7.2: Found {} violations", cc72_violations.len());
-                violations.extend(cc72_violations);
-            }
-            Err(e) => {
-                println!("[scan]     CC7.2: Error - {}", e);
-            }
+        if let Ok(cc72_violations) = CC72LoggingRule::analyze(code, file_path, scan_id) {
+            violations.extend(cc72_violations);
         }
     }
 
     // A1.2 Resilience
     if enabled_controls.contains(&"A1.2".to_string()) {
-        println!("[scan]     Running A1.2 Resilience rule...");
-        match A12ResilienceRule::analyze(code, file_path, scan_id) {
-            Ok(a12_violations) => {
-                println!("[scan]     A1.2: Found {} violations", a12_violations.len());
-                violations.extend(a12_violations);
-            }
-            Err(e) => {
-                println!("[scan]     A1.2: Error - {}", e);
-            }
+        if let Ok(a12_violations) = A12ResilienceRule::analyze(code, file_path, scan_id) {
+            violations.extend(a12_violations);
         }
     }
 
