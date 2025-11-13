@@ -44,6 +44,9 @@ pub async fn detect_framework(path: String) -> Result<Option<String>, String> {
 
 /// Scan a project for SOC 2 violations
 ///
+/// CRITICAL: This function MUST return immediately and run the scan in the background.
+/// Otherwise, the UI will freeze at 0% until the entire scan completes.
+///
 /// Walks through the project directory, analyzes files with all 4 rule engines,
 /// and stores violations in the database. Emits real-time progress events.
 ///
@@ -51,7 +54,7 @@ pub async fn detect_framework(path: String) -> Result<Option<String>, String> {
 /// * `app` - Tauri AppHandle for emitting progress events
 /// * `project_id` - ID of the project to scan
 ///
-/// Returns: Complete Scan object with severity counts or error
+/// Returns: Initial Scan object immediately (status "in_progress")
 #[tauri::command]
 pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_id: i64) -> Result<Scan, String> {
     let conn = db::init_db()
@@ -70,20 +73,41 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
     let scan_id = queries::insert_scan(&conn, project_id)
         .map_err(|e| format!("Failed to create scan: {}", e))?;
 
-    // Count total files before scanning (for accurate progress tracking)
-    let total_files = WalkDir::new(&project.path)
-        .into_iter()
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-        .filter(|e| !should_skip_path(e.path()))
-        .count() as i32;
+    // Get initial scan object to return immediately
+    let initial_scan = queries::select_scan(&conn, scan_id)
+        .map_err(|e| format!("Failed to fetch scan: {}", e))?
+        .ok_or_else(|| "Scan was created but could not be retrieved".to_string())?;
 
-    // Walk through project files
-    let mut files_scanned = 0;
-    let mut violations_found = 0;
-    let mut pending_violations = Vec::new(); // Batch violations for better performance
+    // Clone data for background task
+    let project_path = project.path.clone();
+    let app_clone = app.clone();
 
-    for entry in WalkDir::new(&project.path)
+    // CRITICAL: Spawn background task so function returns immediately
+    // This prevents the UI from freezing at 0% progress
+    tokio::spawn(async move {
+        // Re-initialize database connection in background thread
+        let conn = match db::init_db() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[Scan Error] Failed to init DB in background: {}", e);
+                return;
+            }
+        };
+
+        // Count total files before scanning (for accurate progress tracking)
+        let total_files = WalkDir::new(&project_path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| !should_skip_path(e.path()))
+            .count() as i32;
+
+        // Walk through project files
+        let mut files_scanned = 0;
+        let mut violations_found = 0;
+        let mut pending_violations = Vec::new(); // Batch violations for better performance
+
+        for entry in WalkDir::new(&project_path)
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
@@ -109,20 +133,20 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
                         violations_found,
                         current_file: file_path.to_string_lossy().to_string(),
                     };
-                    let _ = app.emit("scan-progress", progress);
+                    let _ = app_clone.emit("scan-progress", progress);
                 }
 
                 // Detect language
                 if let Some(_language) = FrameworkDetector::detect_language(file_path) {
                     // Security: File MUST be within project path
-                    let relative_path = file_path
-                        .strip_prefix(&project.path)
-                        .map_err(|e| format!(
-                            "Security: File outside project path: {} (project: {}). Error: {}",
-                            file_path.display(), project.path, e
-                        ))?
-                        .to_string_lossy()
-                        .to_string();
+                    let relative_path = match file_path.strip_prefix(&project_path) {
+                        Ok(path) => path.to_string_lossy().to_string(),
+                        Err(e) => {
+                            eprintln!("[Scan Error] File outside project path: {} (project: {}). Error: {}",
+                                file_path.display(), project_path, e);
+                            continue;
+                        }
+                    };
 
                     // Run all 4 rule engines
                     let violations = run_all_rules(&content, &relative_path, scan_id);
@@ -149,48 +173,44 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
         }
     }
 
-    // Insert any remaining violations
-    for violation in pending_violations {
-        if queries::insert_violation(&conn, &violation).is_ok() {
-            violations_found += 1;
+        // Insert any remaining violations
+        for violation in pending_violations {
+            if queries::insert_violation(&conn, &violation).is_ok() {
+                violations_found += 1;
+            }
         }
-    }
 
-    // Update scan with results
-    let completed_at = chrono::Utc::now().to_rfc3339();
-    queries::update_scan_status(&conn, scan_id, "completed", Some(&completed_at))
-        .map_err(|e| format!("Failed to update scan status: {}", e))?;
+        // Update scan with results
+        let completed_at = chrono::Utc::now().to_rfc3339();
+        if let Err(e) = queries::update_scan_status(&conn, scan_id, "completed", Some(&completed_at)) {
+            eprintln!("[Scan Error] Failed to update scan status: {}", e);
+            return;
+        }
 
-    queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found)
-        .map_err(|e| format!("Failed to update scan results: {}", e))?;
+        if let Err(e) = queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found) {
+            eprintln!("[Scan Error] Failed to update scan results: {}", e);
+            return;
+        }
 
-    // Log audit event
-    if let Ok(event) = create_audit_event(
-        &conn,
-        "scan_completed",
-        Some(project_id),
-        None,
-        None,
-        &format!("Scanned {} files, found {} violations", files_scanned, violations_found),
-    ) {
-        let _ = queries::insert_audit_event(&conn, &event);
-    }
+        // Log audit event
+        if let Ok(event) = create_audit_event(
+            &conn,
+            "scan_completed",
+            Some(project_id),
+            None,
+            None,
+            &format!("Scanned {} files, found {} violations", files_scanned, violations_found),
+        ) {
+            let _ = queries::insert_audit_event(&conn, &event);
+        }
 
-    // Fetch complete scan with severity counts
-    let mut scan = queries::select_scan(&conn, scan_id)
-        .map_err(|e| format!("Failed to fetch scan: {}", e))?
-        .ok_or_else(|| "Scan was created but could not be retrieved".to_string())?;
+        println!("[Scan Complete] Project {} - Scanned {} files, found {} violations",
+            project_id, files_scanned, violations_found);
+    }); // End of tokio::spawn
 
-    // Calculate severity counts - propagate errors instead of hiding them
-    let (critical, high, medium, low) = queries::get_severity_counts(&conn, scan_id)
-        .map_err(|e| format!("Failed to calculate severity counts: {}", e))?;
-
-    scan.critical_count = critical;
-    scan.high_count = high;
-    scan.medium_count = medium;
-    scan.low_count = low;
-
-    Ok(scan)
+    // Return immediately with initial scan object (status: "in_progress")
+    // The UI will receive progress events as the background task runs
+    Ok(initial_scan)
 }
 
 /// Get scan progress
