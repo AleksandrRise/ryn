@@ -111,9 +111,11 @@ export function ScanResults() {
         // Load violations for stats
         const viols = await get_violations(latest.id, {})
         setLastScanStats({
-          filesScanned: 0, // Backend doesn't track this in scan table
+          filesScanned: latest.files_scanned || 0,
           violationsFound: viols.length,
-          completedAt: new Date(latest.created_at).toLocaleString(),
+          completedAt: latest.completed_at
+            ? new Date(latest.completed_at).toLocaleString()
+            : new Date(latest.started_at).toLocaleString(),
         })
 
         // Load violations for display

@@ -20,6 +20,8 @@ export interface ScanResult {
   project_id: number
   framework?: string
   status: string
+  files_scanned: number
+  violations_found: number
   total_violations: number
   critical_count: number
   high_count: number
@@ -42,13 +44,31 @@ export interface Violation {
   created_at: string
 }
 
+export interface Control {
+  id: string
+  name: string
+  description: string
+  requirement: string
+  category: string
+}
+
+export interface ViolationDetail {
+  violation: Violation
+  control: Control | null
+  fix: Fix | null
+  scan: ScanResult | null
+}
+
 export interface Fix {
   id: number
   violation_id: number
   original_code: string
   fixed_code: string
-  applied: boolean
-  created_at: string
+  explanation: string
+  trust_level: string
+  applied_at: string | null
+  applied_by: string
+  git_commit_sha: string | null
 }
 
 export interface AuditEvent {
@@ -170,9 +190,9 @@ export async function get_violations(
  */
 export async function get_violation(
   violationId: number
-): Promise<Violation> {
-  return await invoke<Violation>("get_violation", {
-    violationId,
+): Promise<ViolationDetail> {
+  return await invoke<ViolationDetail>("get_violation", {
+    id: violationId,
   })
 }
 
@@ -182,7 +202,7 @@ export async function get_violation(
 export async function dismiss_violation(
   violationId: number
 ): Promise<void> {
-  await invoke<void>("dismiss_violation", { violationId })
+  await invoke<void>("dismiss_violation", { id: violationId })
 }
 
 // ============================================================================
