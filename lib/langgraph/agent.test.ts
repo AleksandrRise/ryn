@@ -26,9 +26,11 @@ describe('LangGraph Agent', () => {
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.success).toBe(true)
       expect(result.state.currentStep).toBe('validated')
     })
@@ -41,9 +43,11 @@ describe('LangGraph Agent', () => {
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.violations).toEqual([])
       expect(result.fixes).toEqual([])
     })
@@ -60,9 +64,11 @@ describe('LangGraph Agent', () => {
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.state.error).toBeDefined()
       expect(result.state.error).toContain('empty')
     })
@@ -75,9 +81,11 @@ describe('LangGraph Agent', () => {
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.state.error).toBeDefined()
       expect(result.state.error).toContain('path')
     })
@@ -90,9 +98,11 @@ describe('LangGraph Agent', () => {
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.state.framework).toBe('django')
     })
 
@@ -104,9 +114,11 @@ describe('LangGraph Agent', () => {
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.state.framework).toBe('express')
     })
 
@@ -118,9 +130,11 @@ describe('LangGraph Agent', () => {
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.state.framework).toBe('flask')
     })
   })
@@ -139,9 +153,11 @@ describe('LangGraph Agent', () => {
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       const cc61Violations = result.violations.filter((v) => v.controlId === 'CC6.1')
       expect(cc61Violations.length).toBeGreaterThan(0)
       expect(cc61Violations[0].severity).toBe('high')
@@ -158,9 +174,11 @@ db_url = 'mysql://user:pass@localhost'`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       const cc67Violations = result.violations.filter((v) => v.controlId === 'CC6.7')
       expect(cc67Violations.length).toBeGreaterThan(0)
       expect(cc67Violations[0].severity).toBe('critical')
@@ -176,9 +194,11 @@ db_url = 'mysql://user:pass@localhost'`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       const cc67Violations = result.violations.filter((v) => v.controlId === 'CC6.7')
       expect(cc67Violations.length).toBeGreaterThan(0)
     })
@@ -194,9 +214,11 @@ product.quantity -= 1`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       const cc72Violations = result.violations.filter((v) => v.controlId === 'CC7.2')
       expect(cc72Violations.length).toBeGreaterThan(0)
       expect(cc72Violations[0].description).toContain('logging')
@@ -213,9 +235,11 @@ data = response.json()`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       const a12Violations = result.violations.filter((v) => v.controlId === 'A1.2')
       expect(a12Violations.length).toBeGreaterThan(0)
       expect(a12Violations[0].severity).toBe('high')
@@ -235,9 +259,11 @@ data = response.json()`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       const cc61Violations = result.violations.filter((v) => v.controlId === 'CC6.1')
       expect(cc61Violations.length).toBeGreaterThan(0)
     })
@@ -253,9 +279,11 @@ const password = 'secret123'`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       const cc67Violations = result.violations.filter((v) => v.controlId === 'CC6.7')
       expect(cc67Violations.length).toBeGreaterThan(0)
     })
@@ -271,9 +299,11 @@ const client = new http.Client()`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       const cc67Violations = result.violations.filter((v) => v.controlId === 'CC6.7')
       expect(cc67Violations.some((v) => v.description.includes('HTTPS'))).toBe(true)
     })
@@ -302,9 +332,11 @@ const client = new http.Client()`
         ],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.fixes.length).toBe(1)
       expect(result.fixes[0].fixedCode).toContain('@login_required')
     })
@@ -328,9 +360,11 @@ const client = new http.Client()`
         ],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.fixes.length).toBe(1)
       expect(result.fixes[0].fixedCode).toContain('authenticate')
     })
@@ -354,9 +388,11 @@ const client = new http.Client()`
         ],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.fixes.length).toBe(1)
       expect(result.fixes[0].explanation).toContain('environment')
     })
@@ -380,9 +416,11 @@ const client = new http.Client()`
         ],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.fixes.length).toBe(1)
       expect(result.fixes[0].fixedCode).toContain('logger')
     })
@@ -406,9 +444,11 @@ const client = new http.Client()`
         ],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.fixes.length).toBe(1)
       expect(result.fixes[0].fixedCode).toContain('try')
     })
@@ -430,9 +470,11 @@ const client = new http.Client()`
         ],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       result.fixes.forEach((fix) => {
         expect(fix.trustLevel).toBe('review')
       })
@@ -471,9 +513,11 @@ const client = new http.Client()`
         ],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.fixes.length).toBe(3)
       expect(result.violations.length).toBe(3)
     })
@@ -490,9 +534,11 @@ const client = new http.Client()`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.state.currentStep).toBe('validated')
     })
 
@@ -505,9 +551,11 @@ const client = new http.Client()`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.state.filePath).toBe(filePath)
     })
 
@@ -520,9 +568,11 @@ const client = new http.Client()`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.state.code).toBe(code)
     })
 
@@ -534,9 +584,11 @@ const client = new http.Client()`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.state.timestamp).toBeDefined()
     })
   })
@@ -552,9 +604,11 @@ const client = new http.Client()`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.success).toBe(false)
       expect(result.state.error).toBeDefined()
     })
@@ -567,9 +621,11 @@ const client = new http.Client()`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.success).toBe(true)
     })
 
@@ -581,9 +637,11 @@ const client = new http.Client()`
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
       expect(result.success).toBe(false)
       expect(result.state.error).toBeDefined()
     })
@@ -603,9 +661,11 @@ const client = new http.Client()`
           violations: [],
           fixes: [],
           currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
         }
 
-        const result = await runAgent(input)
+        const result = await runAgent(input as any)
         expect(result.state.framework).toBeDefined()
       })
     })
@@ -668,9 +728,11 @@ def user_list(request):
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
 
       // Should detect multiple violations
       expect(result.violations.length).toBeGreaterThan(0)
@@ -706,9 +768,11 @@ router.post('/api/admin/users', (req, res) => {
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
 
       // Should detect violations
       expect(result.violations.length).toBeGreaterThan(0)
@@ -741,9 +805,11 @@ def safe_view(request):
         violations: [],
         fixes: [],
         currentStep: 'parse',
+        error: undefined,
+        timestamp: undefined,
       }
 
-      const result = await runAgent(input)
+      const result = await runAgent(input as any)
 
       // Should have few or no violations for well-written code
       expect(result.violations.length).toBeLessThanOrEqual(2)

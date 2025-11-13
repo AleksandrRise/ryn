@@ -10,7 +10,6 @@ use crate::security::path_validation;
 use crate::rate_limiter::{RateLimiter, RateLimiterConfig};
 use std::path::Path;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use once_cell::sync::Lazy;
 
 // Global rate limiter instance (shared across all fix generation calls)

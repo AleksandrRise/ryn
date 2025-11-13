@@ -127,13 +127,14 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
       const mockScanResult: commands.ScanResult = {
         id: 1,
         project_id: 1,
-        framework: "Django",
         status: "completed",
-        total_violations: 5,
+        violations_found: 5,
         critical_count: 1,
         high_count: 2,
         medium_count: 2,
         low_count: 0,
+        files_scanned: 10,
+        total_files: 10,
         started_at: new Date().toISOString(),
         completed_at: new Date().toISOString(),
       }
@@ -145,7 +146,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
       expect(mockInvoke).toHaveBeenCalledWith("scan_project", {
         project_id: testProjectId,
       })
-      expect(result.total_violations).toBe(5)
+      expect(result.violations_found).toBe(5)
       expect(result.critical_count).toBe(1)
       expect(result.status).toBe("completed")
     })
@@ -154,13 +155,14 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
       const mockProgress: commands.ScanResult = {
         id: 1,
         project_id: 1,
-        framework: "Django",
-        status: "in_progress",
-        total_violations: 3,
+        status: "running",
+        violations_found: 3,
         critical_count: 0,
         high_count: 1,
         medium_count: 2,
         low_count: 0,
+        files_scanned: 5,
+        total_files: 10,
         started_at: new Date().toISOString(),
       }
 
@@ -168,8 +170,8 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
 
       const result = await commands.get_scan_progress(testScanId)
 
-      expect(result.status).toBe("in_progress")
-      expect(result.total_violations).toBe(3)
+      expect(result.status).toBe("running")
+      expect(result.violations_found).toBe(3)
     })
 
     it("should retrieve all scans for a project", async () => {
@@ -177,26 +179,28 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
         {
           id: 1,
           project_id: 1,
-          framework: "Django",
           status: "completed",
-          total_violations: 5,
+          violations_found: 5,
           critical_count: 1,
           high_count: 2,
           medium_count: 2,
           low_count: 0,
+          files_scanned: 10,
+          total_files: 10,
           started_at: new Date().toISOString(),
           completed_at: new Date().toISOString(),
         },
         {
           id: 2,
           project_id: 1,
-          framework: "Django",
           status: "completed",
-          total_violations: 3,
+          violations_found: 3,
           critical_count: 0,
           high_count: 1,
           medium_count: 2,
           low_count: 0,
+          files_scanned: 8,
+          total_files: 10,
           started_at: new Date().toISOString(),
           completed_at: new Date().toISOString(),
         },
@@ -207,7 +211,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
       const result = await commands.get_scans(testProjectId)
 
       expect(result).toHaveLength(2)
-      expect(result[0].total_violations).toBe(5)
+      expect(result[0].violations_found).toBe(5)
     })
   })
 
@@ -282,29 +286,40 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
     })
 
     it("should get a single violation with details", async () => {
-      const mockViolation: commands.Violation = {
-        id: 1,
-        scan_id: 1,
-        control_id: "CC6.1",
-        severity: "critical",
-        description: "Missing login_required decorator",
-        code_snippet: "@app.route('/admin')\ndef admin_panel():",
-        line_number: 42,
-        file_path: "src/views.py",
-        status: "open",
-        created_at: new Date().toISOString(),
+      const mockViolationDetail: commands.ViolationDetail = {
+        violation: {
+          id: 1,
+          scan_id: 1,
+          control_id: "CC6.1",
+          severity: "critical",
+          description: "Missing login_required decorator",
+          code_snippet: "@app.route('/admin')\ndef admin_panel():",
+          line_number: 42,
+          file_path: "src/views.py",
+          status: "open",
+          created_at: new Date().toISOString(),
+        },
+        control: {
+          id: "CC6.1",
+          name: "Logical and Physical Access Controls",
+          description: "Access controls restrict access to information assets",
+          requirement: "Implement authentication and authorization",
+          category: "Access Control",
+        },
+        fix: null,
+        scan: null,
       }
 
-      mockInvoke.mockResolvedValueOnce(mockViolation)
+      mockInvoke.mockResolvedValueOnce(mockViolationDetail)
 
       const result = await commands.get_violation(1)
 
       expect(mockInvoke).toHaveBeenCalledWith("get_violation", {
         violation_id: 1,
       })
-      expect(result.id).toBe(1)
-      expect(result.control_id).toBe("CC6.1")
-      expect(result.severity).toBe("critical")
+      expect(result.violation.id).toBe(1)
+      expect(result.violation.control_id).toBe("CC6.1")
+      expect(result.violation.severity).toBe("critical")
     })
 
     it("should dismiss a violation", async () => {
@@ -326,8 +341,11 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
         original_code: "@app.route('/admin')\ndef admin_panel():",
         fixed_code:
           "@app.route('/admin')\n@login_required\ndef admin_panel():",
-        applied: false,
-        created_at: new Date().toISOString(),
+        explanation: "Added @login_required decorator for authentication",
+        trust_level: "review",
+        applied_at: null,
+        applied_by: "ryn-ai",
+        git_commit_sha: null,
       }
 
       mockInvoke.mockResolvedValueOnce(mockFix)
@@ -339,7 +357,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
       })
       expect(result.original_code).toContain("admin_panel")
       expect(result.fixed_code).toContain("@login_required")
-      expect(result.applied).toBe(false)
+      expect(result.applied_at).toBeNull()
     })
 
     it("should apply a fix to a file", async () => {
@@ -471,20 +489,21 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
       const mockScan: commands.ScanResult = {
         id: 1,
         project_id: 1,
-        framework: "Django",
         status: "completed",
-        total_violations: 3,
+        violations_found: 3,
         critical_count: 1,
         high_count: 1,
         medium_count: 1,
         low_count: 0,
+        files_scanned: 10,
+        total_files: 10,
         started_at: new Date().toISOString(),
         completed_at: new Date().toISOString(),
       }
       mockInvoke.mockResolvedValueOnce(mockScan)
       const scan = await commands.scan_project(project.id)
 
-      expect(scan.total_violations).toBe(3)
+      expect(scan.violations_found).toBe(3)
 
       // Step 3: Get violations
       const mockViolations: commands.Violation[] = [
@@ -513,8 +532,11 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
         violation_id: violations[0].id,
         original_code: violations[0].code_snippet,
         fixed_code: "@login_required\ndef admin():",
-        applied: false,
-        created_at: new Date().toISOString(),
+        explanation: "Added authentication decorator",
+        trust_level: "review",
+        applied_at: null,
+        applied_by: "ryn-ai",
+        git_commit_sha: null,
       }
       mockInvoke.mockResolvedValueOnce(mockFix)
       const fix = await commands.generate_fix(violations[0].id)
@@ -593,8 +615,11 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
           violation_id: violation.id,
           original_code: violation.code_snippet,
           fixed_code: `# Fixed CC${violation.control_id}\n${violation.code_snippet}`,
-          applied: false,
-          created_at: new Date().toISOString(),
+          explanation: `Fixed violation ${violation.control_id}`,
+          trust_level: "review" as const,
+          applied_at: null,
+          applied_by: "ryn-ai",
+          git_commit_sha: null,
         })
 
         const fix = await commands.generate_fix(violation.id)

@@ -29,13 +29,10 @@ const AgentStateAnnotation = Annotation.Root({
   }),
   currentStep: Annotation<string>({
     default: () => 'parse',
+    reducer: (x, y) => y ?? x,
   }),
-  error: Annotation<string | undefined>({
-    default: () => undefined,
-  }),
-  timestamp: Annotation<string | undefined>({
-    default: () => new Date().toISOString(),
-  }),
+  error: Annotation<string | undefined>(),
+  timestamp: Annotation<string | undefined>(),
 })
 
 /**
@@ -47,7 +44,7 @@ const AgentStateAnnotation = Annotation.Root({
  * - Extract function/class names
  * - Prepare code for analysis
  */
-async function parseNode(state: AgentState): Promise<NodeOutput> {
+async function parseNode(state: typeof AgentStateAnnotation.State): Promise<NodeOutput> {
   try {
     const fileExtension = state.filePath.split('.').pop()?.toLowerCase()
 
@@ -111,7 +108,7 @@ async function parseNode(state: AgentState): Promise<NodeOutput> {
  * NOTE: In Phase 3, this returns mock violations.
  * Real Claude integration happens in Phase 6.
  */
-async function analyzeNode(state: AgentState): Promise<NodeOutput> {
+async function analyzeNode(state: typeof AgentStateAnnotation.State): Promise<NodeOutput> {
   try {
     const violations: Violation[] = []
 
@@ -295,7 +292,7 @@ async function analyzeNode(state: AgentState): Promise<NodeOutput> {
  * - Track trust level (auto/review/manual)
  * - Return enhanced fixes with explanations
  */
-async function generateFixesNode(state: AgentState): Promise<NodeOutput> {
+async function generateFixesNode(state: typeof AgentStateAnnotation.State): Promise<NodeOutput> {
   try {
     const fixes: Fix[] = []
 
@@ -415,7 +412,7 @@ async function generateFixesNode(state: AgentState): Promise<NodeOutput> {
  * - Check for regressions
  * - Return final validation results
  */
-async function validateNode(state: AgentState): Promise<NodeOutput> {
+async function validateNode(state: typeof AgentStateAnnotation.State): Promise<NodeOutput> {
   try {
     // In Phase 3, skip deep validation
     // Phase 4+ will add syntax checking with tree-sitter
@@ -423,7 +420,7 @@ async function validateNode(state: AgentState): Promise<NodeOutput> {
     const validatedFixes = state.fixes.map((fix) => ({
       ...fix,
       // Mark as validated if it contains code (not empty)
-      trustLevel: fix.fixedCode && fix.fixedCode.length > 0 ? 'review' : 'manual',
+      trustLevel: (fix.fixedCode && fix.fixedCode.length > 0 ? 'review' : 'manual') as 'review' | 'auto' | 'manual',
     }))
 
     return {
@@ -478,12 +475,12 @@ export const agent = workflow.compile()
  * })
  * ```
  */
-export async function runAgent(input: AgentState): Promise<AgentResponse> {
+export async function runAgent(input: typeof AgentStateAnnotation.State): Promise<AgentResponse> {
   try {
     const result = await agent.invoke(input)
 
     return {
-      state: result,
+      state: result as AgentState,
       success: !result.error,
       violations: result.violations,
       fixes: result.fixes,
@@ -494,7 +491,7 @@ export async function runAgent(input: AgentState): Promise<AgentResponse> {
       state: {
         ...input,
         error: `Agent error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      },
+      } as AgentState,
       success: false,
       violations: [],
       fixes: [],
