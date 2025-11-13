@@ -4,6 +4,19 @@ use crate::models::Control;
 
 const SCHEMA_SQL: &str = include_str!("schema.sql");
 
+/// Index creation statements extracted for idempotent execution
+/// These are safe to run on every init because they use IF NOT EXISTS
+const INDEX_SQL: &str = "
+CREATE INDEX IF NOT EXISTS idx_violations_scan_id ON violations(scan_id);
+CREATE INDEX IF NOT EXISTS idx_violations_status ON violations(status);
+CREATE INDEX IF NOT EXISTS idx_fixes_violation_id ON fixes(violation_id);
+CREATE INDEX IF NOT EXISTS idx_audit_events_type ON audit_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_scans_project_id ON scans(project_id);
+CREATE INDEX IF NOT EXISTS idx_audit_events_project_id ON audit_events(project_id);
+CREATE INDEX IF NOT EXISTS idx_violations_file_path ON violations(file_path);
+CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at);
+";
+
 /// Run all database migrations
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     // Check if migrations have already run by looking for projects table
@@ -15,13 +28,16 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         )
         .context("Failed to check if migrations have run")?;
 
-    if table_exists {
-        return Ok(());
+    if !table_exists {
+        // First-time setup: Execute all migrations from schema
+        conn.execute_batch(SCHEMA_SQL)
+            .context("Failed to execute schema migrations")?;
     }
 
-    // Execute all migrations from schema
-    conn.execute_batch(SCHEMA_SQL)
-        .context("Failed to execute schema migrations")?;
+    // Always ensure indexes exist (idempotent due to IF NOT EXISTS)
+    // This ensures existing databases get new indexes added in updates
+    conn.execute_batch(INDEX_SQL)
+        .context("Failed to create database indexes")?;
 
     Ok(())
 }

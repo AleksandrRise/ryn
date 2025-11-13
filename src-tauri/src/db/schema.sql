@@ -100,3 +100,4 @@ CREATE INDEX IF NOT EXISTS idx_audit_events_type ON audit_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_scans_project_id ON scans(project_id);
 CREATE INDEX IF NOT EXISTS idx_audit_events_project_id ON audit_events(project_id);
 CREATE INDEX IF NOT EXISTS idx_violations_file_path ON violations(file_path);
+CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at);
