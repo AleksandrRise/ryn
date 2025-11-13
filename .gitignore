@@ -43,3 +43,6 @@ src-tauri/WixTools/
 
 # Intermediate logo files
 public/ryn-logo-square.png
+
+# Local Claude settings
+.claude/settings.local.json
