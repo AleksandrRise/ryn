@@ -81,6 +81,7 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
     // Walk through project files
     let mut files_scanned = 0;
     let mut violations_found = 0;
+    let mut pending_violations = Vec::new(); // Batch violations for better performance
 
     for entry in WalkDir::new(&project.path)
         .into_iter()
@@ -94,7 +95,7 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
             continue;
         }
 
-        // Read file content
+        // Read file content - file handle automatically closed after this block
         match std::fs::read_to_string(file_path) {
             Ok(content) => {
                 files_scanned += 1;
@@ -109,11 +110,6 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
                         current_file: file_path.to_string_lossy().to_string(),
                     };
                     let _ = app.emit("scan-progress", progress);
-                }
-
-                // Update database every 50 files for persistence
-                if files_scanned % 50 == 0 {
-                    let _ = queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found);
                 }
 
                 // Detect language
@@ -131,18 +127,32 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
                     // Run all 4 rule engines
                     let violations = run_all_rules(&content, &relative_path, scan_id);
 
-                    // Store violations in database
-                    for violation in violations {
+                    // Add to pending batch
+                    pending_violations.extend(violations);
+                }
+
+                // Batch insert every 50 violations to reduce database overhead
+                if pending_violations.len() >= 50 {
+                    for violation in pending_violations.drain(..) {
                         if queries::insert_violation(&conn, &violation).is_ok() {
                             violations_found += 1;
                         }
                     }
+                    // Update database after batch insert
+                    let _ = queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found);
                 }
             }
             Err(_) => {
-                // Skip files that can't be read
+                // Skip files that can't be read (permissions, binary files, etc.)
                 continue;
             }
+        }
+    }
+
+    // Insert any remaining violations
+    for violation in pending_violations {
+        if queries::insert_violation(&conn, &violation).is_ok() {
+            violations_found += 1;
         }
     }
 

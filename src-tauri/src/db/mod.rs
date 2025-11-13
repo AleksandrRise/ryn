@@ -28,19 +28,34 @@ pub fn get_db_path() -> Result<PathBuf> {
 }
 
 /// Initialize the database connection and run migrations
+/// Returns a new connection each time for thread safety
+/// Each connection is automatically closed when dropped
 pub fn init_db() -> Result<Connection> {
     let db_path = get_db_path()?;
-    let conn = Connection::open(&db_path)
-        .context(format!("Failed to open database at {:?}", db_path))?;
+
+    // Open connection with multi-threaded flags for better concurrency
+    let conn = Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
+            | rusqlite::OpenFlags::SQLITE_OPEN_CREATE
+            | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX, // Disable mutex for better performance
+    ).context(format!("Failed to open database at {:?}", db_path))?;
 
     // Enable foreign key support
     conn.execute("PRAGMA foreign_keys = ON", [])
         .context("Failed to enable foreign keys")?;
 
-    // Run migrations
+    // Optimize for concurrent access
+    conn.execute("PRAGMA journal_mode = WAL", [])
+        .context("Failed to enable WAL mode")?;
+
+    // Reduce blocking by setting busy timeout
+    conn.busy_timeout(std::time::Duration::from_secs(5))?;
+
+    // Run migrations (only runs once, safe to call multiple times)
     run_migrations(&conn)?;
 
-    // Seed controls
+    // Seed controls (only seeds once, safe to call multiple times)
     seed_controls(&conn)?;
 
     Ok(conn)
