@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import type { Severity } from "@/lib/types/violation"
 import { open } from "@tauri-apps/plugin-dialog"
+import { listen } from "@tauri-apps/api/event"
 import { Button } from "@/components/ui/button"
 import { Play, Folder, Check, FileSearch, AlertCircle, Shield } from "lucide-react"
 import { useProjectStore } from "@/lib/stores/project-store"
@@ -51,47 +52,55 @@ export function ScanResults() {
     }
   }, [selectedProject])
 
-  // Poll scan progress when scanning
+  // Listen to real-time scan progress events
   useEffect(() => {
     if (!isScanning || !currentScanId) return
 
-    const pollInterval = setInterval(async () => {
-      try {
-        const progress = await get_scan_progress(currentScanId)
+    let unlisten: (() => void) | null = null
 
-        // Update progress
-        setScanProgress({
-          percentage: progress.total_files > 0
-            ? Math.round((progress.files_scanned / progress.total_files) * 100)
-            : 0,
-          currentFile: "",
-          filesScanned: progress.files_scanned,
-          totalFiles: progress.total_files,
-        })
+    // Set up event listener for scan progress
+    const setupListener = async () => {
+      unlisten = await listen<{
+        scan_id: number
+        files_scanned: number
+        total_files: number
+        violations_found: number
+        current_file: string
+      }>("scan-progress", (event) => {
+        const progress = event.payload
 
-        // Check if completed
-        if (progress.status === "completed") {
-          setIsScanning(false)
-          clearInterval(pollInterval)
+        // Only update if it's for the current scan
+        if (progress.scan_id === currentScanId) {
+          setScanProgress({
+            percentage: progress.total_files > 0
+              ? Math.round((progress.files_scanned / progress.total_files) * 100)
+              : 0,
+            currentFile: progress.current_file,
+            filesScanned: progress.files_scanned,
+            totalFiles: progress.total_files,
+          })
 
-          // Load violations
-          await loadViolations(currentScanId)
-          await loadLastScan()
+          // Check if scan completed (100%)
+          if (progress.files_scanned === progress.total_files && progress.total_files > 0) {
+            setTimeout(async () => {
+              setIsScanning(false)
 
-          showSuccess(`Scan completed! Found ${progress.critical_count + progress.high_count + progress.medium_count + progress.low_count} violations`)
-        } else if (progress.status === "failed") {
-          setIsScanning(false)
-          clearInterval(pollInterval)
-          handleTauriError("Scan failed", "Scan failed. Please try again.")
+              // Load violations and refresh
+              await loadViolations(currentScanId)
+              await loadLastScan()
+
+              showSuccess(`Scan completed! Found ${progress.violations_found} violations`)
+            }, 500) // Small delay to ensure DB is updated
+          }
         }
-      } catch (error) {
-        clearInterval(pollInterval)
-        setIsScanning(false)
-        handleTauriError(error, "Failed to get scan progress")
-      }
-    }, 2000) // Poll every 2 seconds
+      })
+    }
 
-    return () => clearInterval(pollInterval)
+    setupListener()
+
+    return () => {
+      if (unlisten) unlisten()
+    }
   }, [isScanning, currentScanId])
 
   const loadLastScan = async () => {

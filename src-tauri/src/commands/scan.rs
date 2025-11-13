@@ -9,6 +9,18 @@ use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12R
 use crate::security::path_validation;
 use std::path::Path;
 use walkdir::WalkDir;
+use serde::Serialize;
+use tauri::Emitter;
+
+/// Progress event payload emitted during scan
+#[derive(Clone, Serialize)]
+struct ScanProgressEvent {
+    scan_id: i64,
+    files_scanned: i32,
+    total_files: i32,
+    violations_found: i32,
+    current_file: String,
+}
 
 /// Detect the framework of a project
 ///
@@ -33,14 +45,15 @@ pub async fn detect_framework(path: String) -> Result<Option<String>, String> {
 /// Scan a project for SOC 2 violations
 ///
 /// Walks through the project directory, analyzes files with all 4 rule engines,
-/// and stores violations in the database
+/// and stores violations in the database. Emits real-time progress events.
 ///
 /// # Arguments
+/// * `app` - Tauri AppHandle for emitting progress events
 /// * `project_id` - ID of the project to scan
 ///
 /// Returns: Complete Scan object with severity counts or error
 #[tauri::command]
-pub async fn scan_project(project_id: i64) -> Result<Scan, String> {
+pub async fn scan_project(app: tauri::AppHandle, project_id: i64) -> Result<Scan, String> {
     let conn = db::init_db()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
@@ -85,6 +98,23 @@ pub async fn scan_project(project_id: i64) -> Result<Scan, String> {
         match std::fs::read_to_string(file_path) {
             Ok(content) => {
                 files_scanned += 1;
+
+                // Emit progress event every 10 files for real-time UI updates
+                if files_scanned % 10 == 0 || files_scanned == total_files {
+                    let progress = ScanProgressEvent {
+                        scan_id,
+                        files_scanned,
+                        total_files,
+                        violations_found,
+                        current_file: file_path.to_string_lossy().to_string(),
+                    };
+                    let _ = app.emit("scan-progress", progress);
+                }
+
+                // Update database every 50 files for persistence
+                if files_scanned % 50 == 0 {
+                    let _ = queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found);
+                }
 
                 // Detect language
                 if let Some(_language) = FrameworkDetector::detect_language(file_path) {
