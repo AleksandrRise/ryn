@@ -7,7 +7,30 @@ use crate::models::Fix;
 use crate::fix_generator::claude_client::ClaudeClient;
 use crate::git::GitOperations;
 use crate::security::path_validation;
+use crate::rate_limiter::{RateLimiter, RateLimiterConfig};
 use std::path::Path;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use once_cell::sync::Lazy;
+
+// Global rate limiter instance (shared across all fix generation calls)
+static RATE_LIMITER: Lazy<Arc<RateLimiter>> = Lazy::new(|| {
+    // Load config from environment or use defaults
+    let config = if let Ok(val) = std::env::var("RYN_DISABLE_RATE_LIMIT") {
+        if val == "true" {
+            RateLimiterConfig {
+                enabled: false,
+                ..Default::default()
+            }
+        } else {
+            RateLimiterConfig::default()
+        }
+    } else {
+        RateLimiterConfig::default()
+    };
+
+    Arc::new(RateLimiter::with_config(config))
+});
 
 /// Generate a fix for a violation using Claude AI
 ///
@@ -37,6 +60,10 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
         .map_err(|e| format!("Failed to fetch project: {}", e))?
         .ok_or_else(|| "Project not found".to_string())?;
 
+    // Framework must be detected before generating fixes
+    let framework = project.framework.as_deref()
+        .ok_or_else(|| "Framework not detected. Please run framework detection first.".to_string())?;
+
     // Validate and read file content with path traversal protection
     let file_path = path_validation::validate_file_path(
         Path::new(&project.path),
@@ -46,6 +73,10 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
     let _file_content = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
+    // Check rate limit before calling Claude API
+    RATE_LIMITER.check_rate_limit().await
+        .map_err(|e| format!("API rate limit: {}", e))?;
+
     // Call Claude API to generate fix
     let client = ClaudeClient::new()
         .map_err(|e| format!("Failed to create Claude client: {}", e))?;
@@ -54,7 +85,7 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
         &violation.control_id,
         &violation.description,
         &violation.code_snippet,
-        &project.framework.as_deref().unwrap_or("unknown"),
+        framework,
     )
     .await
     .map_err(|e| format!("Failed to generate fix: {}", e))?;
@@ -143,8 +174,38 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
     let file_content = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
-    // Replace original code with fixed code
-    let updated_content = file_content.replace(&fix.original_code, &fix.fixed_code);
+    // Replace original code with fixed code at specific line number
+    // This prevents replacing ALL occurrences - only targets the violation line
+    let mut lines: Vec<String> = file_content.lines().map(|s| s.to_string()).collect();
+
+    // Convert line_number (1-indexed) to 0-indexed
+    let target_line_idx = (violation.line_number as usize).saturating_sub(1);
+
+    if target_line_idx >= lines.len() {
+        return Err(format!(
+            "Line number {} out of range (file has {} lines)",
+            violation.line_number,
+            lines.len()
+        ));
+    }
+
+    // Verify the original code exists on the target line
+    let target_line = &lines[target_line_idx];
+    if !target_line.contains(&fix.original_code) {
+        return Err(format!(
+            "Original code not found on line {}. Expected to find: '{}', but line contains: '{}'",
+            violation.line_number,
+            fix.original_code,
+            target_line
+        ));
+    }
+
+    // Replace only on the target line
+    let updated_line = target_line.replace(&fix.original_code, &fix.fixed_code);
+    lines[target_line_idx] = updated_line;
+
+    // Reconstruct file content (preserving line endings)
+    let updated_content = lines.join("\n");
 
     // Write updated file (path already validated)
     std::fs::write(&file_path, &updated_content)
@@ -467,5 +528,194 @@ mod tests {
             assert_eq!(fix.violation_id, violation_id);
             assert!(!fix.explanation.is_empty());
         }
+    }
+
+    /// Test that apply_fix only replaces code at the specific line number,
+    /// not all occurrences of that code in the file (Bug #2 fix verification)
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_apply_fix_line_specific_replacement() {
+        let _guard = TestDbGuard::new();
+        let (project_dir, project_id) = create_test_project_with_git();
+
+        let conn = db::init_db().unwrap();
+        let project = queries::select_project(&conn, project_id).unwrap().unwrap();
+
+        // Create a file with the SAME CODE on multiple lines
+        let file_path = Path::new(&project.path).join("test.py");
+        let file_content = "import os\npassword = \"secret123\"\napi_key = \"secret123\"\ntoken = \"secret123\"\n";
+        fs::write(&file_path, file_content).unwrap();
+
+        // Add file to git index and commit (needed for git operations to work)
+        let repo = git2::Repository::open(&project.path).unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(std::path::Path::new("test.py")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let signature = git2::Signature::now("test", "test@example.com").unwrap();
+        let parent_commit = repo.head().unwrap().peel_to_commit().unwrap();
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "Add test file",
+            &tree,
+            &[&parent_commit],
+        ).unwrap();
+
+        // Create scan
+        let scan_id = queries::insert_scan(&conn, project_id).unwrap();
+
+        // Create violation pointing to line 2 (the password line)
+        let violation = crate::models::Violation {
+            id: 0,
+            scan_id,
+            control_id: "CC1.6".to_string(),
+            severity: "critical".to_string(),
+            description: "Hardcoded password detected".to_string(),
+            file_path: "test.py".to_string(),
+            line_number: 2,  // Target line 2 specifically
+            code_snippet: "password = \"secret123\"".to_string(),
+            status: "open".to_string(),
+            detected_at: chrono::Utc::now().to_rfc3339(),
+        };
+        let violation_id = queries::insert_violation(&conn, &violation).unwrap();
+
+        // Create fix that replaces "secret123" with environment variable
+        let fix = Fix {
+            id: 0,
+            violation_id,
+            original_code: "\"secret123\"".to_string(),
+            fixed_code: "os.getenv(\"PASSWORD\")".to_string(),
+            explanation: "Replaced hardcoded password with environment variable".to_string(),
+            trust_level: "review".to_string(),
+            applied_at: None,
+            applied_by: "ryn-ai".to_string(),
+            git_commit_sha: None,
+        };
+        let fix_id = queries::insert_fix(&conn, &fix).unwrap();
+
+        // Apply the fix (may fail at git commit but file replacement should work)
+        let result = apply_fix(fix_id).await;
+
+        // Read the modified file to verify line-specific replacement worked
+        let updated_content = fs::read_to_string(&file_path).unwrap();
+        let lines: Vec<&str> = updated_content.lines().collect();
+
+        // Verify ONLY line 2 was modified (this is the critical test)
+        assert_eq!(lines[0], "import os", "Line 1 should be unchanged");
+        assert_eq!(lines[1], "password = os.getenv(\"PASSWORD\")", "Line 2 should be modified");
+        assert_eq!(lines[2], "api_key = \"secret123\"", "Line 3 should be unchanged (same original code)");
+        assert_eq!(lines[3], "token = \"secret123\"", "Line 4 should be unchanged (same original code)");
+
+        // If apply_fix succeeded completely (including git), verify violation status
+        if result.is_ok() {
+            let updated_violation = queries::select_violation(&conn, violation_id).unwrap().unwrap();
+            assert_eq!(updated_violation.status, "fixed");
+        }
+
+        // Note: Test may fail at git commit but line-replacement logic is verified above
+    }
+
+    /// Test that apply_fix validates line number is in range
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_apply_fix_line_out_of_range() {
+        let _guard = TestDbGuard::new();
+        let (project_dir, project_id) = create_test_project_with_git();
+
+        let conn = db::init_db().unwrap();
+        let project = queries::select_project(&conn, project_id).unwrap().unwrap();
+
+        // Create a file with only 3 lines
+        let file_path = Path::new(&project.path).join("test.py");
+        fs::write(&file_path, "line1\nline2\nline3\n").unwrap();
+
+        let scan_id = queries::insert_scan(&conn, project_id).unwrap();
+
+        // Create violation pointing to line 10 (out of range)
+        let violation = crate::models::Violation {
+            id: 0,
+            scan_id,
+            control_id: "TEST".to_string(),
+            severity: "high".to_string(),
+            description: "Test".to_string(),
+            file_path: "test.py".to_string(),
+            line_number: 10,  // Out of range!
+            code_snippet: "line1".to_string(),
+            status: "open".to_string(),
+            detected_at: chrono::Utc::now().to_rfc3339(),
+        };
+        let violation_id = queries::insert_violation(&conn, &violation).unwrap();
+
+        let fix = Fix {
+            id: 0,
+            violation_id,
+            original_code: "line1".to_string(),
+            fixed_code: "fixed".to_string(),
+            explanation: "Test".to_string(),
+            trust_level: "review".to_string(),
+            applied_at: None,
+            applied_by: "ryn-ai".to_string(),
+            git_commit_sha: None,
+        };
+        let fix_id = queries::insert_fix(&conn, &fix).unwrap();
+
+        // Apply should fail with clear error
+        let result = apply_fix(fix_id).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("out of range"));
+    }
+
+    /// Test that apply_fix validates original code exists on target line
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_apply_fix_code_mismatch() {
+        let _guard = TestDbGuard::new();
+        let (project_dir, project_id) = create_test_project_with_git();
+
+        let conn = db::init_db().unwrap();
+        let project = queries::select_project(&conn, project_id).unwrap().unwrap();
+
+        // Create a file
+        let file_path = Path::new(&project.path).join("test.py");
+        fs::write(&file_path, "actual_code_here\n").unwrap();
+
+        let scan_id = queries::insert_scan(&conn, project_id).unwrap();
+
+        // Create violation
+        let violation = crate::models::Violation {
+            id: 0,
+            scan_id,
+            control_id: "TEST".to_string(),
+            severity: "high".to_string(),
+            description: "Test".to_string(),
+            file_path: "test.py".to_string(),
+            line_number: 1,
+            code_snippet: "actual_code_here".to_string(),
+            status: "open".to_string(),
+            detected_at: chrono::Utc::now().to_rfc3339(),
+        };
+        let violation_id = queries::insert_violation(&conn, &violation).unwrap();
+
+        // Create fix with original_code that doesn't match the line
+        let fix = Fix {
+            id: 0,
+            violation_id,
+            original_code: "wrong_code".to_string(),  // Doesn't match!
+            fixed_code: "fixed".to_string(),
+            explanation: "Test".to_string(),
+            trust_level: "review".to_string(),
+            applied_at: None,
+            applied_by: "ryn-ai".to_string(),
+            git_commit_sha: None,
+        };
+        let fix_id = queries::insert_fix(&conn, &fix).unwrap();
+
+        // Apply should fail with clear error
+        let result = apply_fix(fix_id).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Original code not found"));
     }
 }

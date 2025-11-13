@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS scans (
     started_at TEXT NOT NULL DEFAULT (datetime('now')),
     completed_at TEXT,
     files_scanned INTEGER DEFAULT 0,
+    total_files INTEGER DEFAULT 0,
     violations_found INTEGER DEFAULT 0,
     status TEXT NOT NULL CHECK(status IN ('running', 'completed', 'failed')) DEFAULT 'running',
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE

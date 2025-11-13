@@ -90,7 +90,7 @@ pub fn insert_scan(conn: &Connection, project_id: i64) -> Result<i64> {
 
 pub fn select_scans(conn: &Connection, project_id: i64) -> Result<Vec<Scan>> {
     let mut stmt = conn
-        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, violations_found, status FROM scans WHERE project_id = ? ORDER BY started_at DESC")
+        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, total_files, violations_found, status FROM scans WHERE project_id = ? ORDER BY started_at DESC")
         .context("Failed to prepare select scans query")?;
 
     let scans = stmt
@@ -101,8 +101,9 @@ pub fn select_scans(conn: &Connection, project_id: i64) -> Result<Vec<Scan>> {
                 started_at: row.get(2)?,
                 completed_at: row.get(3)?,
                 files_scanned: row.get(4)?,
-                violations_found: row.get(5)?,
-                status: row.get(6)?,
+                total_files: row.get(5)?,
+                violations_found: row.get(6)?,
+                status: row.get(7)?,
                 critical_count: 0,
                 high_count: 0,
                 medium_count: 0,
@@ -118,7 +119,7 @@ pub fn select_scans(conn: &Connection, project_id: i64) -> Result<Vec<Scan>> {
 
 pub fn select_scan(conn: &Connection, id: i64) -> Result<Option<Scan>> {
     let mut stmt = conn
-        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, violations_found, status FROM scans WHERE id = ?")
+        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, total_files, violations_found, status FROM scans WHERE id = ?")
         .context("Failed to prepare select scan query")?;
 
     let scan = stmt
@@ -129,8 +130,9 @@ pub fn select_scan(conn: &Connection, id: i64) -> Result<Option<Scan>> {
                 started_at: row.get(2)?,
                 completed_at: row.get(3)?,
                 files_scanned: row.get(4)?,
-                violations_found: row.get(5)?,
-                status: row.get(6)?,
+                total_files: row.get(5)?,
+                violations_found: row.get(6)?,
+                status: row.get(7)?,
                 critical_count: 0,
                 high_count: 0,
                 medium_count: 0,
@@ -152,10 +154,10 @@ pub fn update_scan_status(conn: &Connection, id: i64, status: &str, completed_at
     Ok(())
 }
 
-pub fn update_scan_results(conn: &Connection, id: i64, files_scanned: i32, violations_found: i32) -> Result<()> {
+pub fn update_scan_results(conn: &Connection, id: i64, files_scanned: i32, total_files: i32, violations_found: i32) -> Result<()> {
     conn.execute(
-        "UPDATE scans SET files_scanned = ?, violations_found = ? WHERE id = ?",
-        params![files_scanned, violations_found, id],
+        "UPDATE scans SET files_scanned = ?, total_files = ?, violations_found = ? WHERE id = ?",
+        params![files_scanned, total_files, violations_found, id],
     ).context("Failed to update scan results")?;
 
     Ok(())
@@ -502,7 +504,7 @@ pub fn select_all_projects(conn: &Connection) -> Result<Vec<Project>> {
 
 pub fn select_all_scans(conn: &Connection) -> Result<Vec<Scan>> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, status, files_scanned, violations_found, started_at, completed_at
+        "SELECT id, project_id, status, files_scanned, total_files, violations_found, started_at, completed_at
          FROM scans
          ORDER BY started_at DESC"
     ).context("Failed to prepare select all scans statement")?;
@@ -513,9 +515,10 @@ pub fn select_all_scans(conn: &Connection) -> Result<Vec<Scan>> {
             project_id: row.get(1)?,
             status: row.get(2)?,
             files_scanned: row.get(3)?,
-            violations_found: row.get(4)?,
-            started_at: row.get(5)?,
-            completed_at: row.get(6)?,
+            total_files: row.get(4)?,
+            violations_found: row.get(5)?,
+            started_at: row.get(6)?,
+            completed_at: row.get(7)?,
             critical_count: 0,
             high_count: 0,
             medium_count: 0,
@@ -707,9 +710,10 @@ mod tests {
         assert_eq!(updated.status, "completed");
 
         // Update results
-        update_scan_results(&conn, scan_id, 100, 5).unwrap();
+        update_scan_results(&conn, scan_id, 100, 150, 5).unwrap();
         let with_results = select_scan(&conn, scan_id).unwrap().unwrap();
         assert_eq!(with_results.files_scanned, 100);
+        assert_eq!(with_results.total_files, 150);
         assert_eq!(with_results.violations_found, 5);
     }
 

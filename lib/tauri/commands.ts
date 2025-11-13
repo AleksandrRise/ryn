@@ -21,7 +21,9 @@ export interface ScanResult {
   status: string
   started_at: string
   completed_at?: string
+  created_at?: string
   files_scanned: number
+  total_files: number
   violations_found: number
   critical_count: number
   high_count: number
@@ -48,7 +50,7 @@ export interface Fix {
   original_code: string
   fixed_code: string
   explanation: string
-  trust_level: string
+  trust_level: "auto" | "manual" | "review"
   applied_at: string | null
   applied_by: string
   git_commit_sha: string | null

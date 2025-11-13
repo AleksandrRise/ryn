@@ -11,6 +11,7 @@ pub mod fix_generator;
 pub mod git;
 pub mod utils;
 pub mod security;
+pub mod rate_limiter;
 
 // Re-export commonly used types (types added in later phases)
 // pub use models::{

@@ -211,7 +211,7 @@ export function Dashboard() {
           {lastScan && (
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
               <i className="las la-clock text-sm text-white/50"></i>
-              <span className="text-sm font-medium text-white/50">{formatRelativeTime(lastScan.created_at)}</span>
+              <span className="text-sm font-medium text-white/50">{formatRelativeTime(lastScan.created_at || lastScan.started_at)}</span>
             </div>
           )}
         </div>

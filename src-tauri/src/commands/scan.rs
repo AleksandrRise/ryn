@@ -57,6 +57,14 @@ pub async fn scan_project(project_id: i64) -> Result<Scan, String> {
     let scan_id = queries::insert_scan(&conn, project_id)
         .map_err(|e| format!("Failed to create scan: {}", e))?;
 
+    // Count total files before scanning (for accurate progress tracking)
+    let total_files = WalkDir::new(&project.path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .filter(|e| !should_skip_path(e.path()))
+        .count() as i32;
+
     // Walk through project files
     let mut files_scanned = 0;
     let mut violations_found = 0;
@@ -80,9 +88,13 @@ pub async fn scan_project(project_id: i64) -> Result<Scan, String> {
 
                 // Detect language
                 if let Some(_language) = FrameworkDetector::detect_language(file_path) {
+                    // Security: File MUST be within project path
                     let relative_path = file_path
                         .strip_prefix(&project.path)
-                        .unwrap_or(file_path)
+                        .map_err(|e| format!(
+                            "Security: File outside project path: {} (project: {}). Error: {}",
+                            file_path.display(), project.path, e
+                        ))?
                         .to_string_lossy()
                         .to_string();
 
@@ -109,7 +121,7 @@ pub async fn scan_project(project_id: i64) -> Result<Scan, String> {
     queries::update_scan_status(&conn, scan_id, "completed", Some(&completed_at))
         .map_err(|e| format!("Failed to update scan status: {}", e))?;
 
-    queries::update_scan_results(&conn, scan_id, files_scanned, violations_found)
+    queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found)
         .map_err(|e| format!("Failed to update scan results: {}", e))?;
 
     // Log audit event
@@ -129,9 +141,9 @@ pub async fn scan_project(project_id: i64) -> Result<Scan, String> {
         .map_err(|e| format!("Failed to fetch scan: {}", e))?
         .ok_or_else(|| "Scan was created but could not be retrieved".to_string())?;
 
-    // Calculate severity counts
+    // Calculate severity counts - propagate errors instead of hiding them
     let (critical, high, medium, low) = queries::get_severity_counts(&conn, scan_id)
-        .unwrap_or((0, 0, 0, 0));
+        .map_err(|e| format!("Failed to calculate severity counts: {}", e))?;
 
     scan.critical_count = critical;
     scan.high_count = high;
@@ -158,9 +170,9 @@ pub async fn get_scan_progress(scan_id: i64) -> Result<Scan, String> {
         .map_err(|e| format!("Failed to fetch scan: {}", e))?
         .ok_or_else(|| format!("Scan not found: {}", scan_id))?;
 
-    // Calculate severity counts
+    // Calculate severity counts - propagate errors instead of hiding them
     let (critical, high, medium, low) = queries::get_severity_counts(&conn, scan_id)
-        .unwrap_or((0, 0, 0, 0));
+        .map_err(|e| format!("Failed to calculate severity counts: {}", e))?;
 
     scan.critical_count = critical;
     scan.high_count = high;

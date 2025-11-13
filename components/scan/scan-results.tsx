@@ -7,24 +7,17 @@ import { open } from "@tauri-apps/plugin-dialog"
 import { Button } from "@/components/ui/button"
 import { Play, Folder, Check, FileSearch, AlertCircle, Shield } from "lucide-react"
 import { useProjectStore } from "@/lib/stores/project-store"
-import { create_project, detect_framework, scan_project, get_scan_progress, get_violations, get_scans } from "@/lib/tauri/commands"
+import {
+  create_project,
+  detect_framework,
+  scan_project,
+  get_scan_progress,
+  get_violations,
+  get_scans,
+  type Violation,
+  type ScanResult
+} from "@/lib/tauri/commands"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
-
-interface Violation {
-  id: number
-  severity: string
-  control_id: string
-  description: string
-  file_path: string
-  line_number: number
-  status: string
-}
-
-interface ScanResult {
-  id: number
-  status: string
-  created_at: string
-}
 
 export function ScanResults() {
   const { selectedProject, setSelectedProject } = useProjectStore()
@@ -68,10 +61,12 @@ export function ScanResults() {
 
         // Update progress
         setScanProgress({
-          percentage: Math.round((progress.files_scanned / Math.max(progress.files_scanned + 1, 1)) * 100),
+          percentage: progress.total_files > 0
+            ? Math.round((progress.files_scanned / progress.total_files) * 100)
+            : 0,
           currentFile: "",
           filesScanned: progress.files_scanned,
-          totalFiles: progress.files_scanned + 1,
+          totalFiles: progress.total_files,
         })
 
         // Check if completed
@@ -83,7 +78,7 @@ export function ScanResults() {
           await loadViolations(currentScanId)
           await loadLastScan()
 
-          showSuccess(`Scan completed! Found ${progress.critical + progress.high + progress.medium + progress.low} violations`)
+          showSuccess(`Scan completed! Found ${progress.critical_count + progress.high_count + progress.medium_count + progress.low_count} violations`)
         } else if (progress.status === "failed") {
           setIsScanning(false)
           clearInterval(pollInterval)
@@ -113,7 +108,7 @@ export function ScanResults() {
         setLastScanStats({
           filesScanned: 0, // Backend doesn't track this in scan table
           violationsFound: viols.length,
-          completedAt: new Date(latest.created_at).toLocaleString(),
+          completedAt: new Date(latest.created_at || latest.started_at).toLocaleString(),
         })
 
         // Load violations for display

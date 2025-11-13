@@ -4142,6 +4142,7 @@ dependencies = [
  "git2",
  "mockall",
  "notify",
+ "once_cell",
  "regex",
  "reqwest",
  "rstest",
