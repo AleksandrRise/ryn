@@ -53,7 +53,7 @@ pub async fn detect_framework(path: String) -> Result<Option<String>, String> {
 ///
 /// Returns: Complete Scan object with severity counts or error
 #[tauri::command]
-pub async fn scan_project(app: tauri::AppHandle, project_id: i64) -> Result<Scan, String> {
+pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_id: i64) -> Result<Scan, String> {
     let conn = db::init_db()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
@@ -365,7 +365,8 @@ mod tests {
     #[serial_test::serial]
     async fn test_scan_project_nonexistent_project() {
         let _guard = TestDbGuard::new();
-        let result = scan_project(999).await;
+        let app = tauri::test::mock_app();
+        let result = scan_project(app.handle().clone(), 999).await;
         assert!(result.is_err());
     }
 
@@ -375,7 +376,8 @@ mod tests {
         let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
-        let result = scan_project(project_id).await;
+        let app = tauri::test::mock_app();
+        let result = scan_project(app.handle().clone(), project_id).await;
         assert!(result.is_ok());
 
         let scan = result.unwrap();
@@ -396,7 +398,8 @@ def get_user(user_id):
 "#;
         fs::write(project_dir.path().join("views.py"), py_content).unwrap();
 
-        let result = scan_project(project_id).await;
+        let app = tauri::test::mock_app();
+        let result = scan_project(app.handle().clone(), project_id).await;
         assert!(result.is_ok());
 
         let scan = result.unwrap();
@@ -414,7 +417,8 @@ def get_user(user_id):
         fs::create_dir(&node_modules).unwrap();
         fs::write(node_modules.join("lib.js"), "console.log('test')").unwrap();
 
-        let result = scan_project(project_id).await;
+        let app = tauri::test::mock_app();
+        let result = scan_project(app.handle().clone(), project_id).await;
         assert!(result.is_ok());
     }
 
@@ -424,7 +428,8 @@ def get_user(user_id):
         let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
-        let result = scan_project(project_id).await;
+        let app = tauri::test::mock_app();
+        let result = scan_project(app.handle().clone(), project_id).await;
         assert!(result.is_ok());
 
         let scan = result.unwrap();
@@ -450,7 +455,8 @@ def get_user(user_id):
         let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
-        let scan = scan_project(project_id).await.unwrap();
+        let app = tauri::test::mock_app();
+        let scan = scan_project(app.handle().clone(), project_id).await.unwrap();
         let progress = get_scan_progress(scan.id).await.unwrap();
 
         assert_eq!(progress.id, scan.id);
@@ -466,8 +472,9 @@ def get_user(user_id):
         let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         // Create multiple scans
-        let _scan_id_1 = scan_project(project_id).await.unwrap();
-        let _scan_id_2 = scan_project(project_id).await.unwrap();
+        let app = tauri::test::mock_app();
+        let _scan_id_1 = scan_project(app.handle().clone(), project_id).await.unwrap();
+        let _scan_id_2 = scan_project(app.handle().clone(), project_id).await.unwrap();
 
         let scans = get_scans(project_id).await.unwrap();
         assert_eq!(scans.len(), 2);
@@ -496,7 +503,8 @@ api_key = "sk-1234567890abcdef"
 "#;
         fs::write(project_dir.path().join("config.py"), py_content).unwrap();
 
-        let scan = scan_project(project_id).await.unwrap();
+        let app = tauri::test::mock_app();
+        let scan = scan_project(app.handle().clone(), project_id).await.unwrap();
         let progress = get_scan_progress(scan.id).await.unwrap();
 
         assert!(progress.violations_found >= 0);
@@ -508,7 +516,8 @@ api_key = "sk-1234567890abcdef"
         let _guard = TestDbGuard::new();
         let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
-        let scan_result = scan_project(project_id).await.unwrap();
+        let app = tauri::test::mock_app();
+        let scan_result = scan_project(app.handle().clone(), project_id).await.unwrap();
         let progress = get_scan_progress(scan_result.id).await.unwrap();
 
         assert_eq!(progress.id, scan_result.id);
@@ -550,8 +559,9 @@ api_key = "sk-1234567890abcdef"
         fs::write(project_dir_1.path().join("file1.py"), "x = 1").unwrap();
         fs::write(project_dir_2.path().join("file2.py"), "y = 2").unwrap();
 
-        let scan_id_1 = scan_project(project_id_1).await.unwrap();
-        let scan_id_2 = scan_project(project_id_2).await.unwrap();
+        let app = tauri::test::mock_app();
+        let scan_id_1 = scan_project(app.handle().clone(), project_id_1).await.unwrap();
+        let scan_id_2 = scan_project(app.handle().clone(), project_id_2).await.unwrap();
 
         assert_ne!(scan_id_1, scan_id_2);
 
@@ -570,7 +580,8 @@ api_key = "sk-1234567890abcdef"
 
         fs::write(project_dir.path().join("manage.py"), "#!/usr/bin/env python").unwrap();
 
-        let _scan_id = scan_project(project_id).await.unwrap();
+        let app = tauri::test::mock_app();
+        let _scan_id = scan_project(app.handle().clone(), project_id).await.unwrap();
 
         let conn = db::init_db().unwrap();
         let project = queries::select_project(&conn, project_id).unwrap().unwrap();
