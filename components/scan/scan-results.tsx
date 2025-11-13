@@ -7,7 +7,7 @@ import { open } from "@tauri-apps/plugin-dialog"
 import { Button } from "@/components/ui/button"
 import { Play, Folder, Check, FileSearch, AlertCircle, Shield } from "lucide-react"
 import { useProjectStore } from "@/lib/stores/project-store"
-import { create_project, detect_framework, scan_project, get_scan_progress, get_violations, get_scans } from "@/lib/tauri/commands"
+import { create_project, detect_framework, scan_project, get_scan_progress, get_violations, get_scans, get_projects } from "@/lib/tauri/commands"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
 
 interface Violation {
@@ -143,16 +143,26 @@ export function ScanResults() {
       })
 
       if (selected && typeof selected === "string") {
-        // Detect framework
-        const framework = await detect_framework(selected)
+        // Check if project already exists
+        const existingProjects = await get_projects()
+        const existingProject = existingProjects.find(p => p.path === selected)
 
-        // Create project in database
-        const project = await create_project(selected, undefined, framework)
+        let project
+        if (existingProject) {
+          // Use existing project
+          project = existingProject
+          showInfo(`Project "${project.name}" already exists, using existing project`)
+        } else {
+          // Detect framework
+          const framework = await detect_framework(selected)
+
+          // Create new project in database
+          project = await create_project(selected, undefined, framework)
+          showSuccess(`Project "${project.name}" created successfully`)
+        }
 
         // Update global state
         setSelectedProject(project)
-
-        showSuccess(`Project "${project.name}" loaded successfully`)
       }
     } catch (error) {
       handleTauriError(error, "Failed to select project")
