@@ -38,6 +38,18 @@ fn main() {
     #[cfg(debug_assertions)]
     {
         println!("[ryn] Development build detected, enabling MCP plugin");
+
+        // Clean up stale socket file before starting
+        // This prevents "Socket address already in use" errors after crashes
+        let socket_path = std::path::Path::new("/tmp/tauri-mcp.sock");
+        if socket_path.exists() {
+            println!("[ryn] Removing stale MCP socket file");
+            if let Err(e) = std::fs::remove_file(socket_path) {
+                eprintln!("[ryn] WARNING: Failed to remove stale socket: {}", e);
+                eprintln!("[ryn] You may need to remove /tmp/tauri-mcp.sock manually");
+            }
+        }
+
         builder = builder.plugin(tauri_plugin_mcp::init_with_config(
             tauri_plugin_mcp::PluginConfig::new("ryn".to_string())
                 .start_socket_server(true)
