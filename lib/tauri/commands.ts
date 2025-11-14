@@ -190,7 +190,7 @@ export async function get_violation(
   violationId: number
 ): Promise<ViolationDetail> {
   return await invoke<ViolationDetail>("get_violation", {
-    violationId,
+    id: violationId,
   })
 }
 
@@ -200,7 +200,7 @@ export async function get_violation(
 export async function dismiss_violation(
   violationId: number
 ): Promise<void> {
-  await invoke<void>("dismiss_violation", { violationId })
+  await invoke<void>("dismiss_violation", { id: violationId })
 }
 
 // ============================================================================
