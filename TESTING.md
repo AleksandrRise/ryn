@@ -19,6 +19,14 @@ pnpm tauri dev
 
 Clone and test on real code instead of synthetic examples. Start small, increase complexity.
 
+**Important:** Clone repos OUTSIDE the ryn directory to avoid git conflicts:
+
+```bash
+mkdir -p ~/test-repos
+cd ~/test-repos
+# Then clone repos below
+```
+
 ### SMALL (50-200 files) - Start Here
 
 **1. Vulnerable Flask App**
