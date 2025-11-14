@@ -83,25 +83,25 @@ pub async fn get_violations(
 /// Get a single violation with full details
 ///
 /// # Arguments
-/// * `id` - Violation ID
+/// * `violation_id` - Violation ID
 ///
 /// Returns: Violation detail object with related control and fix information
 #[tauri::command]
-pub async fn get_violation(id: i64) -> Result<ViolationDetail, String> {
+pub async fn get_violation(violation_id: i64) -> Result<ViolationDetail, String> {
     let conn = db::init_db()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
     // Get violation
-    let violation = queries::select_violation(&conn, id)
+    let violation = queries::select_violation(&conn, violation_id)
         .map_err(|e| format!("Failed to fetch violation: {}", e))?
-        .ok_or_else(|| format!("Violation not found: {}", id))?;
+        .ok_or_else(|| format!("Violation not found: {}", violation_id))?;
 
     // Get related control
     let control = queries::select_control(&conn, &violation.control_id)
         .map_err(|e| format!("Failed to fetch control: {}", e))?;
 
     // Get related fix if exists
-    let fix = queries::select_fix_for_violation(&conn, id)
+    let fix = queries::select_fix_for_violation(&conn, violation_id)
         .map_err(|e| format!("Failed to fetch fix: {}", e))?;
 
     // Get related scan
@@ -121,21 +121,21 @@ pub async fn get_violation(id: i64) -> Result<ViolationDetail, String> {
 /// Marks a violation as dismissed in the database and logs an audit event
 ///
 /// # Arguments
-/// * `id` - Violation ID
+/// * `violation_id` - Violation ID
 ///
 /// Returns: Success or error
 #[tauri::command]
-pub async fn dismiss_violation(id: i64) -> Result<(), String> {
+pub async fn dismiss_violation(violation_id: i64) -> Result<(), String> {
     let conn = db::init_db()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
     // Get violation to extract scan_id
-    let violation = queries::select_violation(&conn, id)
+    let violation = queries::select_violation(&conn, violation_id)
         .map_err(|e| format!("Failed to fetch violation: {}", e))?
-        .ok_or_else(|| format!("Violation not found: {}", id))?;
+        .ok_or_else(|| format!("Violation not found: {}", violation_id))?;
 
     // Update status to dismissed
-    queries::update_violation_status(&conn, id, "dismissed")
+    queries::update_violation_status(&conn, violation_id, "dismissed")
         .map_err(|e| format!("Failed to dismiss violation: {}", e))?;
 
     // Get scan and project info for audit
