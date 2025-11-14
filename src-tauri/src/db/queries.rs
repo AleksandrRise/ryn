@@ -58,6 +58,28 @@ pub fn select_project(conn: &Connection, id: i64) -> Result<Option<Project>> {
     Ok(project)
 }
 
+pub fn select_project_by_path(conn: &Connection, path: &str) -> Result<Option<Project>> {
+    let mut stmt = conn
+        .prepare("SELECT id, name, path, framework, created_at, updated_at FROM projects WHERE path = ?")
+        .context("Failed to prepare select project by path query")?;
+
+    let project = stmt
+        .query_row(params![path], |row| {
+            Ok(Project {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                path: row.get(2)?,
+                framework: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })
+        .optional()
+        .context("Failed to query project by path")?;
+
+    Ok(project)
+}
+
 pub fn update_project(conn: &Connection, id: i64, name: &str, framework: Option<&str>) -> Result<()> {
     let updated_at = chrono::Utc::now().to_rfc3339();
     conn.execute(
