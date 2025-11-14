@@ -21,30 +21,12 @@ export function McpInit() {
       return
     }
 
-    // Setup MCP plugin event listeners
-    let cleanupFn: (() => Promise<void>) | null = null
+    // MCP plugin is Rust-only, no frontend bindings available
+    // The plugin runs on the backend and doesn't require frontend setup
+    console.log("[MCP Init] MCP plugin runs backend-only (Unix socket at /tmp/tauri-mcp.sock)")
+    setStatus("ready (backend-only)")
 
-    ;(async () => {
-      try {
-        const { setupPluginListeners, cleanupPluginListeners } = await import("tauri-plugin-mcp")
-        await setupPluginListeners()
-        cleanupFn = cleanupPluginListeners
-        console.log("[MCP Init] Plugin listeners setup complete")
-        setStatus("ready")
-      } catch (error) {
-        console.error("[MCP Init] Failed to setup plugin listeners:", error)
-        setStatus("error")
-      }
-    })()
-
-    // Cleanup on unmount
-    return () => {
-      if (cleanupFn) {
-        cleanupFn().then(() => {
-          console.log("[MCP Init] Plugin listeners cleaned up")
-        })
-      }
-    }
+    // No cleanup needed as plugin is backend-only
   }, [])
 
   // Show status in development
