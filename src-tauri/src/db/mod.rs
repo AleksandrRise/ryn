@@ -16,8 +16,9 @@ pub fn get_db_path() -> Result<PathBuf> {
     let data_dir = match std::env::var("RYN_DATA_DIR") {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => {
-            // Default to current directory for simplicity
-            PathBuf::from("./data")
+            // Default to parent directory (../data) when running from src-tauri via Tauri CLI
+            // This ensures the database is at the project root, not inside src-tauri
+            PathBuf::from("../data")
         }
     };
 

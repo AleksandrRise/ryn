@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.ryn.app",
   "build": {
-    "beforeDevCommand": "RYN_DATA_DIR=./data npm run dev",
+    "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../out"
