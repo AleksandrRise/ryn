@@ -11,12 +11,15 @@ export function generateStaticParams() {
   return []
 }
 
-export default function ViolationPage({ params }: { params: { id: string } }) {
+// Next.js 15+ requires params to be awaited
+export default async function ViolationPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+
   return (
     <>
       <TopNav />
       <main className="pt-12">
-        <ViolationDetail violationId={Number.parseInt(params.id)} />
+        <ViolationDetail violationId={Number.parseInt(id)} />
       </main>
     </>
   )
