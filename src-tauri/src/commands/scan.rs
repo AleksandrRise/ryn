@@ -216,11 +216,11 @@ pub async fn get_scan_progress(scan_id: i64) -> Result<Scan, String> {
 ///
 /// Returns: List of scans for the specified project
 #[tauri::command]
-pub async fn get_scans(project_id: i64) -> Result<Vec<Scan>, String> {
+pub async fn get_scans(projectId: i64) -> Result<Vec<Scan>, String> {
     let conn = db::init_db()
         .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
-    let scans = queries::select_scans(&conn, project_id)
+    let scans = queries::select_scans(&conn, projectId)
         .map_err(|e| format!("Failed to fetch scans: {}", e))?;
 
     Ok(scans)

@@ -157,7 +157,7 @@ export async function get_scan_progress(
 export async function get_scans(
   projectId: number
 ): Promise<ScanResult[]> {
-  return await invoke<ScanResult[]>("get_scans", { project_id: projectId })
+  return await invoke<ScanResult[]>("get_scans", { projectId })
 }
 
 // ============================================================================

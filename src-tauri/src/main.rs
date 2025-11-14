@@ -37,12 +37,13 @@ fn main() {
     // Only include MCP plugin in development builds
     #[cfg(debug_assertions)]
     {
-        println!("[ryn] Development build detected, enabling MCP plugin");
-        builder = builder.plugin(tauri_plugin_mcp::init_with_config(
-            tauri_plugin_mcp::PluginConfig::new("ryn".to_string())
-                .start_socket_server(true)
-                .socket_path("/tmp/tauri-mcp.sock".into())
-        ));
+        println!("[ryn] Development build detected, MCP plugin disabled due to socket conflicts");
+        // TODO: Re-enable MCP plugin after resolving socket path conflicts
+        // builder = builder.plugin(tauri_plugin_mcp::init_with_config(
+        //     tauri_plugin_mcp::PluginConfig::new("ryn".to_string())
+        //         .start_socket_server(true)
+        //         .socket_path("/tmp/tauri-mcp.sock".into())
+        // ));
     }
 
     // Run the Tauri application

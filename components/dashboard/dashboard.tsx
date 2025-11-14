@@ -9,6 +9,7 @@ import {
   get_scans,
   get_violations,
   get_audit_events,
+  get_projects,
   type Violation,
   type ScanResult,
   type AuditEvent,
@@ -91,6 +92,26 @@ export function Dashboard() {
         const fixEvents = events.filter(e => e.event_type === "fix_applied")
         setFixesAppliedCount(fixEvents.length)
       } catch (error) {
+        // Log the actual error for debugging
+        console.error('[Dashboard] Load error:', { error, selectedProject })
+
+        // Check if error is due to project not existing in database
+        // This can happen when database is reset but localStorage still has project reference
+        try {
+          const projects = await get_projects()
+          const projectExists = projects.some((p) => p.id === selectedProject?.id)
+
+          if (!projectExists) {
+            // Project was deleted or database was reset - clear the reference gracefully
+            const { clearProject } = useProjectStore.getState()
+            clearProject()
+            setIsLoading(false)
+            return
+          }
+        } catch {
+          // If get_projects fails, assume database issue and fall through to show error
+        }
+
         handleTauriError(error, "Failed to load dashboard data")
       } finally {
         setIsLoading(false)
