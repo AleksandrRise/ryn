@@ -16,6 +16,13 @@ use ryn::commands::{
 };
 
 fn main() {
+    // Load environment variables from .env file
+    // This allows API keys and config to be read from .env during development
+    if let Err(e) = ryn::utils::env::load_env() {
+        eprintln!("[ryn] WARNING: Failed to load .env file: {}", e);
+        eprintln!("[ryn] API keys must be set in system environment");
+    }
+
     // Initialize database - REQUIRED for app to function properly
     // If database initialization fails, the app cannot operate correctly
     if let Err(e) = ryn::db::init_db() {
@@ -38,6 +45,18 @@ fn main() {
     #[cfg(debug_assertions)]
     {
         println!("[ryn] Development build detected, enabling MCP plugin");
+
+        // Clean up stale socket file before starting
+        // This prevents "Socket address already in use" errors after crashes
+        let socket_path = std::path::Path::new("/tmp/tauri-mcp.sock");
+        if socket_path.exists() {
+            println!("[ryn] Removing stale MCP socket file");
+            if let Err(e) = std::fs::remove_file(socket_path) {
+                eprintln!("[ryn] WARNING: Failed to remove stale socket: {}", e);
+                eprintln!("[ryn] You may need to remove /tmp/tauri-mcp.sock manually");
+            }
+        }
+
         builder = builder.plugin(tauri_plugin_mcp::init_with_config(
             tauri_plugin_mcp::PluginConfig::new("ryn".to_string())
                 .start_socket_server(true)

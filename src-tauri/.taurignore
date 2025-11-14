@@ -1,0 +1,10 @@
+# Tauri Dev Watcher Ignore File
+# Prevents database changes from triggering app rebuilds
+
+# Database directory - changes during scans should not trigger rebuild
+data/
+data/**
+
+# Build artifacts
+target/
+target/**

@@ -15,6 +15,7 @@ import {
   get_scan_progress,
   get_violations,
   get_scans,
+  get_projects,
   type Violation,
   type ScanResult
 } from "@/lib/tauri/commands"
@@ -45,12 +46,34 @@ export function ScanResults() {
     completedAt: "",
   })
 
-  // Load last scan on mount
+  // Verify project exists in database on mount
   useEffect(() => {
-    if (selectedProject) {
-      loadLastScan()
+    const verifyProject = async () => {
+      if (selectedProject) {
+        try {
+          // Verify project still exists in database
+          const projects = await get_projects()
+          const exists = projects.some(p => p.id === selectedProject.id)
+
+          if (!exists) {
+            // Project was deleted or database was cleared
+            console.warn(`Project ${selectedProject.id} not found in database, clearing selection`)
+            setSelectedProject(null)
+            showInfo("Previous project no longer exists. Please select a project.")
+          } else {
+            // Project exists, load last scan
+            loadLastScan()
+          }
+        } catch (error) {
+          console.error("Failed to verify project:", error)
+          // On error, clear the selection to be safe
+          setSelectedProject(null)
+        }
+      }
     }
-  }, [selectedProject])
+
+    verifyProject()
+  }, [])
 
   // Listen to real-time scan progress events
   useEffect(() => {
@@ -175,11 +198,32 @@ export function ScanResults() {
 
       showInfo("Starting scan...")
 
-      // Start scan
+      // Verify project exists before scanning
+      try {
+        const projects = await get_projects()
+        const exists = projects.some(p => p.id === selectedProject.id)
+
+        if (!exists) {
+          throw new Error(`Project not found in database. Please select the project folder again.`)
+        }
+      } catch (verifyError) {
+        // Clear invalid project from state
+        setSelectedProject(null)
+        throw verifyError
+      }
+
+      // Start scan - this is now synchronous and returns when complete
       const scan = await scan_project(selectedProject.id)
       setCurrentScanId(scan.id)
 
-      // Polling starts via useEffect
+      // Scan completed - update UI
+      setIsScanning(false)
+
+      // Load violations and refresh
+      await loadViolations(scan.id)
+      await loadLastScan()
+
+      showSuccess(`Scan completed! Found ${scan.violations_found} violations`)
     } catch (error) {
       setIsScanning(false)
       handleTauriError(error, "Failed to start scan")
