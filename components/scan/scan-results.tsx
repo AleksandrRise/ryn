@@ -212,11 +212,18 @@ export function ScanResults() {
         throw verifyError
       }
 
-      // Start scan
+      // Start scan - this is now synchronous and returns when complete
       const scan = await scan_project(selectedProject.id)
       setCurrentScanId(scan.id)
 
-      // Polling starts via useEffect
+      // Scan completed - update UI
+      setIsScanning(false)
+
+      // Load violations and refresh
+      await loadViolations(scan.id)
+      await loadLastScan()
+
+      showSuccess(`Scan completed! Found ${scan.violations_found} violations`)
     } catch (error) {
       setIsScanning(false)
       handleTauriError(error, "Failed to start scan")
