@@ -16,6 +16,13 @@ use ryn::commands::{
 };
 
 fn main() {
+    // Load environment variables from .env file
+    // This allows API keys and config to be read from .env during development
+    if let Err(e) = ryn::utils::env::load_env() {
+        eprintln!("[ryn] WARNING: Failed to load .env file: {}", e);
+        eprintln!("[ryn] API keys must be set in system environment");
+    }
+
     // Initialize database - REQUIRED for app to function properly
     // If database initialization fails, the app cannot operate correctly
     if let Err(e) = ryn::db::init_db() {
