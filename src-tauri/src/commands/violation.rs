@@ -148,7 +148,7 @@ pub async fn dismiss_violation(violation_id: i64) -> Result<(), String> {
             &conn,
             "violation_dismissed",
             Some(s.project_id),
-            Some(id),
+            Some(violation_id),
             None,
             &format!("Dismissed violation: {}", violation.description),
         ) {
