@@ -29,36 +29,24 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mut builder = tauri::Builder::default()
+    // Build the Tauri application
+    // If this fails, log detailed error and exit gracefully
+    if let Err(e) = tauri::Builder::default()
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init());
-
-    // Only include MCP plugin in development builds
-    #[cfg(debug_assertions)]
-    {
-        println!("[ryn] Development build detected, MCP plugin disabled due to socket conflicts");
-        // TODO: Re-enable MCP plugin after resolving socket path conflicts
-        // builder = builder.plugin(tauri_plugin_mcp::init_with_config(
-        //     tauri_plugin_mcp::PluginConfig::new("ryn".to_string())
-        //         .start_socket_server(true)
-        //         .socket_path("/tmp/tauri-mcp.sock".into())
-        // ));
-    }
-
-    // Run the Tauri application
-    // If this fails, log detailed error and exit gracefully
-    if let Err(e) = builder
+        .plugin(tauri_plugin_dialog::init())
+        .manage(scan::ScanResponseChannels::default())
         .invoke_handler(tauri::generate_handler![
             // Project Commands (3)
             project::select_project_folder,
             project::create_project,
             project::get_projects,
-            // Scan Commands (4)
+            // Scan Commands (5)
             scan::detect_framework,
             scan::scan_project,
             scan::get_scan_progress,
             scan::get_scans,
+            scan::respond_to_cost_limit,
             // Violation Commands (3)
             violation::get_violations,
             violation::get_violation,

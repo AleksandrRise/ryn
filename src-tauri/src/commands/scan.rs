@@ -8,9 +8,12 @@ use crate::scanner::framework_detector::FrameworkDetector;
 use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12ResilienceRule};
 use crate::security::path_validation;
 use std::path::Path;
+use std::collections::HashMap;
+use std::sync::Mutex;
 use walkdir::WalkDir;
 use serde::Serialize;
 use tauri::Emitter;
+use tokio::sync::oneshot;
 
 /// Progress event payload emitted during scan
 #[derive(Clone, Serialize)]
@@ -20,6 +23,68 @@ struct ScanProgressEvent {
     total_files: i32,
     violations_found: i32,
     current_file: String,
+}
+
+/// Cost limit event payload emitted when scan reaches spending threshold
+#[derive(Clone, Serialize)]
+struct CostLimitEvent {
+    scan_id: i64,
+    current_cost_usd: f64,
+    limit_usd: f64,
+    files_analyzed: i64,
+    files_remaining: i32,
+}
+
+/// Channels for handling scan-time cost limit prompts
+///
+/// When a scan hits a cost limit, it sends a prompt to the frontend via Tauri events
+/// and waits for a user decision via a oneshot channel. The frontend responds
+/// via the respond_to_cost_limit() command.
+#[derive(Default)]
+pub struct ScanResponseChannels {
+    /// Map of scan_id -> oneshot sender for cost limit responses
+    ///
+    /// When scan needs user decision:
+    /// 1. Create oneshot channel
+    /// 2. Store sender in this map with scan_id as key
+    /// 3. Emit "cost-limit-reached" event to frontend
+    /// 4. Await receiver
+    /// 5. Frontend calls respond_to_cost_limit(scan_id, continue_scan: bool)
+    /// 6. Command retrieves sender from map and sends decision
+    cost_limit_responses: Mutex<HashMap<i64, oneshot::Sender<bool>>>,
+}
+
+impl ScanResponseChannels {
+    /// Create a new channel set for a scan's cost limit decision
+    ///
+    /// Returns: Receiver that will get the user's decision (true = continue, false = stop)
+    pub fn create_cost_limit_channel(&self, scan_id: i64) -> oneshot::Receiver<bool> {
+        let (tx, rx) = oneshot::channel();
+        let mut channels = self.cost_limit_responses.lock().unwrap();
+        channels.insert(scan_id, tx);
+        rx
+    }
+
+    /// Respond to a cost limit prompt
+    ///
+    /// Called by the respond_to_cost_limit() command when user makes a decision
+    ///
+    /// # Arguments
+    /// * `scan_id` - ID of the scan waiting for decision
+    /// * `continue_scan` - User decision (true = continue, false = stop)
+    ///
+    /// Returns: Ok if channel existed and decision was sent, Err otherwise
+    pub fn respond_to_cost_limit(&self, scan_id: i64, continue_scan: bool) -> Result<(), String> {
+        let mut channels = self.cost_limit_responses.lock().unwrap();
+
+        if let Some(sender) = channels.remove(&scan_id) {
+            sender.send(continue_scan)
+                .map_err(|_| "Failed to send response: receiver dropped".to_string())?;
+            Ok(())
+        } else {
+            Err(format!("No pending cost limit prompt for scan {}", scan_id))
+        }
+    }
 }
 
 /// Detect the framework of a project
@@ -221,6 +286,27 @@ pub async fn get_scans(project_id: i64) -> Result<Vec<Scan>, String> {
         .map_err(|e| format!("Failed to fetch scans: {}", e))?;
 
     Ok(scans)
+}
+
+/// Respond to a cost limit prompt during scanning
+///
+/// When a scan reaches its cost limit, it emits a "cost-limit-reached" event
+/// and waits for the user's decision. The frontend calls this command to
+/// respond with the user's choice.
+///
+/// # Arguments
+/// * `channels` - Managed state containing response channels
+/// * `scan_id` - ID of the scan waiting for a decision
+/// * `continue_scan` - User's decision (true = continue scanning, false = stop)
+///
+/// Returns: Ok if response was sent, Err if no scan was waiting for a decision
+#[tauri::command]
+pub async fn respond_to_cost_limit(
+    channels: tauri::State<'_, ScanResponseChannels>,
+    scan_id: i64,
+    continue_scan: bool,
+) -> Result<(), String> {
+    channels.respond_to_cost_limit(scan_id, continue_scan)
 }
 
 /// Run all 4 rule engines on code
@@ -585,5 +671,119 @@ api_key = "sk-1234567890abcdef"
 
         // Framework should be detected during project creation or scan
         assert!(project.framework.is_some() || project.framework.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_scan_response_channels_create() {
+        let channels = ScanResponseChannels::default();
+        let scan_id = 1;
+
+        let rx = channels.create_cost_limit_channel(scan_id);
+
+        // Channel should exist in the map
+        let map = channels.cost_limit_responses.lock().unwrap();
+        assert!(map.contains_key(&scan_id));
+        drop(map);
+
+        // Receiver should be valid
+        assert!(!rx.is_closed());
+    }
+
+    #[tokio::test]
+    async fn test_scan_response_channels_respond_success() {
+        let channels = ScanResponseChannels::default();
+        let scan_id = 1;
+
+        let rx = channels.create_cost_limit_channel(scan_id);
+
+        // Respond with continue=true
+        let result = channels.respond_to_cost_limit(scan_id, true);
+        assert!(result.is_ok());
+
+        // Receiver should get the decision
+        let decision = rx.await.unwrap();
+        assert_eq!(decision, true);
+
+        // Channel should be removed from map after response
+        let map = channels.cost_limit_responses.lock().unwrap();
+        assert!(!map.contains_key(&scan_id));
+    }
+
+    #[tokio::test]
+    async fn test_scan_response_channels_respond_no_pending() {
+        let channels = ScanResponseChannels::default();
+        let scan_id = 1;
+
+        // Try to respond without creating a channel
+        let result = channels.respond_to_cost_limit(scan_id, true);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("No pending cost limit prompt"));
+    }
+
+    #[tokio::test]
+    async fn test_scan_response_channels_multiple_scans() {
+        let channels = ScanResponseChannels::default();
+        let scan_id_1 = 1;
+        let scan_id_2 = 2;
+
+        let rx1 = channels.create_cost_limit_channel(scan_id_1);
+        let rx2 = channels.create_cost_limit_channel(scan_id_2);
+
+        // Both channels should exist independently
+        let map = channels.cost_limit_responses.lock().unwrap();
+        assert!(map.contains_key(&scan_id_1));
+        assert!(map.contains_key(&scan_id_2));
+        drop(map);
+
+        // Respond to first scan
+        channels.respond_to_cost_limit(scan_id_1, true).unwrap();
+        assert_eq!(rx1.await.unwrap(), true);
+
+        // Second scan should still be waiting
+        let map = channels.cost_limit_responses.lock().unwrap();
+        assert!(!map.contains_key(&scan_id_1));
+        assert!(map.contains_key(&scan_id_2));
+        drop(map);
+
+        // Respond to second scan
+        channels.respond_to_cost_limit(scan_id_2, false).unwrap();
+        assert_eq!(rx2.await.unwrap(), false);
+
+        // Both should be cleaned up
+        let map = channels.cost_limit_responses.lock().unwrap();
+        assert!(map.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_scan_response_channels_respond_false() {
+        let channels = ScanResponseChannels::default();
+        let scan_id = 1;
+
+        let rx = channels.create_cost_limit_channel(scan_id);
+
+        // Respond with continue=false (stop scanning)
+        let result = channels.respond_to_cost_limit(scan_id, false);
+        assert!(result.is_ok());
+
+        // Receiver should get false
+        let decision = rx.await.unwrap();
+        assert_eq!(decision, false);
+    }
+
+    #[tokio::test]
+    async fn test_scan_response_channels_dropped_receiver() {
+        let channels = ScanResponseChannels::default();
+        let scan_id = 1;
+
+        let rx = channels.create_cost_limit_channel(scan_id);
+
+        // Drop the receiver to simulate scan being cancelled
+        drop(rx);
+
+        // Responding should still work (sender doesn't know receiver is gone until send)
+        // But the send itself will fail
+        let result = channels.respond_to_cost_limit(scan_id, true);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("receiver dropped"));
     }
 }
