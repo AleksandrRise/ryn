@@ -110,6 +110,24 @@ pub struct UsageMetrics {
     pub cache_read_input_tokens: i32,
 }
 
+impl UsageMetrics {
+    /// Calculate cost in USD using Claude Haiku 4.5 November 2025 pricing
+    ///
+    /// Pricing (per million tokens):
+    /// - Input: $1.00
+    /// - Output: $5.00
+    /// - Cache write: $1.25
+    /// - Cache read: $0.10
+    pub fn calculate_cost(&self) -> f64 {
+        let input_cost = (self.input_tokens as f64) * 1.00 / 1_000_000.0;
+        let output_cost = (self.output_tokens as f64) * 5.00 / 1_000_000.0;
+        let cache_write_cost = (self.cache_creation_input_tokens as f64) * 1.25 / 1_000_000.0;
+        let cache_read_cost = (self.cache_read_input_tokens as f64) * 0.10 / 1_000_000.0;
+
+        input_cost + output_cost + cache_write_cost + cache_read_cost
+    }
+}
+
 /// Result of LLM analysis for violations
 #[derive(Debug, Clone)]
 pub struct AnalysisResult {

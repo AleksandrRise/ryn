@@ -8,13 +8,16 @@ use crate::scanner::framework_detector::FrameworkDetector;
 use crate::scanner::llm_file_selector;
 use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12ResilienceRule};
 use crate::security::path_validation;
+use crate::fix_generator::claude_client::ClaudeClient;
 use std::path::Path;
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::sync::Arc;
 use walkdir::WalkDir;
 use serde::Serialize;
 use tauri::Emitter;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Semaphore};
+use tokio::time::{timeout, Duration};
 
 /// Progress event payload emitted during scan
 #[derive(Clone, Serialize)]
@@ -267,6 +270,125 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
     scan.low_count = low;
 
     Ok(scan)
+}
+
+/// Analyze collected files with Claude Haiku LLM
+///
+/// Processes files concurrently (max 10 simultaneous) with 30-second timeout per file.
+/// Fetches existing regex violations for context and stores LLM-detected violations.
+///
+/// # Arguments
+/// * `scan_id` - ID of current scan
+/// * `files` - Vector of (relative_path, content) tuples to analyze
+///
+/// # Returns
+/// Tuple of (total_violations_found, total_cost_usd)
+///
+/// # Implementation Details
+/// - Semaphore(10): Limits concurrent API requests to prevent rate limiting
+/// - 30-second timeout: Prevents hanging on slow/large files
+/// - Each task gets independent DB connection and Claude client
+/// - Errors are logged but don't stop processing of other files
+async fn analyze_files_with_llm(
+    scan_id: i64,
+    files: Vec<(String, String)>,
+) -> Result<(i32, f64), String> {
+    if files.is_empty() {
+        return Ok((0, 0.0));
+    }
+
+    // Verify API key exists before spawning tasks
+    std::env::var("ANTHROPIC_API_KEY")
+        .map_err(|_| "ANTHROPIC_API_KEY environment variable not set. Set it to enable LLM scanning.".to_string())?;
+
+    // Create semaphore for concurrency control (max 10 concurrent requests)
+    let semaphore = Arc::new(Semaphore::new(10));
+
+    // Spawn async tasks for each file
+    let mut tasks = Vec::new();
+
+    for (file_path, content) in files {
+        let sem_clone = semaphore.clone();
+
+        let task = tokio::spawn(async move {
+            // Acquire semaphore permit (blocks if 10 tasks already running)
+            let _permit = sem_clone.acquire().await.unwrap();
+
+            // Create Claude client for this task (reads API key from env)
+            let client = match ClaudeClient::new() {
+                Ok(c) => c,
+                Err(e) => return Err(format!("Failed to create Claude client: {}", e)),
+            };
+
+            // Fetch existing regex violations for this file (provides context to LLM)
+            // MUST drop connection before async operations to avoid Send trait issues
+            let regex_findings: Vec<Violation> = {
+                let conn = db::get_connection();
+                queries::select_violations(&conn, scan_id)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|v| v.file_path == file_path && v.detection_method == "regex")
+                    .collect()
+            }; // Connection dropped here
+
+            // Analyze with 30-second timeout
+            let analysis_future = client.analyze_for_violations(
+                scan_id,
+                &file_path,
+                &content,
+                regex_findings,
+            );
+
+            let result = timeout(Duration::from_secs(30), analysis_future).await;
+
+            match result {
+                Ok(Ok(analysis)) => {
+                    // Store LLM violations in database (get new connection)
+                    let mut stored_count = 0;
+                    {
+                        let conn = db::get_connection();
+                        for violation in &analysis.violations {
+                            if queries::insert_violation(&conn, violation).is_ok() {
+                                stored_count += 1;
+                            }
+                        }
+                    } // Connection dropped here
+
+                    Ok((stored_count, analysis.usage.calculate_cost()))
+                }
+                Ok(Err(e)) => {
+                    Err(format!("LLM analysis failed for {}: {}", file_path, e))
+                }
+                Err(_) => {
+                    Err(format!("Timeout: {} took longer than 30 seconds", file_path))
+                }
+            }
+        });
+
+        tasks.push(task);
+    }
+
+    // Wait for all tasks to complete
+    let mut total_violations = 0;
+    let mut total_cost = 0.0;
+
+    for task in tasks {
+        match task.await {
+            Ok(Ok((count, cost))) => {
+                total_violations += count;
+                total_cost += cost;
+            }
+            Ok(Err(e)) => {
+                eprintln!("[ryn] LLM analysis error: {}", e);
+                // Continue processing other files even if one fails
+            }
+            Err(e) => {
+                eprintln!("[ryn] Task join error: {}", e);
+            }
+        }
+    }
+
+    Ok((total_violations, total_cost))
 }
 
 /// Get scan progress
