@@ -457,6 +457,31 @@ export function Dashboard() {
 
       </div>
 
+      {/* Stale Scan Alert */}
+      {lastScan && (() => {
+        const scanTime = new Date(lastScan.created_at || lastScan.started_at).getTime()
+        const now = Date.now()
+        const diffMs = now - scanTime
+        const diffHours = Math.floor(diffMs / 3600000)
+        const isStale = diffHours >= 1
+
+        return isStale ? (
+          <Link
+            href="/scan"
+            className="mt-8 flex items-center justify-between p-6 bg-yellow-500/10 backdrop-blur-sm border border-yellow-500/30 rounded-2xl animate-fade-in-up delay-300 hover:bg-yellow-500/15 hover:border-yellow-500/50 transition-all duration-300 cursor-pointer group"
+          >
+            <div>
+              <p className="font-semibold mb-1 text-yellow-400 group-hover:text-yellow-300 transition-colors">Scan data is {diffHours} hour{diffHours > 1 ? "s" : ""} old</p>
+              <p className="text-sm text-yellow-400/70 group-hover:text-yellow-400/90 transition-colors">Run a fresh scan to get the latest compliance data</p>
+            </div>
+            <div className="flex items-center gap-2 text-sm font-medium text-yellow-400 group-hover:translate-x-1 transition-transform">
+              <span>Rescan Now</span>
+              <i className="las la-arrow-right text-base"></i>
+            </div>
+          </Link>
+        ) : null
+      })()}
+
       {/* Action Footer */}
       <Link
         href="/scan"

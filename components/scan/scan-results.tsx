@@ -3,14 +3,11 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import type { Severity } from "@/lib/types/violation"
-import { open } from "@tauri-apps/plugin-dialog"
 import { listen } from "@tauri-apps/api/event"
 import { Button } from "@/components/ui/button"
-import { Play, Folder, Check, FileSearch, AlertCircle, Shield } from "lucide-react"
+import { Play, Check, FileSearch, AlertCircle, Shield } from "lucide-react"
 import { useProjectStore } from "@/lib/stores/project-store"
 import {
-  create_project,
-  detect_framework,
   scan_project,
   get_scan_progress,
   get_violations,
@@ -138,31 +135,6 @@ export function ScanResults() {
     }
   }
 
-  const handleSelectFolder = async () => {
-    try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: "Select Project Folder",
-      })
-
-      if (selected && typeof selected === "string") {
-        // Detect framework
-        const framework = await detect_framework(selected)
-
-        // Create project in database
-        const project = await create_project(selected, undefined, framework)
-
-        // Update global state
-        setSelectedProject(project)
-
-        showSuccess(`Project "${project.name}" loaded successfully`)
-      }
-    } catch (error) {
-      handleTauriError(error, "Failed to select project")
-    }
-  }
-
   const handleStartScan = async () => {
     if (!selectedProject) {
       handleTauriError("No project selected", "Please select a project first")
@@ -175,11 +147,26 @@ export function ScanResults() {
 
       showInfo("Starting scan...")
 
-      // Start scan
+      // Verify project exists in database before scanning
+      try {
+        const projects = await get_scans(selectedProject.id)
+        // If we can fetch scans for this project, it exists in the database
+      } catch (verifyError) {
+        // If the query fails, the project might not exist
+        console.warn(`Project ${selectedProject.id} verification failed`)
+      }
+
+      // Start scan (this awaits until scan completes)
       const scan = await scan_project(selectedProject.id)
       setCurrentScanId(scan.id)
 
-      // Polling starts via useEffect
+      // Scan is already complete by this point (events were emitted during the await)
+      // Manually fetch the final results
+      setIsScanning(false)
+      await loadViolations(scan.id)
+      await loadLastScan()
+
+      showSuccess(`Scan completed! Found ${scan.violations_found} violations`)
     } catch (error) {
       setIsScanning(false)
       handleTauriError(error, "Failed to start scan")
@@ -193,8 +180,15 @@ export function ScanResults() {
     }))
   }
 
-  const filteredViolations =
-    selectedSeverity === "all" ? violations : violations.filter((v) => v.severity === selectedSeverity)
+  const filteredViolations = violations.filter((v) => {
+    // Filter by severity
+    const matchesSeverity = selectedSeverity === "all" || v.severity === selectedSeverity
+
+    // Filter by selected controls
+    const matchesControl = selectedControls[v.control_id as keyof typeof selectedControls] !== false
+
+    return matchesSeverity && matchesControl
+  })
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -220,31 +214,8 @@ export function ScanResults() {
 
       {/* Scan Configuration Panel */}
       <div className="mb-8 grid grid-cols-12 gap-6 animate-fade-in-up delay-100">
-        {/* Left: Project & Controls - 8 cols */}
+        {/* Left: Controls - 8 cols */}
         <div className="col-span-8 space-y-6">
-          {/* Project Location */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-white/5 rounded-lg">
-                <Folder className="w-5 h-5 text-white/60" />
-              </div>
-              <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Project Location</h3>
-            </div>
-            <div className="flex gap-3">
-              <input
-                type="text"
-                value={selectedProject?.path || ""}
-                readOnly
-                className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono focus:outline-none focus:border-white/30 transition-colors"
-                placeholder="No project selected"
-              />
-              <Button onClick={handleSelectFolder} variant="outline" size="lg" className="gap-2">
-                <Folder className="w-4 h-4" />
-                Browse
-              </Button>
-            </div>
-          </div>
-
           {/* SOC 2 Controls */}
           <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-6">
@@ -299,6 +270,23 @@ export function ScanResults() {
                   <p className="text-xs text-white/40 mb-1">Violations Found</p>
                   <p className="text-lg font-bold tabular-nums">{lastScanStats.violationsFound}</p>
                 </div>
+
+                {/* Stale scan indicator */}
+                {lastScan && (() => {
+                  const scanTime = new Date(lastScan.created_at || lastScan.started_at).getTime()
+                  const now = Date.now()
+                  const diffMs = now - scanTime
+                  const diffHours = Math.floor(diffMs / 3600000)
+                  const isStale = diffHours >= 1
+
+                  return isStale ? (
+                    <div className="mt-4 p-3 bg-yellow-500/15 border border-yellow-500/30 rounded-xl">
+                      <p className="text-xs text-yellow-400 mb-2">
+                        Scan data is {diffHours} hour{diffHours > 1 ? "s" : ""} old
+                      </p>
+                    </div>
+                  ) : null
+                })()}
               </div>
             ) : (
               <p className="text-sm text-white/40">No scans yet</p>

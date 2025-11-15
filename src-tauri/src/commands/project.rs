@@ -30,14 +30,15 @@ pub async fn select_project_folder() -> Result<String, String> {
 
 /// Create a new project in the database
 ///
-/// Validates that the path exists and inserts a new project record
+/// Validates that the path exists and inserts a new project record.
+/// If a project with this path already exists, returns the existing project.
 ///
 /// # Arguments
 /// * `path` - Absolute path to project directory
 /// * `name` - Optional project name (defaults to directory basename)
 /// * `framework` - Optional framework name (auto-detected if not provided)
 ///
-/// Returns: Created Project with assigned ID or error
+/// Returns: Created or existing Project with assigned ID or error
 #[tauri::command]
 pub async fn create_project(
     path: String,
@@ -47,6 +48,26 @@ pub async fn create_project(
     // Validate path exists
     if !Path::new(&path).exists() {
         return Err(format!("Project path does not exist: {}", path));
+    }
+
+    // Get database connection
+    let conn = db::init_db()
+        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+
+    // Check if project already exists with this path
+    if let Some(existing_project) = queries::select_project_by_path(&conn, &path)
+        .map_err(|e| format!("Failed to check for existing project: {}", e))? {
+        // Project already exists - update framework if provided and return it
+        if let Some(fw) = framework.as_deref() {
+            let _ = queries::update_project(&conn, existing_project.id, &existing_project.name, Some(fw));
+
+            // Fetch updated project
+            return queries::select_project(&conn, existing_project.id)
+                .map_err(|e| format!("Failed to fetch updated project: {}", e))?
+                .ok_or_else(|| "Project was updated but could not be retrieved".to_string());
+        }
+
+        return Ok(existing_project);
     }
 
     // Extract project name from path if not provided
@@ -59,11 +80,7 @@ pub async fn create_project(
             .to_string(),
     };
 
-    // Get database connection
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
-
-    // Insert project
+    // Insert new project
     let project_id = queries::insert_project(&conn, &project_name, &path, framework.as_deref())
         .map_err(|e| format!("Failed to create project: {}", e))?;
 

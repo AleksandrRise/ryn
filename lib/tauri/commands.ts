@@ -178,7 +178,7 @@ export async function get_violations(
   filters?: ViolationFilters
 ): Promise<Violation[]> {
   return await invoke<Violation[]>("get_violations", {
-    scan_id: scanId,
+    scanId,
     filters,
   })
 }
