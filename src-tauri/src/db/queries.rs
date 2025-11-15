@@ -207,7 +207,7 @@ pub fn insert_violation(conn: &Connection, violation: &Violation) -> Result<i64>
 
 pub fn select_violations(conn: &Connection, scan_id: i64) -> Result<Vec<Violation>> {
     let mut stmt = conn
-        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at FROM violations WHERE scan_id = ? ORDER BY severity DESC, line_number ASC")
+        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning FROM violations WHERE scan_id = ? ORDER BY severity DESC, line_number ASC")
         .context("Failed to prepare select violations query")?;
 
     let violations = stmt
@@ -223,6 +223,10 @@ pub fn select_violations(conn: &Connection, scan_id: i64) -> Result<Vec<Violatio
                 code_snippet: row.get(7)?,
                 status: row.get(8)?,
                 detected_at: row.get(9)?,
+                detection_method: row.get(10)?,
+                confidence_score: row.get(11)?,
+                llm_reasoning: row.get(12)?,
+                regex_reasoning: row.get(13)?,
             })
         })
         .context("Failed to map violations from query")?
@@ -234,7 +238,7 @@ pub fn select_violations(conn: &Connection, scan_id: i64) -> Result<Vec<Violatio
 
 pub fn select_violation(conn: &Connection, id: i64) -> Result<Option<Violation>> {
     let mut stmt = conn
-        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at FROM violations WHERE id = ?")
+        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning FROM violations WHERE id = ?")
         .context("Failed to prepare select violation query")?;
 
     let violation = stmt
@@ -250,6 +254,10 @@ pub fn select_violation(conn: &Connection, id: i64) -> Result<Option<Violation>>
                 code_snippet: row.get(7)?,
                 status: row.get(8)?,
                 detected_at: row.get(9)?,
+                detection_method: row.get(10)?,
+                confidence_score: row.get(11)?,
+                llm_reasoning: row.get(12)?,
+                regex_reasoning: row.get(13)?,
             })
         })
         .optional()
@@ -558,7 +566,7 @@ pub fn select_all_scans(conn: &Connection) -> Result<Vec<Scan>> {
 
 pub fn select_all_violations(conn: &Connection) -> Result<Vec<Violation>> {
     let mut stmt = conn.prepare(
-        "SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at
+        "SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning
          FROM violations
          ORDER BY detected_at DESC"
     ).context("Failed to prepare select all violations statement")?;
@@ -575,6 +583,10 @@ pub fn select_all_violations(conn: &Connection) -> Result<Vec<Violation>> {
             code_snippet: row.get(7)?,
             status: row.get(8)?,
             detected_at: row.get(9)?,
+            detection_method: row.get(10)?,
+            confidence_score: row.get(11)?,
+            llm_reasoning: row.get(12)?,
+            regex_reasoning: row.get(13)?,
         })
     })
     .context("Failed to query all violations")?

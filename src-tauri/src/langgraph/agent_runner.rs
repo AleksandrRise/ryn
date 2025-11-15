@@ -88,6 +88,10 @@ pub fn agent_to_violation(scan_id: i64, agent_violation: &AgentViolation) -> Vio
         code_snippet: agent_violation.code_snippet.clone(),
         status: "open".to_string(),
         detected_at: chrono::Utc::now().to_rfc3339(),
+        detection_method: "regex".to_string(),
+        confidence_score: None,
+        llm_reasoning: None,
+        regex_reasoning: None,
     }
 }
 
@@ -278,6 +282,10 @@ mod tests {
             code_snippet: "def view(request):".to_string(),
             status: "open".to_string(),
             detected_at: "2025-01-01T00:00:00Z".to_string(),
+            detection_method: "regex".to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
         };
 
         let agent_violation = violation_to_agent(&violation);
@@ -360,6 +368,10 @@ mod tests {
             code_snippet: "def my_view(request):".to_string(),
             status: "open".to_string(),
             detected_at: "2025-01-01T00:00:00Z".to_string(),
+            detection_method: "regex".to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
         };
 
         let result = runner
@@ -389,6 +401,10 @@ mod tests {
             code_snippet: "router.get('/api/users'".to_string(),
             status: "open".to_string(),
             detected_at: "2025-01-01T00:00:00Z".to_string(),
+            detection_method: "regex".to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
         };
 
         let result = runner
@@ -419,6 +435,10 @@ mod tests {
                 code_snippet: "def view1(request):".to_string(),
                 status: "open".to_string(),
                 detected_at: "2025-01-01T00:00:00Z".to_string(),
+                detection_method: "regex".to_string(),
+                confidence_score: None,
+                llm_reasoning: None,
+                regex_reasoning: None,
             },
             Violation {
                 id: 2,
@@ -431,6 +451,10 @@ mod tests {
                 code_snippet: "api_key = 'secret'".to_string(),
                 status: "open".to_string(),
                 detected_at: "2025-01-01T00:00:00Z".to_string(),
+                detection_method: "regex".to_string(),
+                confidence_score: None,
+                llm_reasoning: None,
+                regex_reasoning: None,
             },
         ];
 

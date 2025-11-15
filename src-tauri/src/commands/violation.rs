@@ -213,6 +213,10 @@ mod tests {
             code_snippet: "def get_user(request):".to_string(),
             status: "open".to_string(),
             detected_at: chrono::Utc::now().to_rfc3339(),
+            detection_method: "regex".to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
         };
 
         queries::insert_violation(&conn, &violation).unwrap()
@@ -283,6 +287,10 @@ mod tests {
                 code_snippet: "code".to_string(),
                 status: "open".to_string(),
                 detected_at: chrono::Utc::now().to_rfc3339(),
+                detection_method: "regex".to_string(),
+                confidence_score: None,
+                llm_reasoning: None,
+                regex_reasoning: None,
             };
             let _ = queries::insert_violation(&conn, &violation);
         }
@@ -323,6 +331,10 @@ mod tests {
                 code_snippet: "code".to_string(),
                 status: "open".to_string(),
                 detected_at: chrono::Utc::now().to_rfc3339(),
+                detection_method: "regex".to_string(),
+                confidence_score: None,
+                llm_reasoning: None,
+                regex_reasoning: None,
             };
             let _ = queries::insert_violation(&conn, &violation);
         }
@@ -445,6 +457,10 @@ mod tests {
                 code_snippet: "code".to_string(),
                 status: "open".to_string(),
                 detected_at: chrono::Utc::now().to_rfc3339(),
+                detection_method: "regex".to_string(),
+                confidence_score: None,
+                llm_reasoning: None,
+                regex_reasoning: None,
             };
             let _ = queries::insert_violation(&conn, &violation);
         }
@@ -485,6 +501,10 @@ mod tests {
                 code_snippet: "code".to_string(),
                 status: status.to_string(),
                 detected_at: chrono::Utc::now().to_rfc3339(),
+                detection_method: "regex".to_string(),
+                confidence_score: None,
+                llm_reasoning: None,
+                regex_reasoning: None,
             };
             let _ = queries::insert_violation(&conn, &violation);
         }
@@ -524,6 +544,10 @@ mod tests {
             code_snippet: "code".to_string(),
             status: "open".to_string(),
             detected_at: chrono::Utc::now().to_rfc3339(),
+            detection_method: "regex".to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
         };
         let _ = queries::insert_violation(&conn, &violation);
 

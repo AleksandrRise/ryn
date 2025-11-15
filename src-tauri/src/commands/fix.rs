@@ -361,6 +361,10 @@ mod tests {
             code_snippet: "def get_user(user_id):".to_string(),
             status: "open".to_string(),
             detected_at: chrono::Utc::now().to_rfc3339(),
+            detection_method: "regex".to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
         };
 
         let violation_id = queries::insert_violation(&conn, &violation).unwrap();
@@ -420,6 +424,10 @@ mod tests {
             code_snippet: "code".to_string(),
             status: "open".to_string(),
             detected_at: chrono::Utc::now().to_rfc3339(),
+            detection_method: "regex".to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
         };
         let violation_id = queries::insert_violation(&conn, &violation).unwrap();
 
@@ -603,6 +611,10 @@ mod tests {
             code_snippet: "password = \"secret123\"".to_string(),
             status: "open".to_string(),
             detected_at: chrono::Utc::now().to_rfc3339(),
+            detection_method: "regex".to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
         };
         let violation_id = queries::insert_violation(&conn, &violation).unwrap();
 
@@ -671,6 +683,10 @@ mod tests {
             code_snippet: "line1".to_string(),
             status: "open".to_string(),
             detected_at: chrono::Utc::now().to_rfc3339(),
+            detection_method: "regex".to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
         };
         let violation_id = queries::insert_violation(&conn, &violation).unwrap();
 
@@ -722,6 +738,10 @@ mod tests {
             code_snippet: "actual_code_here".to_string(),
             status: "open".to_string(),
             detected_at: chrono::Utc::now().to_rfc3339(),
+            detection_method: "regex".to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
         };
         let violation_id = queries::insert_violation(&conn, &violation).unwrap();
 

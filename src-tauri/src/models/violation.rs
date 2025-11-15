@@ -13,6 +13,36 @@ pub enum Severity {
     Low,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum DetectionMethod {
+    #[serde(rename = "regex")]
+    Regex,
+    #[serde(rename = "llm")]
+    Llm,
+    #[serde(rename = "hybrid")]
+    Hybrid,
+}
+
+impl DetectionMethod {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            DetectionMethod::Regex => "regex",
+            DetectionMethod::Llm => "llm",
+            DetectionMethod::Hybrid => "hybrid",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "regex" => Some(DetectionMethod::Regex),
+            "llm" => Some(DetectionMethod::Llm),
+            "hybrid" => Some(DetectionMethod::Hybrid),
+            _ => None,
+        }
+    }
+}
+
 impl Severity {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -86,6 +116,11 @@ pub struct Violation {
     pub code_snippet: String,
     pub status: String,
     pub detected_at: String,
+    // Hybrid scanning fields (v2 schema)
+    pub detection_method: String,
+    pub confidence_score: Option<i64>,
+    pub llm_reasoning: Option<String>,
+    pub regex_reasoning: Option<String>,
 }
 
 impl Violation {
@@ -109,6 +144,11 @@ impl Violation {
             code_snippet,
             status: ViolationStatus::Open.as_str().to_string(),
             detected_at: chrono::Utc::now().to_rfc3339(),
+            // Default to regex detection (backward compatible)
+            detection_method: DetectionMethod::Regex.as_str().to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
         }
     }
 
@@ -126,6 +166,14 @@ impl Violation {
 
     pub fn set_status(&mut self, status: ViolationStatus) {
         self.status = status.as_str().to_string();
+    }
+
+    pub fn get_detection_method(&self) -> Option<DetectionMethod> {
+        DetectionMethod::from_str(&self.detection_method)
+    }
+
+    pub fn set_detection_method(&mut self, method: DetectionMethod) {
+        self.detection_method = method.as_str().to_string();
     }
 
     pub fn dismiss(mut self) -> Self {
@@ -247,5 +295,161 @@ mod tests {
         let json = serde_json::to_string(&violation).unwrap();
         let deserialized: Violation = serde_json::from_str(&json).unwrap();
         assert_eq!(violation, deserialized);
+    }
+
+    #[test]
+    fn test_detection_method_as_str() {
+        assert_eq!(DetectionMethod::Regex.as_str(), "regex");
+        assert_eq!(DetectionMethod::Llm.as_str(), "llm");
+        assert_eq!(DetectionMethod::Hybrid.as_str(), "hybrid");
+    }
+
+    #[test]
+    fn test_detection_method_from_str() {
+        assert_eq!(
+            DetectionMethod::from_str("regex"),
+            Some(DetectionMethod::Regex)
+        );
+        assert_eq!(DetectionMethod::from_str("llm"), Some(DetectionMethod::Llm));
+        assert_eq!(
+            DetectionMethod::from_str("hybrid"),
+            Some(DetectionMethod::Hybrid)
+        );
+        assert_eq!(DetectionMethod::from_str("invalid"), None);
+    }
+
+    #[test]
+    fn test_violation_default_detection_method() {
+        let violation = Violation::new(
+            1,
+            "CC6.1".to_string(),
+            Severity::High,
+            "test".to_string(),
+            "test.py".to_string(),
+            1,
+            "code".to_string(),
+        );
+
+        // New violations should default to regex detection
+        assert_eq!(violation.detection_method, "regex");
+        assert_eq!(
+            violation.get_detection_method(),
+            Some(DetectionMethod::Regex)
+        );
+        assert_eq!(violation.confidence_score, None);
+        assert_eq!(violation.llm_reasoning, None);
+        assert_eq!(violation.regex_reasoning, None);
+    }
+
+    #[test]
+    fn test_violation_detection_method_getters_setters() {
+        let mut violation = Violation::new(
+            1,
+            "CC6.1".to_string(),
+            Severity::High,
+            "test".to_string(),
+            "test.py".to_string(),
+            1,
+            "code".to_string(),
+        );
+
+        // Test setting detection method to LLM
+        violation.set_detection_method(DetectionMethod::Llm);
+        assert_eq!(violation.detection_method, "llm");
+        assert_eq!(violation.get_detection_method(), Some(DetectionMethod::Llm));
+
+        // Test setting detection method to Hybrid
+        violation.set_detection_method(DetectionMethod::Hybrid);
+        assert_eq!(violation.detection_method, "hybrid");
+        assert_eq!(
+            violation.get_detection_method(),
+            Some(DetectionMethod::Hybrid)
+        );
+    }
+
+    #[test]
+    fn test_violation_with_llm_fields() {
+        let mut violation = Violation::new(
+            1,
+            "CC7.2".to_string(),
+            Severity::Medium,
+            "Missing audit log".to_string(),
+            "app/auth.py".to_string(),
+            42,
+            "def delete_user(user_id):".to_string(),
+        );
+
+        // Simulate LLM detection
+        violation.set_detection_method(DetectionMethod::Llm);
+        violation.confidence_score = Some(85);
+        violation.llm_reasoning = Some(
+            "This function modifies sensitive data without logging the action for audit purposes."
+                .to_string(),
+        );
+
+        assert_eq!(violation.detection_method, "llm");
+        assert_eq!(violation.confidence_score, Some(85));
+        assert!(violation.llm_reasoning.is_some());
+        assert_eq!(violation.regex_reasoning, None);
+    }
+
+    #[test]
+    fn test_violation_hybrid_detection() {
+        let mut violation = Violation::new(
+            1,
+            "CC6.7".to_string(),
+            Severity::Critical,
+            "Hardcoded secret".to_string(),
+            "config/settings.py".to_string(),
+            10,
+            "API_KEY = 'sk-1234567890abcdef'".to_string(),
+        );
+
+        // Simulate hybrid detection (both regex and LLM found it)
+        violation.set_detection_method(DetectionMethod::Hybrid);
+        violation.confidence_score = Some(95);
+        violation.llm_reasoning = Some(
+            "API key appears to be a production credential that should be externalized."
+                .to_string(),
+        );
+        violation.regex_reasoning =
+            Some("Matched pattern: API_KEY = '[a-z0-9-]+'".to_string());
+
+        assert_eq!(violation.detection_method, "hybrid");
+        assert_eq!(
+            violation.get_detection_method(),
+            Some(DetectionMethod::Hybrid)
+        );
+        assert_eq!(violation.confidence_score, Some(95));
+        assert!(violation.llm_reasoning.is_some());
+        assert!(violation.regex_reasoning.is_some());
+    }
+
+    #[test]
+    fn test_violation_serde_with_hybrid_fields() {
+        let mut violation = Violation::new(
+            1,
+            "CC6.1".to_string(),
+            Severity::High,
+            "test".to_string(),
+            "test.py".to_string(),
+            1,
+            "code".to_string(),
+        );
+
+        violation.set_detection_method(DetectionMethod::Llm);
+        violation.confidence_score = Some(80);
+        violation.llm_reasoning = Some("AI detected issue".to_string());
+
+        let json = serde_json::to_string(&violation).unwrap();
+        let deserialized: Violation = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(violation, deserialized);
+        assert_eq!(deserialized.detection_method, "llm");
+        assert_eq!(deserialized.confidence_score, Some(80));
+        assert_eq!(
+            deserialized.llm_reasoning,
+            Some("AI detected issue".to_string())
+        );
     }
 }
