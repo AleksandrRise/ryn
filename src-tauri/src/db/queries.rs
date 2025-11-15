@@ -681,6 +681,131 @@ pub fn get_severity_counts(conn: &Connection, scan_id: i64) -> Result<(i32, i32,
     Ok((critical, high, medium, low))
 }
 
+// ===== SCAN COSTS CRUD =====
+
+pub fn insert_scan_cost(conn: &Connection, scan_cost: &ScanCost) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO scan_costs (scan_id, files_analyzed_with_llm, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_cost_usd, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        params![
+            scan_cost.scan_id,
+            scan_cost.files_analyzed_with_llm,
+            scan_cost.input_tokens,
+            scan_cost.output_tokens,
+            scan_cost.cache_read_tokens,
+            scan_cost.cache_write_tokens,
+            scan_cost.total_cost_usd,
+            scan_cost.created_at
+        ],
+    ).context("Failed to insert scan cost")?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn select_scan_cost(conn: &Connection, id: i64) -> Result<Option<ScanCost>> {
+    let mut stmt = conn
+        .prepare("SELECT id, scan_id, files_analyzed_with_llm, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_cost_usd, created_at FROM scan_costs WHERE id = ?")
+        .context("Failed to prepare select scan cost query")?;
+
+    let scan_cost = stmt
+        .query_row(params![id], |row| {
+            Ok(ScanCost {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                files_analyzed_with_llm: row.get(2)?,
+                input_tokens: row.get(3)?,
+                output_tokens: row.get(4)?,
+                cache_read_tokens: row.get(5)?,
+                cache_write_tokens: row.get(6)?,
+                total_cost_usd: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })
+        .optional()
+        .context("Failed to query scan cost")?;
+
+    Ok(scan_cost)
+}
+
+pub fn select_scan_cost_by_scan_id(conn: &Connection, scan_id: i64) -> Result<Option<ScanCost>> {
+    let mut stmt = conn
+        .prepare("SELECT id, scan_id, files_analyzed_with_llm, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_cost_usd, created_at FROM scan_costs WHERE scan_id = ?")
+        .context("Failed to prepare select scan cost by scan_id query")?;
+
+    let scan_cost = stmt
+        .query_row(params![scan_id], |row| {
+            Ok(ScanCost {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                files_analyzed_with_llm: row.get(2)?,
+                input_tokens: row.get(3)?,
+                output_tokens: row.get(4)?,
+                cache_read_tokens: row.get(5)?,
+                cache_write_tokens: row.get(6)?,
+                total_cost_usd: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })
+        .optional()
+        .context("Failed to query scan cost by scan_id")?;
+
+    Ok(scan_cost)
+}
+
+/// Get all scan costs since a given timestamp (RFC3339 format)
+/// Used for analytics dashboard to show costs over time
+pub fn select_scan_costs_since(conn: &Connection, since: &str) -> Result<Vec<ScanCost>> {
+    let mut stmt = conn
+        .prepare("SELECT id, scan_id, files_analyzed_with_llm, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_cost_usd, created_at FROM scan_costs WHERE created_at >= ? ORDER BY created_at DESC")
+        .context("Failed to prepare select scan costs since query")?;
+
+    let scan_costs = stmt
+        .query_map(params![since], |row| {
+            Ok(ScanCost {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                files_analyzed_with_llm: row.get(2)?,
+                input_tokens: row.get(3)?,
+                output_tokens: row.get(4)?,
+                cache_read_tokens: row.get(5)?,
+                cache_write_tokens: row.get(6)?,
+                total_cost_usd: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })
+        .context("Failed to map scan costs from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect scan costs")?;
+
+    Ok(scan_costs)
+}
+
+pub fn select_all_scan_costs(conn: &Connection) -> Result<Vec<ScanCost>> {
+    let mut stmt = conn
+        .prepare("SELECT id, scan_id, files_analyzed_with_llm, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_cost_usd, created_at FROM scan_costs ORDER BY created_at DESC")
+        .context("Failed to prepare select all scan costs query")?;
+
+    let scan_costs = stmt
+        .query_map([], |row| {
+            Ok(ScanCost {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                files_analyzed_with_llm: row.get(2)?,
+                input_tokens: row.get(3)?,
+                output_tokens: row.get(4)?,
+                cache_read_tokens: row.get(5)?,
+                cache_write_tokens: row.get(6)?,
+                total_cost_usd: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })
+        .context("Failed to map scan costs from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect scan costs")?;
+
+    Ok(scan_costs)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

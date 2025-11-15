@@ -37,6 +37,7 @@ pub mod violation;
 pub mod fix;
 pub mod audit;
 pub mod settings;
+pub mod analytics;
 
 // Re-export all commands
 pub use project::{select_project_folder, create_project, get_projects};
@@ -45,3 +46,4 @@ pub use violation::{get_violations, get_violation, dismiss_violation};
 pub use fix::{generate_fix, apply_fix};
 pub use audit::get_audit_events;
 pub use settings::{get_settings, update_settings, clear_database, export_data};
+pub use analytics::get_scan_costs;

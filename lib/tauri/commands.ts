@@ -89,6 +89,18 @@ export interface Settings {
   updated_at: string
 }
 
+export interface ScanCost {
+  id: number
+  scan_id: number
+  files_analyzed_with_llm: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  total_cost_usd: number
+  created_at: string
+}
+
 // ============================================================================
 // PROJECT COMMANDS
 // ============================================================================
@@ -294,4 +306,18 @@ export async function complete_onboarding(
     scan_mode: scanMode,
     cost_limit: costLimit,
   })
+}
+
+// ============================================================================
+// ANALYTICS COMMANDS
+// ============================================================================
+
+export type TimeRange = "24h" | "7d" | "30d" | "all"
+
+/**
+ * Get scan costs for a given time range
+ * @param timeRange - Time period: "24h", "7d", "30d", or "all"
+ */
+export async function get_scan_costs(timeRange: TimeRange): Promise<ScanCost[]> {
+  return await invoke<ScanCost[]>("get_scan_costs", { time_range: timeRange })
 }
