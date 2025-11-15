@@ -121,6 +121,14 @@ pub async fn detect_framework(path: String) -> Result<Option<String>, String> {
 pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_id: i64) -> Result<Scan, String> {
     let conn = db::get_connection();
 
+    // Query LLM scan mode from settings (regex_only, smart, or analyze_all)
+    // Defaults to "regex_only" if setting not found
+    let llm_scan_mode = queries::select_setting(&conn, "llm_scan_mode")
+        .ok()
+        .flatten()
+        .map(|s| s.value)
+        .unwrap_or_else(|| "regex_only".to_string());
+
     // Get project from database
     let project = queries::select_project(&conn, project_id)
         .map_err(|e| format!("Failed to fetch project: {}", e))?
