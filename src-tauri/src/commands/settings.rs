@@ -10,8 +10,7 @@ use crate::models::Settings;
 /// Returns: List of all settings key-value pairs
 #[tauri::command]
 pub async fn get_settings() -> Result<Vec<Settings>, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     let settings = queries::select_all_settings(&conn)
         .map_err(|e| format!("Failed to fetch settings: {}", e))?;
@@ -28,8 +27,7 @@ pub async fn get_settings() -> Result<Vec<Settings>, String> {
 /// Returns: Success or error
 #[tauri::command]
 pub async fn update_settings(key: String, value: String) -> Result<(), String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     // Validate key
     if key.is_empty() {
@@ -63,8 +61,7 @@ pub async fn update_settings(key: String, value: String) -> Result<(), String> {
 /// Returns: Success message with backup location, or error
 #[tauri::command]
 pub async fn clear_database() -> Result<String, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     // Create backup directory
     let home_dir = dirs::home_dir()
@@ -126,8 +123,7 @@ pub async fn clear_database() -> Result<String, String> {
 pub async fn export_data() -> Result<String, String> {
     use serde_json::json;
 
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     // Fetch all data from all tables
     let projects = queries::select_all_projects(&conn)

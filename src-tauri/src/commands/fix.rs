@@ -42,32 +42,38 @@ static RATE_LIMITER: Lazy<Arc<RateLimiter>> = Lazy::new(|| {
 /// Returns: Generated Fix object or error
 #[tauri::command]
 pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    // Phase 1: Read all required data from database (scoped to drop guard before awaits)
+    let (violation, scan_project_id, _project_path, project_framework, file_path) = {
+        let conn = db::get_connection();
 
-    // Get violation from database
-    let violation = queries::select_violation(&conn, violation_id)
-        .map_err(|e| format!("Failed to fetch violation: {}", e))?
-        .ok_or_else(|| format!("Violation not found: {}", violation_id))?;
+        // Get violation from database
+        let violation = queries::select_violation(&conn, violation_id)
+            .map_err(|e| format!("Failed to fetch violation: {}", e))?
+            .ok_or_else(|| format!("Violation not found: {}", violation_id))?;
 
-    // Get scan and project info
-    let scan = queries::select_scan(&conn, violation.scan_id)
-        .map_err(|e| format!("Failed to fetch scan: {}", e))?
-        .ok_or_else(|| "Scan not found".to_string())?;
+        // Get scan and project info
+        let scan = queries::select_scan(&conn, violation.scan_id)
+            .map_err(|e| format!("Failed to fetch scan: {}", e))?
+            .ok_or_else(|| "Scan not found".to_string())?;
 
-    let project = queries::select_project(&conn, scan.project_id)
-        .map_err(|e| format!("Failed to fetch project: {}", e))?
-        .ok_or_else(|| "Project not found".to_string())?;
+        let project = queries::select_project(&conn, scan.project_id)
+            .map_err(|e| format!("Failed to fetch project: {}", e))?
+            .ok_or_else(|| "Project not found".to_string())?;
 
-    // Validate and read file content with path traversal protection
-    let file_path = path_validation::validate_file_path(
-        Path::new(&project.path),
-        &violation.file_path
-    ).map_err(|e| format!("Security: Invalid file path: {}", e))?;
+        // Validate and save file path
+        let file_path = path_validation::validate_file_path(
+            Path::new(&project.path),
+            &violation.file_path
+        ).map_err(|e| format!("Security: Invalid file path: {}", e))?;
 
+        (violation.clone(), scan.project_id, project.path, project.framework, file_path)
+    }; // MutexGuard dropped here
+
+    // Validate file exists (doesn't need DB connection)
     let _file_content = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
+    // Phase 2: Async operations (no DB connection held)
     // Check rate limit before calling Claude API
     RATE_LIMITER.check_rate_limit().await
         .map_err(|e| format!("API rate limit: {}", e))?;
@@ -80,44 +86,49 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
         &violation.control_id,
         &violation.description,
         &violation.code_snippet,
-        &project.framework.as_deref().unwrap_or("unknown"),
+        &project_framework.as_deref().unwrap_or("unknown"),
     )
     .await
     .map_err(|e| format!("Failed to generate fix: {}", e))?;
 
-    // Create fix record in database
-    let fix = Fix {
-        id: 0,
-        violation_id,
-        original_code: violation.code_snippet.clone(),
-        fixed_code,
-        explanation: format!("AI-generated fix for {}: {}", violation.control_id, violation.description),
-        trust_level: "review".to_string(),
-        applied_at: None,
-        applied_by: "ryn-ai".to_string(),
-        git_commit_sha: None,
-        backup_path: None,
-    };
+    // Phase 3: Write results back to database (scoped to drop guard immediately)
+    let result = {
+        let conn = db::get_connection();
 
-    let fix_id = queries::insert_fix(&conn, &fix)
-        .map_err(|e| format!("Failed to save fix: {}", e))?;
+        // Create fix record in database
+        let fix = Fix {
+            id: 0,
+            violation_id,
+            original_code: violation.code_snippet.clone(),
+            fixed_code,
+            explanation: format!("AI-generated fix for {}: {}", violation.control_id, violation.description),
+            trust_level: "review".to_string(),
+            applied_at: None,
+            applied_by: "ryn-ai".to_string(),
+            git_commit_sha: None,
+            backup_path: None,
+        };
 
-    // Log audit event
-    if let Ok(event) = create_audit_event(
-        &conn,
-        "fix_generated",
-        Some(scan.project_id),
-        Some(violation_id),
-        Some(fix_id),
-        &format!("Generated fix for violation: {}", violation.description),
-    ) {
-        let _ = queries::insert_audit_event(&conn, &event);
-    }
+        let fix_id = queries::insert_fix(&conn, &fix)
+            .map_err(|e| format!("Failed to save fix: {}", e))?;
 
-    // Fetch and return created fix
-    let result = queries::select_fix(&conn, fix_id)
-        .map_err(|e| format!("Failed to fetch created fix: {}", e))?
-        .ok_or_else(|| "Fix was created but could not be retrieved".to_string())?;
+        // Log audit event
+        if let Ok(event) = create_audit_event(
+            &conn,
+            "fix_generated",
+            Some(scan_project_id),
+            Some(violation_id),
+            Some(fix_id),
+            &format!("Generated fix for violation: {}", violation.description),
+        ) {
+            let _ = queries::insert_audit_event(&conn, &event);
+        }
+
+        // Fetch and return created fix
+        queries::select_fix(&conn, fix_id)
+            .map_err(|e| format!("Failed to fetch created fix: {}", e))?
+            .ok_or_else(|| "Fix was created but could not be retrieved".to_string())?
+    }; // MutexGuard dropped here
 
     Ok(result)
 }
@@ -133,8 +144,7 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
 /// Returns: Git commit SHA or error
 #[tauri::command]
 pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     // Get fix
     let fix = queries::select_fix(&conn, fix_id)

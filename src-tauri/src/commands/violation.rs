@@ -26,8 +26,7 @@ pub async fn get_violations(
     scan_id: i64,
     filters: Option<ViolationFilters>,
 ) -> Result<Vec<Violation>, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     // Get all violations for scan
     let mut violations = queries::select_violations(&conn, scan_id)
@@ -88,8 +87,7 @@ pub async fn get_violations(
 /// Returns: Violation detail object with related control and fix information
 #[tauri::command]
 pub async fn get_violation(violation_id: i64) -> Result<ViolationDetail, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     // Get violation
     let violation = queries::select_violation(&conn, violation_id)
@@ -126,8 +124,7 @@ pub async fn get_violation(violation_id: i64) -> Result<ViolationDetail, String>
 /// Returns: Success or error
 #[tauri::command]
 pub async fn dismiss_violation(violation_id: i64) -> Result<(), String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     // Get violation to extract scan_id
     let violation = queries::select_violation(&conn, violation_id)

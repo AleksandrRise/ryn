@@ -51,8 +51,7 @@ pub async fn create_project(
     }
 
     // Get database connection
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     // Check if project already exists with this path
     if let Some(existing_project) = queries::select_project_by_path(&conn, &path)
@@ -103,8 +102,7 @@ pub async fn create_project(
 /// Returns: List of all projects sorted by creation date (newest first)
 #[tauri::command]
 pub async fn get_projects() -> Result<Vec<Project>, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     let projects = queries::select_projects(&conn)
         .map_err(|e| format!("Failed to fetch projects: {}", e))?;

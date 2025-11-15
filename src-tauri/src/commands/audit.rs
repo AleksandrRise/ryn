@@ -21,8 +21,7 @@ pub struct AuditFilters {
 /// Returns: List of audit events sorted by creation date (newest first)
 #[tauri::command]
 pub async fn get_audit_events(filters: Option<AuditFilters>) -> Result<Vec<AuditEvent>, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     let limit = filters
         .as_ref()

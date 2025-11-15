@@ -54,8 +54,7 @@ pub async fn detect_framework(path: String) -> Result<Option<String>, String> {
 /// Returns: Complete Scan object with severity counts or error
 #[tauri::command]
 pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_id: i64) -> Result<Scan, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     // Get project from database
     let project = queries::select_project(&conn, project_id)
@@ -193,8 +192,7 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
 /// Returns: Complete Scan object with severity counts
 #[tauri::command]
 pub async fn get_scan_progress(scan_id: i64) -> Result<Scan, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     let mut scan = queries::select_scan(&conn, scan_id)
         .map_err(|e| format!("Failed to fetch scan: {}", e))?
@@ -217,8 +215,7 @@ pub async fn get_scan_progress(scan_id: i64) -> Result<Scan, String> {
 /// Returns: List of scans for the specified project
 #[tauri::command]
 pub async fn get_scans(project_id: i64) -> Result<Vec<Scan>, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::get_connection();
 
     let scans = queries::select_scans(&conn, project_id)
         .map_err(|e| format!("Failed to fetch scans: {}", e))?;
