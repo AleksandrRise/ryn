@@ -44,7 +44,7 @@ struct CostLimitEvent {
 /// When a scan hits a cost limit, it sends a prompt to the frontend via Tauri events
 /// and waits for a user decision via a oneshot channel. The frontend responds
 /// via the respond_to_cost_limit() command.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ScanResponseChannels {
     /// Map of scan_id -> oneshot sender for cost limit responses
     ///
@@ -55,7 +55,9 @@ pub struct ScanResponseChannels {
     /// 4. Await receiver
     /// 5. Frontend calls respond_to_cost_limit(scan_id, continue_scan: bool)
     /// 6. Command retrieves sender from map and sends decision
-    cost_limit_responses: Mutex<HashMap<i64, oneshot::Sender<bool>>>,
+    ///
+    /// Wrapped in Arc to allow cloning for async tasks
+    cost_limit_responses: Arc<Mutex<HashMap<i64, oneshot::Sender<bool>>>>,
 }
 
 impl ScanResponseChannels {
@@ -122,29 +124,38 @@ pub async fn detect_framework(path: String) -> Result<Option<String>, String> {
 ///
 /// Returns: Complete Scan object with severity counts or error
 #[tauri::command]
-pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_id: i64) -> Result<Scan, String> {
-    let conn = db::get_connection();
+pub async fn scan_project<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    channels: tauri::State<'_, ScanResponseChannels>,
+    project_id: i64,
+) -> Result<Scan, String> {
+    // Query settings and create scan record (scoped to drop connection before async operations)
+    let (llm_scan_mode, project, scan_id) = {
+        let conn = db::get_connection();
 
-    // Query LLM scan mode from settings (regex_only, smart, or analyze_all)
-    // Defaults to "regex_only" if setting not found
-    let llm_scan_mode = queries::select_setting(&conn, "llm_scan_mode")
-        .ok()
-        .flatten()
-        .map(|s| s.value)
-        .unwrap_or_else(|| "regex_only".to_string());
+        // Query LLM scan mode from settings (regex_only, smart, or analyze_all)
+        // Defaults to "regex_only" if setting not found
+        let llm_scan_mode = queries::select_setting(&conn, "llm_scan_mode")
+            .ok()
+            .flatten()
+            .map(|s| s.value)
+            .unwrap_or_else(|| "regex_only".to_string());
 
-    // Get project from database
-    let project = queries::select_project(&conn, project_id)
-        .map_err(|e| format!("Failed to fetch project: {}", e))?
-        .ok_or_else(|| format!("Project not found: {}", project_id))?;
+        // Get project from database
+        let project = queries::select_project(&conn, project_id)
+            .map_err(|e| format!("Failed to fetch project: {}", e))?
+            .ok_or_else(|| format!("Project not found: {}", project_id))?;
 
-    // Validate project path to prevent scanning system directories
-    path_validation::validate_project_path(Path::new(&project.path))
-        .map_err(|e| format!("Security: Invalid project path: {}", e))?;
+        // Validate project path to prevent scanning system directories
+        path_validation::validate_project_path(Path::new(&project.path))
+            .map_err(|e| format!("Security: Invalid project path: {}", e))?;
 
-    // Create scan record
-    let scan_id = queries::insert_scan(&conn, project_id)
-        .map_err(|e| format!("Failed to create scan: {}", e))?;
+        // Create scan record
+        let scan_id = queries::insert_scan(&conn, project_id)
+            .map_err(|e| format!("Failed to create scan: {}", e))?;
+
+        (llm_scan_mode, project, scan_id)
+    }; // Connection dropped here
 
     // Count total files before scanning (for accurate progress tracking)
     let total_files = WalkDir::new(&project.path)
@@ -193,6 +204,7 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
 
                 // Update database every 50 files for persistence
                 if files_scanned % 50 == 0 {
+                    let conn = db::get_connection();
                     let _ = queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found);
                 }
 
@@ -212,11 +224,14 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
                     let violations = run_all_rules(&content, &relative_path, scan_id);
 
                     // Store violations in database
-                    for violation in violations {
-                        if queries::insert_violation(&conn, &violation).is_ok() {
-                            violations_found += 1;
+                    {
+                        let conn = db::get_connection();
+                        for violation in violations {
+                            if queries::insert_violation(&conn, &violation).is_ok() {
+                                violations_found += 1;
+                            }
                         }
-                    }
+                    } // Connection dropped here
 
                     // Collect file for LLM analysis if scan mode requires it
                     // should_analyze_with_llm returns true for:
@@ -235,39 +250,78 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
         }
     }
 
-    // Update scan with results
-    let completed_at = chrono::Utc::now().to_rfc3339();
-    queries::update_scan_status(&conn, scan_id, "completed", Some(&completed_at))
-        .map_err(|e| format!("Failed to update scan status: {}", e))?;
+    // Analyze collected files with LLM if any were selected (smart/analyze_all modes)
+    if !files_for_llm_analysis.is_empty() {
+        eprintln!("[ryn] Analyzing {} files with Claude Haiku LLM (mode: {})",
+                  files_for_llm_analysis.len(), llm_scan_mode);
 
-    queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found)
-        .map_err(|e| format!("Failed to update scan results: {}", e))?;
+        // Clone channels for async tasks (Arc makes this cheap)
+        let channels_arc = Arc::new(channels.inner().clone());
 
-    // Log audit event
-    if let Ok(event) = create_audit_event(
-        &conn,
-        "scan_completed",
-        Some(project_id),
-        None,
-        None,
-        &format!("Scanned {} files, found {} violations", files_scanned, violations_found),
-    ) {
-        let _ = queries::insert_audit_event(&conn, &event);
+        match analyze_files_with_llm(
+            scan_id,
+            files_for_llm_analysis,
+            channels_arc,
+            app.clone(),
+        ).await {
+            Ok((llm_violations, total_cost)) => {
+                eprintln!("[ryn] LLM analysis complete: {} violations, ${:.4} cost",
+                          llm_violations, total_cost);
+                violations_found += llm_violations;
+
+                // TODO: Store detailed token usage in scan_costs table (requires ScanCost model)
+                // For now just log the cost
+                eprintln!("[ryn] Total scan cost: ${:.4}", total_cost);
+            }
+            Err(e) => {
+                eprintln!("[ryn] LLM analysis failed: {}", e);
+                // Continue with scan completion even if LLM analysis fails
+            }
+        }
+    } else {
+        eprintln!("[ryn] No files selected for LLM analysis (mode: {})", llm_scan_mode);
     }
 
-    // Fetch complete scan with severity counts
-    let mut scan = queries::select_scan(&conn, scan_id)
-        .map_err(|e| format!("Failed to fetch scan: {}", e))?
-        .ok_or_else(|| "Scan was created but could not be retrieved".to_string())?;
+    // Update scan with results and fetch final data (scoped to drop connection)
+    let scan = {
+        let conn = db::get_connection();
 
-    // Calculate severity counts - propagate errors instead of hiding them
-    let (critical, high, medium, low) = queries::get_severity_counts(&conn, scan_id)
-        .map_err(|e| format!("Failed to calculate severity counts: {}", e))?;
+        // Update scan with results
+        let completed_at = chrono::Utc::now().to_rfc3339();
+        queries::update_scan_status(&conn, scan_id, "completed", Some(&completed_at))
+            .map_err(|e| format!("Failed to update scan status: {}", e))?;
 
-    scan.critical_count = critical;
-    scan.high_count = high;
-    scan.medium_count = medium;
-    scan.low_count = low;
+        queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found)
+            .map_err(|e| format!("Failed to update scan results: {}", e))?;
+
+        // Log audit event
+        if let Ok(event) = create_audit_event(
+            &conn,
+            "scan_completed",
+            Some(project_id),
+            None,
+            None,
+            &format!("Scanned {} files, found {} violations", files_scanned, violations_found),
+        ) {
+            let _ = queries::insert_audit_event(&conn, &event);
+        }
+
+        // Fetch complete scan with severity counts
+        let mut scan = queries::select_scan(&conn, scan_id)
+            .map_err(|e| format!("Failed to fetch scan: {}", e))?
+            .ok_or_else(|| "Scan was created but could not be retrieved".to_string())?;
+
+        // Calculate severity counts - propagate errors instead of hiding them
+        let (critical, high, medium, low) = queries::get_severity_counts(&conn, scan_id)
+            .map_err(|e| format!("Failed to calculate severity counts: {}", e))?;
+
+        scan.critical_count = critical;
+        scan.high_count = high;
+        scan.medium_count = medium;
+        scan.low_count = low;
+
+        scan
+    }; // Connection dropped here
 
     Ok(scan)
 }
@@ -289,9 +343,11 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
 /// - 30-second timeout: Prevents hanging on slow/large files
 /// - Each task gets independent DB connection and Claude client
 /// - Errors are logged but don't stop processing of other files
-async fn analyze_files_with_llm(
+async fn analyze_files_with_llm<R: tauri::Runtime>(
     scan_id: i64,
     files: Vec<(String, String)>,
+    channels: Arc<ScanResponseChannels>,
+    app_handle: tauri::AppHandle<R>,
 ) -> Result<(i32, f64), String> {
     if files.is_empty() {
         return Ok((0, 0.0));
@@ -301,89 +357,147 @@ async fn analyze_files_with_llm(
     std::env::var("ANTHROPIC_API_KEY")
         .map_err(|_| "ANTHROPIC_API_KEY environment variable not set. Set it to enable LLM scanning.".to_string())?;
 
+    // Query cost limit from settings (default to $1.00 if not set)
+    let cost_limit_usd: f64 = {
+        let conn = db::get_connection();
+        queries::select_setting(&conn, "cost_limit_per_scan")
+            .ok()
+            .flatten()
+            .and_then(|s| s.value.parse::<f64>().ok())
+            .unwrap_or(1.0)
+    }; // Connection dropped here
+
     // Create semaphore for concurrency control (max 10 concurrent requests)
     let semaphore = Arc::new(Semaphore::new(10));
 
-    // Spawn async tasks for each file
-    let mut tasks = Vec::new();
-
-    for (file_path, content) in files {
-        let sem_clone = semaphore.clone();
-
-        let task = tokio::spawn(async move {
-            // Acquire semaphore permit (blocks if 10 tasks already running)
-            let _permit = sem_clone.acquire().await.unwrap();
-
-            // Create Claude client for this task (reads API key from env)
-            let client = match ClaudeClient::new() {
-                Ok(c) => c,
-                Err(e) => return Err(format!("Failed to create Claude client: {}", e)),
-            };
-
-            // Fetch existing regex violations for this file (provides context to LLM)
-            // MUST drop connection before async operations to avoid Send trait issues
-            let regex_findings: Vec<Violation> = {
-                let conn = db::get_connection();
-                queries::select_violations(&conn, scan_id)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter(|v| v.file_path == file_path && v.detection_method == "regex")
-                    .collect()
-            }; // Connection dropped here
-
-            // Analyze with 30-second timeout
-            let analysis_future = client.analyze_for_violations(
-                scan_id,
-                &file_path,
-                &content,
-                regex_findings,
-            );
-
-            let result = timeout(Duration::from_secs(30), analysis_future).await;
-
-            match result {
-                Ok(Ok(analysis)) => {
-                    // Store LLM violations in database (get new connection)
-                    let mut stored_count = 0;
-                    {
-                        let conn = db::get_connection();
-                        for violation in &analysis.violations {
-                            if queries::insert_violation(&conn, violation).is_ok() {
-                                stored_count += 1;
-                            }
-                        }
-                    } // Connection dropped here
-
-                    Ok((stored_count, analysis.usage.calculate_cost()))
-                }
-                Ok(Err(e)) => {
-                    Err(format!("LLM analysis failed for {}: {}", file_path, e))
-                }
-                Err(_) => {
-                    Err(format!("Timeout: {} took longer than 30 seconds", file_path))
-                }
-            }
-        });
-
-        tasks.push(task);
-    }
-
-    // Wait for all tasks to complete
+    // Track cumulative cost and violations
     let mut total_violations = 0;
     let mut total_cost = 0.0;
+    let total_files = files.len();
 
-    for task in tasks {
-        match task.await {
-            Ok(Ok((count, cost))) => {
-                total_violations += count;
-                total_cost += cost;
+    // Process files in batches, checking cost limit every 10 files
+    for (batch_idx, chunk) in files.chunks(10).enumerate() {
+        let mut tasks = Vec::new();
+
+        // Spawn tasks for this batch of up to 10 files
+        for (file_path, content) in chunk {
+            let file_path = file_path.clone();
+            let content = content.clone();
+            let sem_clone = semaphore.clone();
+
+            let task = tokio::spawn(async move {
+                // Acquire semaphore permit (blocks if 10 tasks already running)
+                let _permit = sem_clone.acquire().await.unwrap();
+
+                // Create Claude client for this task (reads API key from env)
+                let client = match ClaudeClient::new() {
+                    Ok(c) => c,
+                    Err(e) => return Err(format!("Failed to create Claude client: {}", e)),
+                };
+
+                // Fetch existing regex violations for this file (provides context to LLM)
+                // MUST drop connection before async operations to avoid Send trait issues
+                let regex_findings: Vec<Violation> = {
+                    let conn = db::get_connection();
+                    queries::select_violations(&conn, scan_id)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter(|v| v.file_path == file_path && v.detection_method == "regex")
+                        .collect()
+                }; // Connection dropped here
+
+                // Analyze with 30-second timeout
+                let analysis_future = client.analyze_for_violations(
+                    scan_id,
+                    &file_path,
+                    &content,
+                    regex_findings,
+                );
+
+                let result = timeout(Duration::from_secs(30), analysis_future).await;
+
+                match result {
+                    Ok(Ok(analysis)) => {
+                        // Store LLM violations in database (get new connection)
+                        let mut stored_count = 0;
+                        {
+                            let conn = db::get_connection();
+                            for violation in &analysis.violations {
+                                if queries::insert_violation(&conn, violation).is_ok() {
+                                    stored_count += 1;
+                                }
+                            }
+                        } // Connection dropped here
+
+                        Ok((stored_count, analysis.usage.calculate_cost()))
+                    }
+                    Ok(Err(e)) => {
+                        Err(format!("LLM analysis failed for {}: {}", file_path, e))
+                    }
+                    Err(_) => {
+                        Err(format!("Timeout: {} took longer than 30 seconds", file_path))
+                    }
+                }
+            });
+
+            tasks.push(task);
+        }
+
+        // Wait for this batch to complete
+        for task in tasks {
+            match task.await {
+                Ok(Ok((count, cost))) => {
+                    total_violations += count;
+                    total_cost += cost;
+                }
+                Ok(Err(e)) => {
+                    eprintln!("[ryn] LLM analysis error: {}", e);
+                    // Continue processing other files even if one fails
+                }
+                Err(e) => {
+                    eprintln!("[ryn] Task join error: {}", e);
+                }
             }
-            Ok(Err(e)) => {
-                eprintln!("[ryn] LLM analysis error: {}", e);
-                // Continue processing other files even if one fails
+        }
+
+        // After each batch (every 10 files), check if we've exceeded cost limit
+        let files_analyzed = (batch_idx + 1) * 10.min(total_files);
+        let files_remaining = total_files - files_analyzed;
+
+        if total_cost > cost_limit_usd && files_remaining > 0 {
+            // Create oneshot channel for user response
+            let rx = channels.create_cost_limit_channel(scan_id);
+
+            // Emit cost-limit-reached event to frontend
+            let event = CostLimitEvent {
+                scan_id,
+                current_cost_usd: total_cost,
+                limit_usd: cost_limit_usd,
+                files_analyzed: files_analyzed as i64,
+                files_remaining: files_remaining as i32,
+            };
+
+            if let Err(e) = app_handle.emit("cost-limit-reached", event) {
+                eprintln!("[ryn] Failed to emit cost-limit-reached event: {}", e);
+                // Continue anyway - treat as "stop scanning"
+                break;
             }
-            Err(e) => {
-                eprintln!("[ryn] Task join error: {}", e);
+
+            // Wait for user decision (true = continue, false = stop)
+            match rx.await {
+                Ok(true) => {
+                    // User chose to continue - process next batch
+                    continue;
+                }
+                Ok(false) => {
+                    // User chose to stop - exit loop
+                    break;
+                }
+                Err(_) => {
+                    // Channel closed (user closed dialog?) - stop scanning
+                    eprintln!("[ryn] Cost limit response channel closed - stopping scan");
+                    break;
+                }
             }
         }
     }
