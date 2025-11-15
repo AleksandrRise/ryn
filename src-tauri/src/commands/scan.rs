@@ -3,7 +3,7 @@
 //! Handles project scanning, framework detection, and scan progress tracking
 
 use crate::db::{self, queries};
-use crate::models::{Violation, Scan};
+use crate::models::{Violation, Scan, DetectionMethod, Severity};
 use crate::scanner::framework_detector::FrameworkDetector;
 use crate::scanner::llm_file_selector;
 use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12ResilienceRule};
@@ -172,6 +172,7 @@ pub async fn scan_project<R: tauri::Runtime>(
     // Walk through project files
     let mut files_scanned = 0;
     let mut violations_found = 0;
+    let mut regex_violations: Vec<Violation> = Vec::new();  // Collect all regex violations
 
     for entry in WalkDir::new(&project.path)
         .into_iter()
@@ -220,18 +221,9 @@ pub async fn scan_project<R: tauri::Runtime>(
                         .to_string_lossy()
                         .to_string();
 
-                    // Run all 4 rule engines
-                    let violations = run_all_rules(&content, &relative_path, scan_id);
-
-                    // Store violations in database
-                    {
-                        let conn = db::get_connection();
-                        for violation in violations {
-                            if queries::insert_violation(&conn, &violation).is_ok() {
-                                violations_found += 1;
-                            }
-                        }
-                    } // Connection dropped here
+                    // Run all 4 rule engines and collect violations (don't insert yet)
+                    let mut violations = run_all_rules(&content, &relative_path, scan_id);
+                    regex_violations.append(&mut violations);
 
                     // Collect file for LLM analysis if scan mode requires it
                     // should_analyze_with_llm returns true for:
@@ -250,8 +242,11 @@ pub async fn scan_project<R: tauri::Runtime>(
         }
     }
 
+    // Merge regex and LLM violations, then insert deduplicated results
+    eprintln!("[ryn] Merging {} regex violations with LLM results", regex_violations.len());
+
     // Analyze collected files with LLM if any were selected (smart/analyze_all modes)
-    if !files_for_llm_analysis.is_empty() {
+    let llm_violations_vec = if !files_for_llm_analysis.is_empty() {
         eprintln!("[ryn] Analyzing {} files with Claude Haiku LLM (mode: {})",
                   files_for_llm_analysis.len(), llm_scan_mode);
 
@@ -266,21 +261,36 @@ pub async fn scan_project<R: tauri::Runtime>(
         ).await {
             Ok((llm_violations, total_cost)) => {
                 eprintln!("[ryn] LLM analysis complete: {} violations, ${:.4} cost",
-                          llm_violations, total_cost);
-                violations_found += llm_violations;
-
+                          llm_violations.len(), total_cost);
                 // TODO: Store detailed token usage in scan_costs table (requires ScanCost model)
-                // For now just log the cost
                 eprintln!("[ryn] Total scan cost: ${:.4}", total_cost);
+                llm_violations
             }
             Err(e) => {
                 eprintln!("[ryn] LLM analysis failed: {}", e);
-                // Continue with scan completion even if LLM analysis fails
+                // Continue with empty LLM violations
+                Vec::new()
             }
         }
     } else {
         eprintln!("[ryn] No files selected for LLM analysis (mode: {})", llm_scan_mode);
-    }
+        Vec::new()
+    };
+
+    // Merge violations: deduplicates when both regex and LLM found the same issue
+    let merged_violations = merge_violations(regex_violations, llm_violations_vec);
+
+    // Insert all merged violations into database
+    {
+        let conn = db::get_connection();
+        for violation in &merged_violations {
+            if queries::insert_violation(&conn, violation).is_ok() {
+                violations_found += 1;
+            }
+        }
+    } // Connection dropped here
+
+    eprintln!("[ryn] Inserted {} final violations after deduplication", violations_found);
 
     // Update scan with results and fetch final data (scoped to drop connection)
     let scan = {
@@ -348,9 +358,9 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
     files: Vec<(String, String)>,
     channels: Arc<ScanResponseChannels>,
     app_handle: tauri::AppHandle<R>,
-) -> Result<(i32, f64), String> {
+) -> Result<(Vec<Violation>, f64), String> {
     if files.is_empty() {
-        return Ok((0, 0.0));
+        return Ok((Vec::new(), 0.0));
     }
 
     // Verify API key exists before spawning tasks
@@ -370,8 +380,8 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
     // Create semaphore for concurrency control (max 10 concurrent requests)
     let semaphore = Arc::new(Semaphore::new(10));
 
-    // Track cumulative cost and violations
-    let mut total_violations = 0;
+    // Track cumulative cost and collected violations
+    let mut llm_violations: Vec<Violation> = Vec::new();
     let mut total_cost = 0.0;
     let total_files = files.len();
 
@@ -418,18 +428,8 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
 
                 match result {
                     Ok(Ok(analysis)) => {
-                        // Store LLM violations in database (get new connection)
-                        let mut stored_count = 0;
-                        {
-                            let conn = db::get_connection();
-                            for violation in &analysis.violations {
-                                if queries::insert_violation(&conn, violation).is_ok() {
-                                    stored_count += 1;
-                                }
-                            }
-                        } // Connection dropped here
-
-                        Ok((stored_count, analysis.usage.calculate_cost()))
+                        // Return violations and cost (will be merged and inserted later)
+                        Ok((analysis.violations, analysis.usage.calculate_cost()))
                     }
                     Ok(Err(e)) => {
                         Err(format!("LLM analysis failed for {}: {}", file_path, e))
@@ -443,11 +443,11 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
             tasks.push(task);
         }
 
-        // Wait for this batch to complete
+        // Wait for this batch to complete and collect violations
         for task in tasks {
             match task.await {
-                Ok(Ok((count, cost))) => {
-                    total_violations += count;
+                Ok(Ok((mut violations, cost))) => {
+                    llm_violations.append(&mut violations);
                     total_cost += cost;
                 }
                 Ok(Err(e)) => {
@@ -502,7 +502,141 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
         }
     }
 
-    Ok((total_violations, total_cost))
+    Ok((llm_violations, total_cost))
+}
+
+/// Merge regex and LLM violations, deduplicating when both found the same issue
+///
+/// # Algorithm
+/// 1. For each LLM violation, search for regex violations in the same file
+/// 2. Check if line numbers are within ±3 lines (configurable tolerance)
+/// 3. If match found:
+///    - Create hybrid violation with combined reasoning
+///    - Mark both original violations as "merged" (don't insert separately)
+/// 4. Return deduplicated list: [regex-only, llm-only, hybrid]
+///
+/// # Arguments
+/// * `regex_violations` - Violations detected by regex patterns
+/// * `llm_violations` - Violations detected by Claude Haiku analysis
+///
+/// # Returns
+/// Deduplicated vector with detection_method properly set
+fn merge_violations(
+    regex_violations: Vec<Violation>,
+    llm_violations: Vec<Violation>,
+) -> Vec<Violation> {
+    const LINE_TOLERANCE: i64 = 3;
+
+    let mut merged = Vec::new();
+    let mut regex_matched = vec![false; regex_violations.len()];
+    let mut llm_matched = vec![false; llm_violations.len()];
+
+    // Pass 1: Find hybrid violations (both regex and LLM detected same issue)
+    for (llm_idx, llm_violation) in llm_violations.iter().enumerate() {
+        let mut best_match: Option<usize> = None;
+        let mut best_distance = LINE_TOLERANCE + 1;
+
+        // Search for matching regex violation in same file
+        for (regex_idx, regex_violation) in regex_violations.iter().enumerate() {
+            if regex_matched[regex_idx] {
+                continue; // Already matched with another LLM violation
+            }
+
+            // Must be same file and same control_id
+            if regex_violation.file_path != llm_violation.file_path {
+                continue;
+            }
+            if regex_violation.control_id != llm_violation.control_id {
+                continue;
+            }
+
+            // Check if line numbers are within tolerance (±3 lines)
+            let distance = (regex_violation.line_number - llm_violation.line_number).abs();
+            if distance <= LINE_TOLERANCE && distance < best_distance {
+                best_match = Some(regex_idx);
+                best_distance = distance;
+            }
+        }
+
+        // If we found a match, create hybrid violation
+        if let Some(regex_idx) = best_match {
+            let regex_violation = &regex_violations[regex_idx];
+
+            // Create hybrid violation combining both detections
+            let mut hybrid = llm_violation.clone();
+            hybrid.set_detection_method(DetectionMethod::Hybrid);
+
+            // Combine reasoning from both methods
+            hybrid.regex_reasoning = Some(format!(
+                "Pattern match at line {}: {}",
+                regex_violation.line_number,
+                regex_violation.description
+            ));
+
+            // LLM reasoning already exists, just ensure it's set
+            if hybrid.llm_reasoning.is_none() {
+                hybrid.llm_reasoning = Some(llm_violation.description.clone());
+            }
+
+            // Use LLM's line number (more precise) but note the regex match in reasoning
+            if regex_violation.line_number != llm_violation.line_number {
+                hybrid.regex_reasoning = Some(format!(
+                    "{} (regex detected at line {}, LLM at line {})",
+                    hybrid.regex_reasoning.as_ref().unwrap(),
+                    regex_violation.line_number,
+                    llm_violation.line_number
+                ));
+            }
+
+            // Prefer higher severity between the two
+            let regex_severity = regex_violation.get_severity().unwrap_or(Severity::Low);
+            let llm_severity = llm_violation.get_severity().unwrap_or(Severity::Low);
+            if regex_severity.numeric_value() > llm_severity.numeric_value() {
+                hybrid.set_severity(regex_severity);
+            }
+
+            // Use LLM's confidence score
+            // confidence_score already set from llm_violation
+
+            eprintln!(
+                "[ryn] Merged hybrid violation: {} at {} line {} (±{} lines from regex)",
+                hybrid.control_id,
+                hybrid.file_path,
+                hybrid.line_number,
+                best_distance
+            );
+
+            merged.push(hybrid);
+            regex_matched[regex_idx] = true;
+            llm_matched[llm_idx] = true;
+        }
+    }
+
+    // Pass 2: Add regex-only violations (not matched with LLM)
+    for (idx, violation) in regex_violations.into_iter().enumerate() {
+        if !regex_matched[idx] {
+            // Already has detection_method = "regex" from creation
+            merged.push(violation);
+        }
+    }
+
+    // Pass 3: Add LLM-only violations (not matched with regex)
+    for (idx, violation) in llm_violations.into_iter().enumerate() {
+        if !llm_matched[idx] {
+            // Already has detection_method = "llm" from LLM analysis
+            merged.push(violation);
+        }
+    }
+
+    eprintln!(
+        "[ryn] Merge complete: {} total violations ({} hybrid, {} regex-only, {} llm-only)",
+        merged.len(),
+        merged.iter().filter(|v| v.detection_method == "hybrid").count(),
+        merged.iter().filter(|v| v.detection_method == "regex").count(),
+        merged.iter().filter(|v| v.detection_method == "llm").count()
+    );
+
+    merged
 }
 
 /// Get scan progress
