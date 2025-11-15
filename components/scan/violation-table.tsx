@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { SeverityBadge } from "./severity-badge"
+import { DetectionBadge } from "./detection-badge"
 import { Button } from "@/components/ui/button"
 import { ExternalLink, Sparkles } from "lucide-react"
 import type { Violation } from "@/lib/types/violation"
@@ -32,6 +33,9 @@ export function ViolationTable({ violations }: ViolationTableProps) {
                 Control
               </th>
               <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-3">
+                Detection
+              </th>
+              <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-3">
                 Description
               </th>
               <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-6 py-3">
@@ -53,6 +57,9 @@ export function ViolationTable({ violations }: ViolationTableProps) {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="text-sm font-mono text-foreground">{violation.controlId}</span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <DetectionBadge method={violation.detectionMethod} />
                 </td>
                 <td className="px-6 py-4">
                   <p className="text-sm text-foreground max-w-md">{violation.description}</p>
