@@ -12,10 +12,12 @@ import {
   get_scan_progress,
   get_violations,
   get_scans,
+  respond_to_cost_limit,
   type Violation,
   type ScanResult
 } from "@/lib/tauri/commands"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
+import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
 
 export function ScanResults() {
   const { selectedProject, setSelectedProject } = useProjectStore()
@@ -40,6 +42,13 @@ export function ScanResults() {
     filesScanned: 0,
     violationsFound: 0,
     completedAt: "",
+  })
+  const [showCostLimitDialog, setShowCostLimitDialog] = useState(false)
+  const [costLimitData, setCostLimitData] = useState({
+    currentCost: 0,
+    costLimit: 0,
+    filesAnalyzed: 0,
+    totalFiles: 0,
   })
 
   // Load last scan on mount
@@ -89,6 +98,42 @@ export function ScanResults() {
               showSuccess(`Scan completed! Found ${progress.violations_found} violations`)
             }, 500) // Small delay to ensure DB is updated
           }
+        }
+      })
+    }
+
+    setupListener()
+
+    return () => {
+      if (unlisten) unlisten()
+    }
+  }, [isScanning, currentScanId])
+
+  // Listen to cost limit reached events
+  useEffect(() => {
+    if (!isScanning || !currentScanId) return
+
+    let unlisten: (() => void) | null = null
+
+    const setupListener = async () => {
+      unlisten = await listen<{
+        scan_id: number
+        current_cost_usd: number
+        cost_limit_usd: number
+        files_analyzed: number
+        total_files: number
+      }>("cost-limit-reached", (event) => {
+        const data = event.payload
+
+        // Only show dialog if it's for the current scan
+        if (data.scan_id === currentScanId) {
+          setCostLimitData({
+            currentCost: data.current_cost_usd,
+            costLimit: data.cost_limit_usd,
+            filesAnalyzed: data.files_analyzed,
+            totalFiles: data.total_files,
+          })
+          setShowCostLimitDialog(true)
         }
       })
     }
@@ -178,6 +223,36 @@ export function ScanResults() {
       ...prev,
       [control]: !prev[control as keyof typeof prev]
     }))
+  }
+
+  const handleCostLimitContinue = async () => {
+    if (!currentScanId) return
+
+    try {
+      await respond_to_cost_limit(currentScanId, true)
+      setShowCostLimitDialog(false)
+      showInfo("Continuing scan...")
+    } catch (error) {
+      handleTauriError(error, "Failed to continue scan")
+    }
+  }
+
+  const handleCostLimitStop = async () => {
+    if (!currentScanId) return
+
+    try {
+      await respond_to_cost_limit(currentScanId, false)
+      setShowCostLimitDialog(false)
+      setIsScanning(false)
+
+      // Load violations found so far
+      await loadViolations(currentScanId)
+      await loadLastScan()
+
+      showInfo("Scan stopped. Using violations found so far.")
+    } catch (error) {
+      handleTauriError(error, "Failed to stop scan")
+    }
   }
 
   const filteredViolations = violations.filter((v) => {
@@ -415,6 +490,18 @@ export function ScanResults() {
           </table>
         </div>
       </div>
+
+      {/* Cost Limit Dialog */}
+      {showCostLimitDialog && (
+        <CostLimitDialog
+          currentCost={costLimitData.currentCost}
+          costLimit={costLimitData.costLimit}
+          filesAnalyzed={costLimitData.filesAnalyzed}
+          totalFiles={costLimitData.totalFiles}
+          onContinue={handleCostLimitContinue}
+          onStop={handleCostLimitStop}
+        />
+      )}
     </div>
   )
 }

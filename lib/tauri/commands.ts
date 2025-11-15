@@ -321,3 +321,18 @@ export type TimeRange = "24h" | "7d" | "30d" | "all"
 export async function get_scan_costs(timeRange: TimeRange): Promise<ScanCost[]> {
   return await invoke<ScanCost[]>("get_scan_costs", { time_range: timeRange })
 }
+
+/**
+ * Respond to cost limit prompt during scanning
+ * @param scanId - The ID of the scan
+ * @param shouldContinue - True to continue scanning, false to stop
+ */
+export async function respond_to_cost_limit(
+  scanId: number,
+  shouldContinue: boolean
+): Promise<void> {
+  await invoke<void>("respond_to_cost_limit", {
+    scan_id: scanId,
+    should_continue: shouldContinue,
+  })
+}
