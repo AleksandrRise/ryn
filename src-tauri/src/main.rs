@@ -1,7 +1,7 @@
 //! Ryn Tauri 2.0 Backend - Production Implementation
 //!
 //! This is the main entry point for the Ryn desktop application.
-//! It registers all 14 Tauri IPC commands for frontend-backend communication.
+//! It registers all 15 Tauri IPC commands for frontend-backend communication.
 //!
 //! Phase 8: Complete Tauri Commands Implementation
 //! - All commands integrated with database, scanning, rules, and Claude API
@@ -56,11 +56,12 @@ fn main() {
             fix::apply_fix,
             // Audit Commands (1)
             audit::get_audit_events,
-            // Settings Commands (4)
+            // Settings Commands (5)
             settings::get_settings,
             settings::update_settings,
             settings::clear_database,
             settings::export_data,
+            settings::complete_onboarding,
         ])
         .run(tauri::generate_context!())
     {

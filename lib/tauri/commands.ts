@@ -280,3 +280,18 @@ export async function clear_database(): Promise<void> {
 export async function export_data(): Promise<string> {
   return await invoke<string>("export_data")
 }
+
+/**
+ * Complete onboarding by saving user's scanning preferences
+ * @param scanMode - Scanning mode: "regex_only", "smart", or "analyze_all"
+ * @param costLimit - Cost limit per scan in dollars (e.g., 5.00)
+ */
+export async function complete_onboarding(
+  scanMode: "regex_only" | "smart" | "analyze_all",
+  costLimit: number
+): Promise<void> {
+  await invoke<void>("complete_onboarding", {
+    scan_mode: scanMode,
+    cost_limit: costLimit,
+  })
+}

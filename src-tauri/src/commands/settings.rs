@@ -171,6 +171,56 @@ pub async fn export_data() -> Result<String, String> {
         .map_err(|e| format!("Failed to serialize export data: {}", e))
 }
 
+/// Complete onboarding by saving user's scanning preferences
+///
+/// # Arguments
+/// * `scan_mode` - Selected scanning mode: "regex_only", "smart", or "analyze_all"
+/// * `cost_limit` - Cost limit per scan in dollars (e.g., 5.00)
+///
+/// Returns: Success or error
+#[tauri::command]
+pub async fn complete_onboarding(scan_mode: String, cost_limit: f64) -> Result<(), String> {
+    let conn = db::get_connection();
+
+    // Validate scan_mode
+    if !matches!(scan_mode.as_str(), "regex_only" | "smart" | "analyze_all") {
+        return Err(format!("Invalid scan mode: {}. Must be regex_only, smart, or analyze_all", scan_mode));
+    }
+
+    // Validate cost_limit
+    if cost_limit < 0.0 {
+        return Err("Cost limit cannot be negative".to_string());
+    }
+
+    if cost_limit > 1000.0 {
+        return Err("Cost limit cannot exceed $1,000.00".to_string());
+    }
+
+    // Save settings
+    queries::insert_or_update_setting(&conn, "llm_scan_mode", &scan_mode)
+        .map_err(|e| format!("Failed to save scan mode setting: {}", e))?;
+
+    queries::insert_or_update_setting(&conn, "cost_limit_per_scan", &cost_limit.to_string())
+        .map_err(|e| format!("Failed to save cost limit setting: {}", e))?;
+
+    queries::insert_or_update_setting(&conn, "onboarding_completed", "true")
+        .map_err(|e| format!("Failed to mark onboarding as complete: {}", e))?;
+
+    // Log audit event
+    if let Ok(event) = create_audit_event(
+        &conn,
+        "onboarding_completed",
+        None,
+        None,
+        None,
+        &format!("Onboarding completed: scan_mode={}, cost_limit=${:.2}", scan_mode, cost_limit),
+    ) {
+        let _ = queries::insert_audit_event(&conn, &event);
+    }
+
+    Ok(())
+}
+
 /// Helper function to create audit events
 fn create_audit_event(
     _conn: &rusqlite::Connection,
