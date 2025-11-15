@@ -5,6 +5,7 @@
 use crate::db::{self, queries};
 use crate::models::{Violation, Scan};
 use crate::scanner::framework_detector::FrameworkDetector;
+use crate::scanner::llm_file_selector;
 use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12ResilienceRule};
 use crate::security::path_validation;
 use std::path::Path;
@@ -150,6 +151,10 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
         .filter(|e| !should_skip_path(e.path()))
         .count() as i32;
 
+    // Collect files for LLM analysis (smart/analyze_all modes)
+    // Each entry: (relative_path, content)
+    let mut files_for_llm_analysis: Vec<(String, String)> = Vec::new();
+
     // Walk through project files
     let mut files_scanned = 0;
     let mut violations_found = 0;
@@ -208,6 +213,15 @@ pub async fn scan_project<R: tauri::Runtime>(app: tauri::AppHandle<R>, project_i
                         if queries::insert_violation(&conn, &violation).is_ok() {
                             violations_found += 1;
                         }
+                    }
+
+                    // Collect file for LLM analysis if scan mode requires it
+                    // should_analyze_with_llm returns true for:
+                    //   - "smart": files with security-relevant patterns (auth, db, API, secrets, etc.)
+                    //   - "analyze_all": all supported language files (.py, .js, .ts, .go, etc.)
+                    //   - "regex_only": never (returns false)
+                    if llm_file_selector::should_analyze_with_llm(&relative_path, &content, &llm_scan_mode) {
+                        files_for_llm_analysis.push((relative_path.clone(), content.clone()));
                     }
                 }
             }
