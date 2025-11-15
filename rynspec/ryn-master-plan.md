@@ -2,9 +2,9 @@
 
 ## Executive Summary
 
-Ryn is an AI-powered desktop application that automates SOC 2 compliance by scanning application code for violations and generating one-click fixes via AI. Unlike infrastructure monitoring platforms (Vanta, Drata), Ryn scans actual codebases in real-time using file watching, detects missing audit logs, weak access controls, and hardcoded secrets, then uses LangGraph agents with Claude Haiku 4.5 to generate context-aware fixes and apply them via git commit.
+Ryn is an AI-powered desktop application that automates SOC 2 compliance by scanning application code for violations and generating one-click fixes via AI. Unlike infrastructure monitoring platforms (Vanta, Drata), Ryn scans actual codebases using hybrid detection (regex + AI), detects missing audit logs, weak access controls, and hardcoded secrets, then uses Claude Haiku 4.5 to generate context-aware fixes and apply them via git commit.
 
-**Current State**: Complete UI mockup with mock data. Backend Rust implementation needed.
+**Current State**: Hybrid scanning architecture complete with three scanning modes (regex_only, smart, analyze_all), cost tracking, analytics dashboard, and full UI integration. Testing and E2E verification in progress.
 
 **Goal**: Production-ready desktop app with 99% test coverage in 20 days.
 
@@ -32,12 +32,26 @@ Ryn is an AI-powered desktop application that automates SOC 2 compliance by scan
 - Control mechanisms: Custom breakpoints, time-travel debugging, cyclical workflows
 - Critical for semi-autonomous code modification with human approval gates
 
-**Code Analysis**: Neuro-Symbolic Architecture
-- Tree-sitter: Fast incremental AST parsing (40+ languages, error tolerance)
-- Static Analysis: Regex patterns for known SOC 2 violations
-- LLM Analysis: Claude Haiku 4.5 with rich AST context for semantic fixes
-- Validation: Compile, test, re-run static analysis before presenting to user
-- Rule: Never trust LLM output without validation
+**Code Analysis**: Hybrid Detection Architecture
+- **Three Scanning Modes**:
+  * `regex_only`: Free, instant pattern matching only (no AI costs)
+  * `smart` (recommended): AI analyzes ~30-40% of files (security-critical code only)
+  * `analyze_all`: AI analyzes every file (maximum accuracy, higher cost)
+- **Regex Engine**: Fast pattern matching for known SOC 2 violations (hardcoded secrets, missing auth, etc.)
+- **LLM Analysis**: Claude Haiku 4.5 for semantic understanding of complex violations
+- **Hybrid Detection**: Violations found by both methods are merged with ±3 line matching
+  * `detection_method`: "regex" | "llm" | "hybrid"
+  * Hybrid violations include both `regex_reasoning` and `llm_reasoning` with AI `confidence_score`
+- **LLM File Selection**: Heuristic-based filtering identifies security-critical files:
+  * Authentication/authorization keywords (login, auth, session, permission)
+  * Database operations (cursor, execute, query, ORM methods)
+  * API endpoints (route decorators, HTTP methods)
+  * Security-sensitive imports (crypto, jwt, bcrypt, secrets)
+- **Cost Tracking**: Real-time token usage calculation with 2025 Claude Haiku pricing
+  * $0.80/MTok input, $4.00/MTok output, $0.08/MTok cache read, $1.00/MTok cache write
+  * Cost limit enforcement with user prompts to continue or stop
+  * Analytics dashboard showing daily cost breakdown
+- **Prompt Caching**: SOC 2 controls cached in system prompt (90% cost reduction on repeated scans)
 
 **LLM Integration**: Claude Haiku 4.5 with Prompt Caching
 - API Key Storage: .env files with macOS Keychain integration (MVP)
