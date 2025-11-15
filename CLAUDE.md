@@ -9,9 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Tech Stack**: Tauri 2.0 (Rust backend) + Next.js 16 (React 19 frontend) + SQLite + Claude API + LangGraph
 
 **Current Implementation Status**:
-- ✅ Full backend: 14 Tauri commands, 4 SOC 2 rule engines, database layer, Claude API integration
-- ✅ Complete UI: Dashboard, scan results, violation details, audit trail, settings
-- ⚠️ Known runtime issue: Database connection leak causing scan failures on real projects
+- ✅ Hybrid scanning: 3 modes (regex_only, smart, analyze_all) with detection method tracking
+- ✅ Full backend: 16 Tauri commands, 4 SOC 2 rule engines, singleton DB connection, Claude API integration
+- ✅ LLM analysis: File selection heuristics, concurrent analysis (Semaphore 10), violation deduplication
+- ✅ Cost tracking: Real-time token usage, cost limits, user prompts, analytics dashboard
+- ✅ Complete UI: Dashboard, scan results with detection badges, violation details with hybrid reasoning, settings, analytics
+- ✅ Database: 8 tables with migrations (detection_method, confidence_score, scan_costs)
+- ⏳ Testing: Comprehensive test suites needed (unit, integration, E2E)
 - ❌ File watcher: Implemented but not integrated
 - ❌ LangGraph: TypeScript agent exists but disconnected from Rust backend
 
@@ -88,30 +92,64 @@ JSON Response → TypeScript interfaces
 
 **snake_case convention**: Rust uses `project_id: i64`, TypeScript uses `project_id: number` (NOT `projectId`). Tauri serializes both correctly.
 
-**2. Scanning Architecture**
+**2. Hybrid Scanning Architecture**
+
+**Three Scanning Modes** (configured in Settings):
+- `regex_only`: Free, instant pattern matching only (no AI costs)
+- `smart` (recommended): AI analyzes ~30-40% of files (security-critical code only)
+- `analyze_all`: AI analyzes every file (maximum accuracy, higher cost)
 
 ```
 User clicks "Scan" → scan_project() command →
 ├─ Walks directory (walkdir crate)
 ├─ Skips node_modules, .git, etc
 ├─ Detects language (Python/JS/TS)
-├─ Runs 4 rule engines in parallel:
-│  ├─ CC6.1: Access Control (missing @login_required, auth middleware)
-│  ├─ CC6.7: Secrets (hardcoded passwords, API keys, tokens)
-│  ├─ CC7.2: Logging (missing audit logs on sensitive ops)
-│  └─ A1.2: Resilience (missing error handling, timeouts)
-├─ Stores violations in SQLite
-├─ Emits progress events (scan-progress) every 10 files
-└─ Returns Scan object with severity counts
+├─ Phase 1: Regex Detection
+│  ├─ Runs 4 rule engines in parallel:
+│  │  ├─ CC6.1: Access Control (missing @login_required, auth middleware)
+│  │  ├─ CC6.7: Secrets (hardcoded passwords, API keys, tokens)
+│  │  ├─ CC7.2: Logging (missing audit logs on sensitive ops)
+│  │  └─ A1.2: Resilience (missing error handling, timeouts)
+│  └─ Stores violations with detection_method="regex"
+├─ Phase 2: LLM Analysis (if mode != "regex_only")
+│  ├─ File Selection (smart mode only):
+│  │  └─ Filters security-critical files (auth, db, API, crypto keywords)
+│  ├─ Concurrent Analysis (Semaphore(10)):
+│  │  ├─ Build prompt with SOC 2 controls + code + regex findings
+│  │  ├─ Call Claude Haiku with prompt caching
+│  │  ├─ Parse JSON response for violations
+│  │  ├─ Store with detection_method="llm", confidence_score, llm_reasoning
+│  │  └─ Track token usage and cost
+│  ├─ Cost Limit Enforcement:
+│  │  ├─ Check every 10 files against cost_limit_per_scan setting
+│  │  ├─ Emit "cost-limit-reached" event if exceeded
+│  │  └─ Wait for user response (continue/stop) via respond_to_cost_limit()
+│  └─ 30-second timeout per file (tokio::time::timeout)
+├─ Phase 3: Violation Deduplication
+│  ├─ Match violations with ±3 line tolerance
+│  ├─ Merge regex + LLM violations → detection_method="hybrid"
+│  ├─ Hybrid violations include both regex_reasoning and llm_reasoning
+│  └─ Store final deduplicated violations in SQLite
+├─ Store scan_costs table (input/output/cache tokens, total_cost_usd)
+├─ Emit progress events (scan-progress) every 10 files
+└─ Return Scan object with severity counts
 ```
 
-**Rule Engine Pattern**: Each rule in `src-tauri/src/rules/*.rs` exposes `analyze(code, file_path, scan_id) -> Result<Vec<Violation>>`. Rules use regex patterns, NOT AST parsing (tree-sitter exists but unused by rules).
+**Detection Method Field**: `violation.detection_method` is "regex" | "llm" | "hybrid"
+- Regex: Found only by pattern matching (has `regex_reasoning`)
+- LLM: Found only by AI (has `llm_reasoning` and `confidence_score`)
+- Hybrid: Found by both methods (has both reasoning fields + confidence score)
+
+**Rule Engine Pattern**: Each rule in `src-tauri/src/rules/*.rs` exposes `analyze(code, file_path, scan_id) -> Result<Vec<Violation>>`. Rules use regex patterns for fast detection.
 
 **3. Database Layer**
 
-- **Connection management**: `db::init_db()` called once in `main.rs`, but **every command re-initializes** (causes connection leak - known bug)
-- **Schema**: 7 tables (projects, scans, violations, fixes, audit_events, controls, settings)
-- **Migrations**: Executed on first run via `migrations.rs:run_migrations()`
+- **Connection management**: Singleton connection using `once_cell::Lazy` (`db::get_connection()`)
+- **Schema**: 8 tables (projects, scans, violations, fixes, audit_events, controls, settings, scan_costs)
+  * `violations` table has 4 new fields: `detection_method`, `confidence_score`, `llm_reasoning`, `regex_reasoning`
+  * `settings` table has 3 new fields: `llm_scan_mode`, `cost_limit_per_scan`, `onboarding_completed`
+  * `scan_costs` table tracks token usage and costs per scan (input/output/cache tokens, total_cost_usd)
+- **Migrations**: Executed on first run via `migrations.rs:run_migrations()` using PRAGMA user_version pattern
 - **Indexes**: B-tree indexes on foreign keys and status fields for performance
 
 **4. Fix Generation Flow**
