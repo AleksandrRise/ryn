@@ -140,6 +140,34 @@ fn migrate_to_v2(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Seed default settings into the database
+///
+/// Inserts default values for hybrid scanning settings:
+/// - llm_scan_mode: "regex_only" (no LLM analysis by default)
+/// - cost_limit_per_scan: "1.0" (USD)
+/// - onboarding_completed: "false"
+pub fn seed_settings(conn: &Connection) -> Result<()> {
+    // Insert default settings if they don't exist
+    // Using INSERT OR IGNORE ensures we don't overwrite existing settings
+
+    conn.execute(
+        "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+        ["llm_scan_mode", "regex_only"],
+    ).context("Failed to insert llm_scan_mode setting")?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+        ["cost_limit_per_scan", "1.0"],
+    ).context("Failed to insert cost_limit_per_scan setting")?;
+
+    conn.execute(
+        "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+        ["onboarding_completed", "false"],
+    ).context("Failed to insert onboarding_completed setting")?;
+
+    Ok(())
+}
+
 /// Run all database migrations
 /// Uses PRAGMA user_version to track schema state:
 /// - v0: Empty database (no tables)
@@ -158,6 +186,9 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         migrate_to_v2(conn)?;
         set_schema_version(conn, 2)?;
     }
+
+    // Seed default settings (idempotent - won't overwrite existing values)
+    seed_settings(conn)?;
 
     Ok(())
 }
