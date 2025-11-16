@@ -9,6 +9,11 @@
 use serde::{Deserialize, Serialize};
 use crate::models::{Violation, Fix};
 use anyhow::Result;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use tokio::sync::Mutex;
+use std::collections::HashMap;
+use tokio::sync::oneshot;
 
 /**
  * Request payload sent to the TypeScript agent
@@ -143,6 +148,85 @@ impl Default for AgentRunnerConfig {
 }
 
 /**
+ * Global request ID counter for generating unique request IDs
+ */
+static REQUEST_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/**
+ * Generates a unique request ID
+ */
+fn generate_request_id() -> String {
+    let id = REQUEST_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+    format!("req-{}", id)
+}
+
+/**
+ * Manages pending requests and their responses
+ *
+ * This struct allows the Rust backend to wait for responses from the TypeScript LangGraph agent.
+ * When a request is sent to the agent, a oneshot channel is created and stored in this state.
+ * When the agent completes, the TypeScript bridge invokes run_agent_response command,
+ * which sends the response through the corresponding oneshot channel.
+ */
+#[derive(Debug)]
+pub struct AgentRunnerState {
+    /// Maps request_id to oneshot sender for that request's response
+    pending_responses: HashMap<String, oneshot::Sender<AgentResponse>>,
+}
+
+impl AgentRunnerState {
+    /// Create a new AgentRunnerState
+    pub fn new() -> Self {
+        Self {
+            pending_responses: HashMap::new(),
+        }
+    }
+
+    /// Register a pending request and return a receiver for its response
+    ///
+    /// # Returns
+    /// A tuple of (request_id, receiver) where receiver can be awaited to get the response
+    pub fn register_request(&mut self) -> (String, oneshot::Receiver<AgentResponse>) {
+        let request_id = generate_request_id();
+        let (tx, rx) = oneshot::channel();
+        self.pending_responses.insert(request_id.clone(), tx);
+        (request_id, rx)
+    }
+
+    /// Send a response for a pending request
+    ///
+    /// # Arguments
+    /// * `request_id` - The ID of the request to respond to
+    /// * `response` - The response to send
+    ///
+    /// # Returns
+    /// Ok(()) if the request was found and the response was sent
+    /// Err if the request was not found or already responded
+    pub fn respond_to_request(&mut self, request_id: &str, response: AgentResponse) -> Result<()> {
+        if let Some(tx) = self.pending_responses.remove(request_id) {
+            // If the receiver has been dropped (timeout), send will fail silently
+            let _ = tx.send(response);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "Request {} not found or already responded",
+                request_id
+            ))
+        }
+    }
+
+    /// Check if a request is still pending
+    pub fn is_pending(&self, request_id: &str) -> bool {
+        self.pending_responses.contains_key(request_id)
+    }
+
+    /// Get the number of pending requests
+    pub fn pending_count(&self) -> usize {
+        self.pending_responses.len()
+    }
+}
+
+/**
  * Agent runner: orchestrates invocation of TypeScript agent
  *
  * In Phase 3, this is a mock implementation.
@@ -151,11 +235,21 @@ impl Default for AgentRunnerConfig {
 pub struct AgentRunner {
     #[allow(dead_code)]
     config: AgentRunnerConfig,
+    /// Shared state for managing pending requests and responses
+    state: Arc<Mutex<AgentRunnerState>>,
 }
 
 impl AgentRunner {
     pub fn new(config: AgentRunnerConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            state: Arc::new(Mutex::new(AgentRunnerState::new())),
+        }
+    }
+
+    /// Get a reference to the shared state
+    pub fn state(&self) -> Arc<Mutex<AgentRunnerState>> {
+        Arc::clone(&self.state)
     }
 
     /**
@@ -494,5 +588,174 @@ mod tests {
         assert!(response.success);
         assert_eq!(response.current_step, "validated");
         assert!(response.error.is_none());
+    }
+
+    #[test]
+    fn test_agent_runner_state_creation() {
+        let state = AgentRunnerState::new();
+        assert_eq!(state.pending_count(), 0);
+    }
+
+    #[test]
+    fn test_register_request_generates_unique_ids() {
+        let mut state = AgentRunnerState::new();
+
+        let (id1, _rx1) = state.register_request();
+        let (id2, _rx2) = state.register_request();
+        let (id3, _rx3) = state.register_request();
+
+        // IDs should be unique
+        assert_ne!(id1, id2);
+        assert_ne!(id2, id3);
+        assert_ne!(id1, id3);
+
+        // IDs should start with "req-"
+        assert!(id1.starts_with("req-"));
+        assert!(id2.starts_with("req-"));
+        assert!(id3.starts_with("req-"));
+
+        // State should track all requests
+        assert_eq!(state.pending_count(), 3);
+        assert!(state.is_pending(&id1));
+        assert!(state.is_pending(&id2));
+        assert!(state.is_pending(&id3));
+    }
+
+    #[tokio::test]
+    async fn test_respond_to_request_success() {
+        let mut state = AgentRunnerState::new();
+
+        let (request_id, rx) = state.register_request();
+
+        // Create a response
+        let response = AgentResponse {
+            success: true,
+            violations: vec![],
+            fixes: vec![],
+            current_step: "complete".to_string(),
+            error: None,
+        };
+
+        // Respond to the request
+        let result = state.respond_to_request(&request_id, response.clone());
+        assert!(result.is_ok());
+
+        // Verify the response is received
+        let received = rx.await;
+        assert!(received.is_ok());
+        let received_response = received.unwrap();
+        assert_eq!(received_response.success, true);
+        assert_eq!(received_response.current_step, "complete");
+
+        // Request should no longer be pending
+        assert!(!state.is_pending(&request_id));
+        assert_eq!(state.pending_count(), 0);
+    }
+
+    #[test]
+    fn test_respond_to_nonexistent_request() {
+        let mut state = AgentRunnerState::new();
+
+        let response = AgentResponse {
+            success: true,
+            violations: vec![],
+            fixes: vec![],
+            current_step: "complete".to_string(),
+            error: None,
+        };
+
+        // Try to respond to a request that doesn't exist
+        let result = state.respond_to_request("nonexistent-request", response);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_respond_to_request_twice() {
+        let mut state = AgentRunnerState::new();
+
+        let (request_id, _rx) = state.register_request();
+
+        let response = AgentResponse {
+            success: true,
+            violations: vec![],
+            fixes: vec![],
+            current_step: "complete".to_string(),
+            error: None,
+        };
+
+        // First response should succeed
+        let result1 = state.respond_to_request(&request_id, response.clone());
+        assert!(result1.is_ok());
+
+        // Second response should fail (request already responded)
+        let result2 = state.respond_to_request(&request_id, response);
+        assert!(result2.is_err());
+        assert!(result2.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_multiple_concurrent_requests() {
+        let mut state = AgentRunnerState::new();
+
+        // Register multiple requests
+        let mut receivers = Vec::new();
+        for _ in 0..5 {
+            let (request_id, rx) = state.register_request();
+            receivers.push((request_id, rx));
+        }
+
+        assert_eq!(state.pending_count(), 5);
+
+        // Respond to each request
+        for (i, (request_id, _)) in receivers.iter_mut().enumerate() {
+            let response = AgentResponse {
+                success: true,
+                violations: vec![],
+                fixes: vec![],
+                current_step: format!("step-{}", i),
+                error: None,
+            };
+
+            state.respond_to_request(&request_id, response).unwrap();
+        }
+
+        // All requests should be processed
+        assert_eq!(state.pending_count(), 0);
+
+        // Verify each response
+        for (i, (_, rx)) in receivers.into_iter().enumerate() {
+            let response = rx.await.unwrap();
+            assert_eq!(response.current_step, format!("step-{}", i));
+        }
+    }
+
+    #[test]
+    fn test_agent_runner_has_state() {
+        let config = AgentRunnerConfig::default();
+        let runner = AgentRunner::new(config);
+
+        let state = runner.state();
+        // State should be created and empty
+        assert_eq!(state.blocking_lock().pending_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_agent_runner_state_shared_between_calls() {
+        let config = AgentRunnerConfig::default();
+        let runner = AgentRunner::new(config);
+
+        let state1 = runner.state();
+        let state2 = runner.state();
+
+        // Both references should point to the same state
+        let mut state1_guard = state1.lock().await;
+        let (request_id, _rx) = state1_guard.register_request();
+
+        drop(state1_guard);
+
+        // Check from state2 reference
+        let state2_guard = state2.lock().await;
+        assert!(state2_guard.is_pending(&request_id));
     }
 }
