@@ -88,6 +88,8 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
         &violation.description,
         &violation.code_snippet,
         &project_framework.as_deref().unwrap_or("unknown"),
+        violation.function_name.as_deref(),
+        violation.class_name.as_deref(),
     )
     .await
     .map_err(|e| format!("Failed to generate fix: {}", e))?;

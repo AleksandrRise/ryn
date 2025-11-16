@@ -198,6 +198,80 @@ impl Default for CodeParser {
     }
 }
 
+/// Find function and class context for a specific line number
+///
+/// # Arguments
+/// * `parse_result` - The ParseResult from parsing the code
+/// * `line_number` - The line number to find context for (1-indexed, as used in violations)
+///
+/// # Returns
+/// * `(Option<String>, Option<String>)` - (function_name, class_name)
+///
+/// # Example
+/// ```
+/// let parser = CodeParser::new()?;
+/// let result = parser.parse_python(code)?;
+/// let (func_name, class_name) = find_context_at_line(&result, 10);
+/// ```
+pub fn find_context_at_line(
+    parse_result: &ParseResult,
+    line_number: i64,
+) -> (Option<String>, Option<String>) {
+    let target_row = (line_number - 1) as usize; // Convert to 0-indexed
+
+    // Find containing function
+    let function_name = parse_result.functions.iter()
+        .find(|node| node.start_row <= target_row && target_row <= node.end_row)
+        .and_then(|node| extract_name_from_definition(&node.text));
+
+    // Find containing class
+    let class_name = parse_result.classes.iter()
+        .find(|node| node.start_row <= target_row && target_row <= node.end_row)
+        .and_then(|node| extract_name_from_definition(&node.text));
+
+    (function_name, class_name)
+}
+
+/// Extract name from function/class definition text
+///
+/// Examples:
+/// - "def my_function():" -> Some("my_function")
+/// - "class MyClass:" -> Some("MyClass")
+/// - "function myFunc() {" -> Some("myFunc")
+/// - "class MyClass {" -> Some("MyClass")
+fn extract_name_from_definition(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+
+    // Python function: "def func_name(...)"
+    if trimmed.starts_with("def ") {
+        return trimmed
+            .strip_prefix("def ")?
+            .split('(')
+            .next()
+            .map(|s| s.trim().to_string());
+    }
+
+    // Python class: "class ClassName(...)" or "class ClassName:"
+    if trimmed.starts_with("class ") {
+        return trimmed
+            .strip_prefix("class ")?
+            .split(|c: char| c == '(' || c == ':')
+            .next()
+            .map(|s| s.trim().to_string());
+    }
+
+    // JavaScript/TypeScript function: "function funcName(...)" or "async function funcName(...)"
+    if trimmed.contains("function ") {
+        let after_function = trimmed.split("function ").nth(1)?;
+        return after_function
+            .split('(')
+            .next()
+            .map(|s| s.trim().to_string());
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

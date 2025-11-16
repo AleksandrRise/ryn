@@ -121,6 +121,9 @@ pub struct Violation {
     pub confidence_score: Option<i64>,
     pub llm_reasoning: Option<String>,
     pub regex_reasoning: Option<String>,
+    // Tree-sitter context fields (v3 schema)
+    pub function_name: Option<String>,
+    pub class_name: Option<String>,
 }
 
 impl Violation {
@@ -149,6 +152,9 @@ impl Violation {
             confidence_score: None,
             llm_reasoning: None,
             regex_reasoning: None,
+            // Tree-sitter context fields default to None
+            function_name: None,
+            class_name: None,
         }
     }
 

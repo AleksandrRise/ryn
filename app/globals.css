@@ -43,9 +43,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   font-weight: 400;
-  line-height: 1.6;
+  line-height: 1.5;
+  font-size: 0.875rem;
 }
 
 /* Global cursor pointer for all interactive elements */
@@ -63,51 +64,51 @@ select,
 
 /* Typography System */
 h1, h2, h3, h4, h5, h6 {
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   color: #ffffff;
-  text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.08);
 }
 
 h1 {
-  font-size: 3rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 h2 {
-  font-size: 2.25rem;
-  font-weight: 700;
-}
-
-h3 {
-  font-size: 1.875rem;
-  font-weight: 600;
-}
-
-h4 {
   font-size: 1.5rem;
   font-weight: 600;
 }
 
-h5 {
+h3 {
   font-size: 1.25rem;
   font-weight: 600;
 }
 
-h6 {
+h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+h5 {
   font-size: 1rem;
+  font-weight: 600;
+}
+
+h6 {
+  font-size: 0.875rem;
   font-weight: 600;
 }
 
 /* Text utilities */
 .text-display {
-  font-size: 4rem;
-  font-weight: 800;
-  letter-spacing: -0.05em;
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
   line-height: 1;
-  text-shadow: 0 0 30px rgba(255, 255, 255, 0.15);
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
 }
 
 .text-glow {

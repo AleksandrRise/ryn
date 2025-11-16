@@ -140,6 +140,30 @@ fn migrate_to_v2(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migrate from v2 to v3 (tree-sitter context fields)
+/// Adds function_name and class_name for better fix context:
+/// - function_name: The function where violation was found (NULL if not in a function)
+/// - class_name: The class where violation was found (NULL if not in a class)
+fn migrate_to_v3(conn: &Connection) -> Result<()> {
+    // ============================================================
+    // VIOLATIONS TABLE: Add tree-sitter context columns
+    // ============================================================
+
+    // function_name: Extracted via tree-sitter for better fix context
+    conn.execute(
+        "ALTER TABLE violations ADD COLUMN function_name TEXT",
+        [],
+    ).context("Failed to add violations.function_name column")?;
+
+    // class_name: Extracted via tree-sitter for better fix context
+    conn.execute(
+        "ALTER TABLE violations ADD COLUMN class_name TEXT",
+        [],
+    ).context("Failed to add violations.class_name column")?;
+
+    Ok(())
+}
+
 /// Seed default settings into the database
 ///
 /// Inserts default values for hybrid scanning settings:
@@ -173,6 +197,7 @@ pub fn seed_settings(conn: &Connection) -> Result<()> {
 /// - v0: Empty database (no tables)
 /// - v1: Initial schema (7 tables, 8 indexes)
 /// - v2: Hybrid scanning schema (detection_method, scan_costs, etc.)
+/// - v3: Tree-sitter context fields (function_name, class_name)
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     let current_version = get_schema_version(conn)?;
 
@@ -185,6 +210,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 2 {
         migrate_to_v2(conn)?;
         set_schema_version(conn, 2)?;
+    }
+
+    if current_version < 3 {
+        migrate_to_v3(conn)?;
+        set_schema_version(conn, 3)?;
     }
 
     // Seed default settings (idempotent - won't overwrite existing values)

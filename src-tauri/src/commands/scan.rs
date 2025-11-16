@@ -6,6 +6,7 @@ use crate::db::{self, queries};
 use crate::models::{Violation, Scan, DetectionMethod, Severity};
 use crate::scanner::framework_detector::FrameworkDetector;
 use crate::scanner::llm_file_selector;
+use crate::scanner::tree_sitter_utils::{CodeParser, find_context_at_line};
 use crate::scanner::SKIP_DIRECTORIES;
 use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12ResilienceRule};
 use crate::security::path_validation;
@@ -282,10 +283,13 @@ pub async fn scan_project<R: tauri::Runtime>(
     // Merge violations: deduplicates when both regex and LLM found the same issue
     let merged_violations = merge_violations(regex_violations, llm_violations_vec);
 
-    // Insert all merged violations into database
+    // Enrich violations with tree-sitter context (function_name, class_name)
+    let enriched_violations = enrich_violations_with_context(merged_violations);
+
+    // Insert all enriched violations into database
     {
         let conn = db::get_connection();
-        for violation in &merged_violations {
+        for violation in &enriched_violations {
             if queries::insert_violation(&conn, violation).is_ok() {
                 violations_found += 1;
             }
@@ -728,6 +732,79 @@ fn run_all_rules(code: &str, file_path: &str, scan_id: i64) -> Vec<Violation> {
     }
 
     violations
+}
+
+/// Enrich violations with tree-sitter context (function_name, class_name)
+///
+/// Groups violations by file, parses each file once with tree-sitter,
+/// and extracts function/class names for each violation.
+fn enrich_violations_with_context(violations: Vec<Violation>) -> Vec<Violation> {
+    // Group violations by file_path
+    let mut violations_by_file: HashMap<String, Vec<Violation>> = HashMap::new();
+    for violation in violations {
+        violations_by_file
+            .entry(violation.file_path.clone())
+            .or_insert_with(Vec::new)
+            .push(violation);
+    }
+
+    // Initialize tree-sitter parser (reuse for all files)
+    let parser = match CodeParser::new() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[ryn] Failed to initialize tree-sitter parser: {}", e);
+            // Return violations unchanged if parser fails
+            return violations_by_file.into_values().flatten().collect();
+        }
+    };
+
+    let mut enriched_violations = Vec::new();
+
+    // Process each file
+    for (file_path, mut file_violations) in violations_by_file {
+        // Read file content
+        let code = match std::fs::read_to_string(&file_path) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("[ryn] Failed to read file for tree-sitter parsing: {} - {}", file_path, e);
+                // Keep violations as-is if file can't be read
+                enriched_violations.extend(file_violations);
+                continue;
+            }
+        };
+
+        // Determine language from file extension
+        let parse_result = if file_path.ends_with(".py") {
+            parser.parse_python(&code)
+        } else if file_path.ends_with(".js") || file_path.ends_with(".jsx") {
+            parser.parse_javascript(&code)
+        } else if file_path.ends_with(".ts") || file_path.ends_with(".tsx") {
+            parser.parse_typescript(&code)
+        } else {
+            // Unsupported language, skip tree-sitter parsing
+            enriched_violations.extend(file_violations);
+            continue;
+        };
+
+        match parse_result {
+            Ok(result) => {
+                // Extract context for each violation
+                for violation in &mut file_violations {
+                    let (func_name, class_name) = find_context_at_line(&result, violation.line_number);
+                    violation.function_name = func_name;
+                    violation.class_name = class_name;
+                }
+                enriched_violations.extend(file_violations);
+            }
+            Err(e) => {
+                eprintln!("[ryn] Failed to parse {} with tree-sitter: {}", file_path, e);
+                // Keep violations as-is if parsing fails
+                enriched_violations.extend(file_violations);
+            }
+        }
+    }
+
+    enriched_violations
 }
 
 /// Determine if a path should be skipped during scanning

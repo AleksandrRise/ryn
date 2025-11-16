@@ -66,8 +66,8 @@ export default function AnalyticsPage() {
   return (
     <>
       <TopNav />
-      <main className="pt-12 px-6 pb-8">
-        <div className="max-w-7xl mx-auto space-y-8">
+      <main className="pt-10 px-4 pb-6">
+        <div className="max-w-7xl mx-auto space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
@@ -211,7 +211,7 @@ export default function AnalyticsPage() {
                         if (active && payload && payload.length) {
                           const data = payload[0].payload
                           return (
-                            <div className="bg-background border rounded-lg p-3 shadow-lg">
+                            <div className="bg-background border-border/50 border rounded-lg p-3 shadow-lg">
                               <p className="font-medium">{data.date}</p>
                               <p className="text-sm text-muted-foreground">
                                 ${data.cost.toFixed(3)} ({data.scans} scan{data.scans !== 1 ? 's' : ''})

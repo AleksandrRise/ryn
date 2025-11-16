@@ -5,7 +5,7 @@ export default function AuditPage() {
   return (
     <>
       <TopNav />
-      <main className="pt-12">
+      <main className="pt-10">
         <AuditTrail />
       </main>
     </>

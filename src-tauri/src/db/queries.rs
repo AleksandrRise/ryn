@@ -189,7 +189,7 @@ pub fn update_scan_results(conn: &Connection, id: i64, files_scanned: i32, total
 
 pub fn insert_violation(conn: &Connection, violation: &Violation) -> Result<i64> {
     conn.execute(
-        "INSERT INTO violations (scan_id, control_id, severity, description, file_path, line_number, code_snippet, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO violations (scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detection_method, confidence_score, llm_reasoning, regex_reasoning, function_name, class_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             violation.scan_id,
             violation.control_id,
@@ -199,6 +199,12 @@ pub fn insert_violation(conn: &Connection, violation: &Violation) -> Result<i64>
             violation.line_number,
             violation.code_snippet,
             violation.status,
+            violation.detection_method,
+            violation.confidence_score,
+            violation.llm_reasoning,
+            violation.regex_reasoning,
+            violation.function_name,
+            violation.class_name,
         ],
     ).context("Failed to insert violation")?;
 
@@ -207,7 +213,7 @@ pub fn insert_violation(conn: &Connection, violation: &Violation) -> Result<i64>
 
 pub fn select_violations(conn: &Connection, scan_id: i64) -> Result<Vec<Violation>> {
     let mut stmt = conn
-        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning FROM violations WHERE scan_id = ? ORDER BY severity DESC, line_number ASC")
+        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning, function_name, class_name FROM violations WHERE scan_id = ? ORDER BY severity DESC, line_number ASC")
         .context("Failed to prepare select violations query")?;
 
     let violations = stmt
@@ -227,6 +233,8 @@ pub fn select_violations(conn: &Connection, scan_id: i64) -> Result<Vec<Violatio
                 confidence_score: row.get(11)?,
                 llm_reasoning: row.get(12)?,
                 regex_reasoning: row.get(13)?,
+                function_name: row.get(14)?,
+                class_name: row.get(15)?,
             })
         })
         .context("Failed to map violations from query")?
@@ -238,7 +246,7 @@ pub fn select_violations(conn: &Connection, scan_id: i64) -> Result<Vec<Violatio
 
 pub fn select_violation(conn: &Connection, id: i64) -> Result<Option<Violation>> {
     let mut stmt = conn
-        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning FROM violations WHERE id = ?")
+        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning, function_name, class_name FROM violations WHERE id = ?")
         .context("Failed to prepare select violation query")?;
 
     let violation = stmt
@@ -258,6 +266,8 @@ pub fn select_violation(conn: &Connection, id: i64) -> Result<Option<Violation>>
                 confidence_score: row.get(11)?,
                 llm_reasoning: row.get(12)?,
                 regex_reasoning: row.get(13)?,
+                function_name: row.get(14)?,
+                class_name: row.get(15)?,
             })
         })
         .optional()
@@ -566,7 +576,7 @@ pub fn select_all_scans(conn: &Connection) -> Result<Vec<Scan>> {
 
 pub fn select_all_violations(conn: &Connection) -> Result<Vec<Violation>> {
     let mut stmt = conn.prepare(
-        "SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning
+        "SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning, function_name, class_name
          FROM violations
          ORDER BY detected_at DESC"
     ).context("Failed to prepare select all violations statement")?;
@@ -587,6 +597,8 @@ pub fn select_all_violations(conn: &Connection) -> Result<Vec<Violation>> {
             confidence_score: row.get(11)?,
             llm_reasoning: row.get(12)?,
             regex_reasoning: row.get(13)?,
+            function_name: row.get(14)?,
+            class_name: row.get(15)?,
         })
     })
     .context("Failed to query all violations")?

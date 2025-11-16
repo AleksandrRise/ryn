@@ -5,7 +5,7 @@ export default function ScanPage() {
   return (
     <>
       <TopNav />
-      <main className="pt-12">
+      <main className="pt-10">
         <ScanResults />
       </main>
     </>

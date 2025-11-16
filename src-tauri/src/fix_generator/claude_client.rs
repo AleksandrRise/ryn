@@ -218,6 +218,8 @@ impl ClaudeClient {
     /// * `violation_description` - Description of the violation
     /// * `original_code` - Code snippet with the violation
     /// * `framework` - Framework type (e.g., "django", "express")
+    /// * `function_name` - Function name where violation was found (from tree-sitter)
+    /// * `class_name` - Class name where violation was found (from tree-sitter)
     ///
     /// # Returns
     /// Fixed code as a string
@@ -227,12 +229,16 @@ impl ClaudeClient {
         violation_description: &str,
         original_code: &str,
         framework: &str,
+        function_name: Option<&str>,
+        class_name: Option<&str>,
     ) -> Result<String> {
         let prompt = self.build_fix_prompt(
             violation_control_id,
             violation_description,
             original_code,
             framework,
+            function_name,
+            class_name,
         );
 
         let response = self.call_api(&prompt, None).await?;
@@ -253,6 +259,8 @@ impl ClaudeClient {
         violation_description: &str,
         original_code: &str,
         framework: &str,
+        function_name: Option<&str>,
+        class_name: Option<&str>,
         system_context: &str,
     ) -> Result<String> {
         let prompt = self.build_fix_prompt(
@@ -260,6 +268,8 @@ impl ClaudeClient {
             violation_description,
             original_code,
             framework,
+            function_name,
+            class_name,
         );
 
         let response = self.call_api(&prompt, Some(system_context.to_string())).await?;
@@ -274,60 +284,81 @@ impl ClaudeClient {
     /// Build fix prompt based on SOC 2 control
     ///
     /// Constructs specialized prompts for different control types to ensure
-    /// consistent, high-quality fixes
+    /// consistent, high-quality fixes. Includes tree-sitter context (function_name, class_name)
+    /// when available for better understanding of code structure.
     fn build_fix_prompt(
         &self,
         control_id: &str,
         description: &str,
         code: &str,
         framework: &str,
+        function_name: Option<&str>,
+        class_name: Option<&str>,
     ) -> String {
+        // Build context section if tree-sitter data is available
+        let mut context_section = String::new();
+        if function_name.is_some() || class_name.is_some() {
+            context_section.push_str("Context:\n");
+            if let Some(func) = function_name {
+                context_section.push_str(&format!("- Function: {}\n", func));
+            }
+            if let Some(cls) = class_name {
+                context_section.push_str(&format!("- Class: {}\n", cls));
+            }
+            context_section.push_str("\n");
+        }
+
         match control_id {
             "CC6.1" => {
                 format!(
                     "Fix the following access control violation in {} code:\n\n\
                      Violation: {}\n\n\
+                     {}\
                      Original code:\n```\n{}\n```\n\n\
                      Provide the fixed code only, no explanation.",
-                    framework, description, code
+                    framework, description, context_section, code
                 )
             }
             "CC6.7" => {
                 format!(
                     "Fix the following secrets/cryptography violation in {} code:\n\n\
                      Violation: {}\n\n\
+                     {}\
                      Original code:\n```\n{}\n```\n\n\
                      Move hardcoded secrets to environment variables. \
                      Provide the fixed code only, no explanation.",
-                    framework, description, code
+                    framework, description, context_section, code
                 )
             }
             "CC7.2" => {
                 format!(
                     "Fix the following logging violation in {} code:\n\n\
                      Violation: {}\n\n\
+                     {}\
                      Original code:\n```\n{}\n```\n\n\
                      Add proper audit logging without logging sensitive data. \
                      Provide the fixed code only, no explanation.",
-                    framework, description, code
+                    framework, description, context_section, code
                 )
             }
             "A1.2" => {
                 format!(
                     "Fix the following resilience violation in {} code:\n\n\
                      Violation: {}\n\n\
+                     {}\
                      Original code:\n```\n{}\n```\n\n\
                      Add error handling, timeouts, and retry logic. \
                      Provide the fixed code only, no explanation.",
-                    framework, description, code
+                    framework, description, context_section, code
                 )
             }
             _ => {
                 format!(
                     "Fix the following compliance violation:\n\n\
                      Violation: {}\n\n\
+                     {}\
                      Original code:\n```\n{}\n```",
-                    description, code
+                    description, context_section, code
                 )
             }
         }
@@ -599,6 +630,8 @@ impl ClaudeClient {
                     confidence_score: Some(det.confidence_score),
                     llm_reasoning: Some(det.reasoning),
                     regex_reasoning: None,
+                    function_name: None,
+                    class_name: None,
                 }
             })
             .collect();
@@ -690,6 +723,8 @@ mod tests {
             "Missing @login_required decorator",
             "def view(request): pass",
             "django",
+            None,
+            None,
         );
 
         assert!(prompt.contains("access control"));
@@ -711,6 +746,8 @@ mod tests {
             "Hardcoded API key in source",
             "API_KEY = 'sk_live_12345'",
             "python",
+            None,
+            None,
         );
 
         assert!(prompt.contains("secrets/cryptography"));
@@ -731,6 +768,8 @@ mod tests {
             "Missing audit log for user creation",
             "user.save()",
             "django",
+            None,
+            None,
         );
 
         assert!(prompt.contains("logging violation"));
@@ -752,6 +791,8 @@ mod tests {
             "Unhandled network request with no timeout",
             "requests.get(url)",
             "python",
+            None,
+            None,
         );
 
         assert!(prompt.contains("resilience violation"));
@@ -773,6 +814,8 @@ mod tests {
             "Some violation",
             "code here",
             "nodejs",
+            None,
+            None,
         );
 
         assert!(prompt.contains("compliance violation"));

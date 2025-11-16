@@ -54,7 +54,7 @@ export default function HomePage() {
   return (
     <>
       <TopNav />
-      <main className="pt-12">
+      <main className="pt-10">
         <Dashboard />
       </main>
 

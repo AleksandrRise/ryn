@@ -9,7 +9,7 @@ export default function ViolationPage({ params }: { params: { id: string } }) {
   return (
     <>
       <TopNav />
-      <main className="pt-12">
+      <main className="pt-10">
         <ViolationDetail violationId={Number.parseInt(params.id)} />
       </main>
     </>

@@ -92,6 +92,8 @@ pub fn agent_to_violation(scan_id: i64, agent_violation: &AgentViolation) -> Vio
         confidence_score: None,
         llm_reasoning: None,
         regex_reasoning: None,
+        function_name: None,
+        class_name: None,
     }
 }
 
