@@ -4,166 +4,426 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Ryn** is an AI-powered SOC 2 compliance tool that scans application code for violations (missing audit logs, weak access controls, hardcoded secrets) and generates one-click fixes via AI.
+**Ryn** is an AI-powered SOC 2 compliance tool that scans application code for violations and generates one-click fixes via Claude. Unlike infrastructure monitoring tools (Vanta, Drata), Ryn scans actual application code for missing audit logs, weak access controls, hardcoded secrets, and error handling issues.
 
-**Current State**: Complete UI mockup with mock data. Backend Rust implementation needed.
+**Tech Stack**: Tauri 2.0 (Rust backend) + Next.js 16 (React 19 frontend) + SQLite + Claude API + LangGraph
 
-## Technology Stack
-
-- **Frontend**: Next.js 15.5.6 + React 19 + TypeScript + TailwindCSS
-- **Backend**: Tauri 2.0 (Rust)
-- **UI**: shadcn/ui + Radix UI components
-- **Package Manager**: pnpm
+**Current Implementation Status**:
+- ✅ Hybrid scanning: 3 modes (regex_only, smart, analyze_all) with detection method tracking
+- ✅ Full backend: 16 Tauri commands, 4 SOC 2 rule engines, singleton DB connection, Claude API integration
+- ✅ LLM analysis: File selection heuristics, concurrent analysis (Semaphore 10), violation deduplication
+- ✅ Cost tracking: Real-time token usage, cost limits, user prompts, analytics dashboard
+- ✅ Complete UI: Dashboard, scan results with detection badges, violation details with hybrid reasoning, settings, analytics
+- ✅ Database: 8 tables with migrations (detection_method, confidence_score, scan_costs)
+- ⏳ Testing: Comprehensive test suites needed (unit, integration, E2E)
+- ❌ File watcher: Implemented but not integrated
+- ❌ LangGraph: TypeScript agent exists but disconnected from Rust backend
 
 ## Development Commands
 
-### Quick Start
+### Essential Commands
 
 ```bash
-# Install dependencies (runs once)
+# Install all dependencies
 pnpm install
 
-# Run Tauri desktop app with hot-reload (recommended for development)
-pnpm tauri dev
+# Run development server (recommended)
+pnpm tauri dev              # Launches Tauri window with hot-reload
 
-# Build production (Next.js static export + Tauri bundle)
-pnpm build              # Next.js static export
-pnpm tauri build        # Desktop app bundle
+# Frontend only (for UI work)
+pnpm dev                    # Next.js at http://localhost:3000
 
-# Development only
-pnpm dev                # Next.js dev server (http://localhost:3000) - separate from Tauri
-pnpm lint               # Run ESLint
+# Production build
+pnpm build                  # Next.js static export
+pnpm tauri build            # Desktop app bundle (macOS .dmg, Windows .msi, Linux .AppImage)
+
+# Code quality
+pnpm lint                   # ESLint
+pnpm prettier --check "**/*.{ts,tsx}"   # Format check
+cd src-tauri && cargo fmt   # Rust formatting
+cd src-tauri && cargo clippy -- -D warnings   # Rust linting
 ```
 
-### Tauri Development Notes
+### Testing
 
-- `pnpm tauri dev` runs Next.js in static export mode and launches the Tauri window
-- The Next.js dev server (`pnpm dev`) is separate and useful for isolated frontend testing
-- MCP plugin is only enabled in debug builds and exposes a Unix socket at `/tmp/tauri-mcp.sock`
-- Rebuild Rust code: changes to `src-tauri/src/*.rs` require restarting `pnpm tauri dev`
+```bash
+# Rust backend tests (44 source files, 280+ tests)
+cd src-tauri && cargo test              # All tests
+cargo test test_name                     # Single test
+cargo test --package ryn --lib           # Library tests only
+
+# Frontend tests
+pnpm vitest                             # Run all Vitest tests
+pnpm vitest --ui                        # Visual test UI
+pnpm vitest run path/to/test.ts         # Single test file
+```
+
+### Important Notes
+
+- **Rust changes require restart**: Modifications to `src-tauri/src/*.rs` require stopping and restarting `pnpm tauri dev`
+- **Database location**: `./data/ryn.db` by default (override with `RYN_DATA_DIR` environment variable)
+- **MCP plugin**: Only enabled in debug builds at `/tmp/tauri-mcp.sock`
+- **API key required**: Set `ANTHROPIC_API_KEY` in `.env` for fix generation to work
+- **Next.js static export**: `next.config.mjs` uses `output: 'export'` - required for Tauri bundling
+
+### Environment Variables
+
+```bash
+# Required for fix generation
+ANTHROPIC_API_KEY=sk-ant-api03-xxxxx
+
+# Optional: Custom database location
+RYN_DATA_DIR=/path/to/data/dir   # Defaults to ./data
+```
 
 ## Architecture
 
-### Project Structure
+### Critical Design Patterns
+
+**1. Frontend-Backend Communication (Tauri IPC)**
+
+All communication flows through Tauri's IPC system with strict type safety:
 
 ```
-app/
-├── layout.tsx                  # Root layout with dark theme
-├── globals.css                 # Global styles
-├── page.tsx                    # Dashboard (73% compliance score)
-├── scan/page.tsx               # Violations table
-├── violation/[id]/page.tsx     # Violation detail + AI fix
-├── audit/page.tsx              # Audit trail & reports
-└── settings/page.tsx           # Framework & scan config
+React Component → lib/tauri/commands.ts → invoke("command_name") →
+Rust src-tauri/src/commands/*.rs → Database/Scanner/Rules →
+JSON Response → TypeScript interfaces
+```
+
+**snake_case convention**: Rust uses `project_id: i64`, TypeScript uses `project_id: number` (NOT `projectId`). Tauri serializes both correctly.
+
+**2. Hybrid Scanning Architecture**
+
+**Three Scanning Modes** (configured in Settings):
+- `regex_only`: Free, instant pattern matching only (no AI costs)
+- `smart` (recommended): AI analyzes ~30-40% of files (security-critical code only)
+- `analyze_all`: AI analyzes every file (maximum accuracy, higher cost)
+
+```
+User clicks "Scan" → scan_project() command →
+├─ Walks directory (walkdir crate)
+├─ Skips node_modules, .git, etc
+├─ Detects language (Python/JS/TS)
+├─ Phase 1: Regex Detection
+│  ├─ Runs 4 rule engines in parallel:
+│  │  ├─ CC6.1: Access Control (missing @login_required, auth middleware)
+│  │  ├─ CC6.7: Secrets (hardcoded passwords, API keys, tokens)
+│  │  ├─ CC7.2: Logging (missing audit logs on sensitive ops)
+│  │  └─ A1.2: Resilience (missing error handling, timeouts)
+│  └─ Stores violations with detection_method="regex"
+├─ Phase 2: LLM Analysis (if mode != "regex_only")
+│  ├─ File Selection (smart mode only):
+│  │  └─ Filters security-critical files (auth, db, API, crypto keywords)
+│  ├─ Concurrent Analysis (Semaphore(10)):
+│  │  ├─ Build prompt with SOC 2 controls + code + regex findings
+│  │  ├─ Call Claude Haiku with prompt caching
+│  │  ├─ Parse JSON response for violations
+│  │  ├─ Store with detection_method="llm", confidence_score, llm_reasoning
+│  │  └─ Track token usage and cost
+│  ├─ Cost Limit Enforcement:
+│  │  ├─ Check every 10 files against cost_limit_per_scan setting
+│  │  ├─ Emit "cost-limit-reached" event if exceeded
+│  │  └─ Wait for user response (continue/stop) via respond_to_cost_limit()
+│  └─ 30-second timeout per file (tokio::time::timeout)
+├─ Phase 3: Violation Deduplication
+│  ├─ Match violations with ±3 line tolerance
+│  ├─ Merge regex + LLM violations → detection_method="hybrid"
+│  ├─ Hybrid violations include both regex_reasoning and llm_reasoning
+│  └─ Store final deduplicated violations in SQLite
+├─ Store scan_costs table (input/output/cache tokens, total_cost_usd)
+├─ Emit progress events (scan-progress) every 10 files
+└─ Return Scan object with severity counts
+```
+
+**Detection Method Field**: `violation.detection_method` is "regex" | "llm" | "hybrid"
+- Regex: Found only by pattern matching (has `regex_reasoning`)
+- LLM: Found only by AI (has `llm_reasoning` and `confidence_score`)
+- Hybrid: Found by both methods (has both reasoning fields + confidence score)
+
+**Rule Engine Pattern**: Each rule in `src-tauri/src/rules/*.rs` exposes `analyze(code, file_path, scan_id) -> Result<Vec<Violation>>`. Rules use regex patterns for fast detection.
+
+**3. Database Layer**
+
+- **Connection management**: Singleton connection using `once_cell::Lazy` (`db::get_connection()`)
+- **Schema**: 8 tables (projects, scans, violations, fixes, audit_events, controls, settings, scan_costs)
+  * `violations` table has 4 new fields: `detection_method`, `confidence_score`, `llm_reasoning`, `regex_reasoning`
+  * `settings` table has 3 new fields: `llm_scan_mode`, `cost_limit_per_scan`, `onboarding_completed`
+  * `scan_costs` table tracks token usage and costs per scan (input/output/cache tokens, total_cost_usd)
+- **Migrations**: Executed on first run via `migrations.rs:run_migrations()` using PRAGMA user_version pattern
+- **Indexes**: B-tree indexes on foreign keys and status fields for performance
+
+**4. Fix Generation Flow**
+
+```
+User clicks "Generate Fix" → generate_fix(violation_id) →
+├─ Fetch violation from DB
+├─ Get control requirements from controls table
+├─ Build Claude prompt with:
+│  ├─ File context (surrounding lines)
+│  ├─ Framework info (Django/Flask/Express)
+│  ├─ SOC 2 control requirements
+│  └─ Original code snippet
+├─ Call Claude API (Haiku model, prompt caching enabled)
+├─ Parse response for fixed_code + explanation
+├─ Validate fix (line-level check only)
+└─ Store in fixes table with trust_level="review"
+
+User clicks "Apply Fix" → apply_fix(fix_id) →
+├─ Read original file
+├─ Apply string replacement (exact match)
+├─ Write file to disk
+├─ Git operations:
+│  ├─ Check repo is clean
+│  ├─ Stage changed file
+│  ├─ Create commit with message
+│  └─ Store commit SHA in fixes.git_commit_sha
+└─ Update violation.status = "fixed"
+```
+
+**Rate Limiting**: Claude API calls limited to 50 requests/minute (configurable in `rate_limiter.rs`)
+
+### Module Organization
+
+```
+src-tauri/src/
+├── commands/           # 14 Tauri IPC command handlers
+│   ├── project.rs      # select_project_folder, create_project, get_projects
+│   ├── scan.rs         # detect_framework, scan_project, get_scan_progress, get_scans
+│   ├── violation.rs    # get_violations, get_violation, dismiss_violation
+│   ├── fix.rs          # generate_fix, apply_fix (Claude API integration)
+│   ├── audit.rs        # get_audit_events
+│   └── settings.rs     # get_settings, update_settings, clear_database, export_data
+├── rules/              # 4 SOC 2 compliance rule engines
+│   ├── cc6_1_access_control.rs
+│   ├── cc6_7_secrets.rs
+│   ├── cc7_2_logging.rs
+│   └── a1_2_resilience.rs
+├── scanner/            # Code analysis infrastructure
+│   ├── framework_detector.rs   # Detects Django/Flask/Express/Next.js
+│   ├── file_watcher.rs         # notify-based file watching (NOT INTEGRATED)
+│   ├── tree_sitter_utils.rs    # AST parsing (exists but rules don't use it)
+│   ├── python_scanner.rs       # STUB ONLY
+│   └── javascript_scanner.rs   # STUB ONLY
+├── fix_generator/
+│   ├── claude_client.rs        # Anthropic API client with streaming
+│   └── (fix_applicator merged into commands/fix.rs)
+├── git/
+│   └── operations.rs           # git2-based operations (commit, clean check)
+├── db/
+│   ├── schema.sql              # SQLite schema with 7 tables
+│   ├── migrations.rs           # Auto-apply migrations on startup
+│   └── queries.rs              # CRUD operations with parameterized SQL
+├── security/
+│   └── path_validation.rs      # Prevents path traversal, blocks system dirs
+├── rate_limiter.rs             # Token bucket rate limiting for Claude API
+└── main.rs                     # Entry point, registers all commands
+```
+
+### Frontend Architecture
+
+```
+app/                    # Next.js 16 App Router
+├── page.tsx           # Dashboard with compliance score
+├── scan/page.tsx      # Violations table with filters
+├── violation/[id]/    # Violation detail + fix generation
+├── audit/page.tsx     # Audit trail timeline
+└── settings/page.tsx  # Framework config, database management
 
 components/
-├── dashboard/                  # Compliance metrics, charts
-├── scan/                       # Violation table, filters
-├── violation/                  # Detail view, code preview, diff
-├── audit/                      # Timeline, event cards
-├── settings/                   # Framework, database, preferences
-├── layout/                     # Top nav, sidebar
+├── scan/
+│   └── scan-results.tsx       # Main scanning UI (line 179 calls scan_project)
+├── violation/
+│   └── fix-generator.tsx      # AI fix UI with diff viewer
 └── ui/                         # 90+ shadcn/ui components
 
 lib/
-├── types/                      # violation.ts, audit.ts, fix.ts
-└── tauri/commands.ts           # IPC interfaces (TODO stubs)
-
-src-tauri/src/main.rs          # Rust backend (placeholder commands)
+├── tauri/commands.ts           # TypeScript wrappers for all 14 Tauri commands
+├── types/                      # TypeScript interfaces matching Rust models
+├── langgraph/
+│   ├── agent.ts                # LangGraph state machine (NOT USED BY BACKEND)
+│   ├── prompts.ts              # SOC 2 prompt templates
+│   └── types.ts
+└── utils/error-handler.ts      # Centralized Tauri error handling
 ```
 
-### Key Entry Points
+## Critical Known Issues
 
-1. **Tauri Backend**: `src-tauri/src/main.rs` - All commands return mock data
-2. **Frontend Root**: `app/layout.tsx` - Dark theme + water background
-3. **Dashboard**: `app/page.tsx` - Main compliance view
-4. **Types**: `lib/types/violation.ts` - Core data models
+### 1. Database Connection Leak (Causes Runtime Errors)
 
-## Known Issues
+**Symptom**: `[Tauri Error] {}` when scanning real projects
 
-1. **TypeScript Errors Ignored**: `next.config.mjs` has `ignoreBuildErrors: true` - TypeScript errors don't block builds but should be addressed
-2. **Backend Stub Implementation**: All Tauri commands in `main.rs` are TODO stubs returning mock data
-3. **No Test Framework**: Vitest, Playwright, and Rust unit tests are not configured
-4. **Incorrect Package Name**: `package.json` lists `"name": "my-v0-project"` instead of `"ryn"`
+**Root Cause**: Every command calls `db::init_db()`, creating new SQLite connections without cleanup. Under load, this exhausts file descriptors.
 
-## Key Features (Status)
+**Location**: All command modules call `let conn = db::init_db().map_err(...)?;`
 
-- ✅ **UI Complete**: Dashboard, scan results, violation details, audit trail, settings
-- ⏳ **Backend**: Placeholder commands need implementation
-- ⏳ **Code Scanning**: Not implemented
-- ⏳ **AI Fix Generation**: Not implemented
-- ⏳ **Database**: SQLite plugin installed but unused
+**Fix Required**: Implement connection pooling or use `once_cell::Lazy` for singleton connection
 
-## Design System
+### 2. LangGraph Integration Incomplete
 
-- **Theme**: Dark only (pure black #000 background)
-- **Typography**: Inter font, tabular numbers
-- **Severity Colors**: Critical (red #ef4444), High (orange #f97316), Medium (yellow #eab308), Low (gray #525252)
-- **Style**: Minimalist, brutalist aesthetic with animated water background
+**Status**: TypeScript agent (`lib/langgraph/agent.ts`) is fully implemented with state machine, but Rust bridge (`src-tauri/src/langgraph/agent_runner.rs`) only returns mock responses.
 
-## Dependencies
+**Impact**: Scanning works via direct rule engines, but the "LangGraph orchestration" mentioned in docs is non-functional.
 
-### Frontend (package.json)
-- Next.js 15.5.6, React 19, TypeScript 5
-- 20+ Radix UI components, lucide-react icons
-- react-hook-form + zod validation
-- zustand (state), recharts (charts), sonner (toasts)
-- TailwindCSS 4.1.9, class-variance-authority
+### 3. File Watcher Not Integrated
 
-### Backend (Cargo.toml)
-- tauri 2.0, tauri-plugin-sql (SQLite), tauri-plugin-fs, tauri-plugin-dialog
-- serde, serde_json, chrono (with serde support)
-- tauri-plugin-mcp (local path)
+**Status**: `src-tauri/src/scanner/file_watcher.rs` is implemented but never called by scan commands.
 
-## Testing
+**Impact**: "Real-time compliance feedback" feature doesn't work - scans are manual only.
 
-No testing framework configured. Need to add:
-- Vitest for React components
-- Playwright/Cypress for E2E
-- Rust unit tests in src-tauri
+### 4. Weak Test Assertions
 
-## Frontend-Backend Communication
+**Examples**:
+- `commands/scan.rs:590`: `assert!(project.framework.is_some() || project.framework.is_none());` (always true)
+- `commands/fix.rs:378`: `assert!(result.is_err() || result.is_ok());` (always true)
 
-Tauri commands defined in `src-tauri/src/main.rs` are invoked from React via `lib/tauri/commands.ts`. Add new commands as follows:
+**Impact**: Tests pass but don't validate behavior. Needs audit and strengthening.
 
-1. Define the command in `src-tauri/src/main.rs`:
-   ```rust
-   #[tauri::command]
-   fn my_command(param: String) -> Result<String, String> {
-       // Implementation
-       Ok(result)
-   }
-   ```
+### 5. E2E Tests Are Fully Mocked
 
-2. Register in `invoke_handler`:
-   ```rust
-   .invoke_handler(tauri::generate_handler![my_command])
-   ```
+**Location**: `__tests__/e2e/workflow.test.ts` mocks all Tauri commands via `vi.mock("@tauri-apps/api/core")`
 
-3. Call from React:
-   ```typescript
-   import { invoke } from "@tauri-apps/api/core";
-   const result = await invoke("my_command", { param: "value" });
-   ```
+**Impact**: No integration tests that actually invoke Rust backend. Real project scanning is untested.
 
-Key plugins available:
-- **tauri-plugin-sql**: SQLite database queries
-- **tauri-plugin-dialog**: File/folder selection dialogs
-- **tauri-plugin-fs**: File system operations
-- **tauri-plugin-mcp** (dev-only): Unix socket server at `/tmp/tauri-mcp.sock`
+## CI/CD and Platform Support
 
-## Documentation Storage
+### GitHub Actions Workflows
 
-Per project guidelines, all context7 library documentation should be stored in `.claude/docs/` folder. Do not add redundant or unrelated files to this directory.
+**test.yml** - Runs on push/PR to main:
+- Frontend: TypeScript check, Vitest, Prettier formatting
+- Backend: Rust fmt, clippy (with `-D warnings`), cargo test
+- Integration: Full build test
+- Security: cargo audit + npm audit
 
-## Other Resources
+**release.yml** - Triggered on git tags (v*):
+- Multi-platform builds: macOS (universal), Linux (x86_64), Windows (x86_64)
+- Creates draft GitHub release with binaries
 
-- `/ryn-stack`: Comprehensive market research on SOC 2 compliance landscape (750KB)
-- `/ryn-sum`: One-paragraph product pitch
-- `README.md`: Empty (needs content)
+### Platform-Specific Requirements
 
-- make granulated, unambiguous todo lists that aren't confusing and left up to multiple interpretations.
-- use docs folder in .claude folder to always store documentation from context7. dont add any redundant files in docs.
-- use context7 to fetch any documentation you might need in order to satisfy the "no
- guessing/assuming" doctrine
-- commit often
+**Linux Development**:
+```bash
+# Ubuntu/Debian dependencies for Tauri
+sudo apt-get update && sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev \
+  libappindicator3-dev \
+  librsvg2-dev \
+  patchelf \
+  libssl-dev \
+  libgtk-3-dev
+```
+
+**macOS**: Xcode Command Line Tools required (`xcode-select --install`)
+
+**Windows**: Visual Studio Build Tools required
+
+## Common Development Tasks
+
+### Adding a New SOC 2 Rule
+
+1. Create `src-tauri/src/rules/your_rule.rs`:
+```rust
+pub struct YourRule;
+impl YourRule {
+    pub fn analyze(code: &str, file_path: &str, scan_id: i64) -> Result<Vec<Violation>> {
+        let mut violations = Vec::new();
+        // Add regex patterns
+        Ok(violations)
+    }
+}
+```
+
+2. Add to `src-tauri/src/rules/mod.rs`:
+```rust
+pub mod your_rule;
+pub use your_rule::*;
+```
+
+3. Call from `src-tauri/src/commands/scan.rs` in `run_all_rules()` function
+
+4. Add 15+ tests covering all violation patterns and false positives
+
+### Adding a New Tauri Command
+
+1. Define in appropriate command module (e.g., `src-tauri/src/commands/scan.rs`):
+```rust
+#[tauri::command]
+pub async fn your_command(param: String) -> Result<YourType, String> {
+    let conn = db::init_db().map_err(|e| format!("DB error: {}", e))?;
+    // Implementation
+    Ok(result)
+}
+```
+
+2. Register in `src-tauri/src/main.rs`:
+```rust
+.invoke_handler(tauri::generate_handler![
+    // ... existing commands
+    your_module::your_command,
+])
+```
+
+3. Add TypeScript wrapper in `lib/tauri/commands.ts`:
+```typescript
+export async function your_command(param: string): Promise<YourType> {
+  return await invoke<YourType>("your_command", { param })
+}
+```
+
+4. Add interface to `lib/tauri/commands.ts` matching Rust struct
+
+### Running Single Test
+
+```bash
+# Rust: Run specific test function
+cd src-tauri && cargo test test_scan_detects_violations
+
+# Rust: Run all tests in a module
+cargo test --lib commands::scan::tests
+
+# Rust: Run with output
+cargo test -- --nocapture test_name
+
+# Frontend: Run specific test file
+pnpm vitest run __tests__/e2e/workflow.test.ts
+
+# Frontend: Watch mode for single file
+pnpm vitest watch path/to/test.ts
+```
+
+### Debugging
+
+```bash
+# Rust: Enable detailed logging
+RUST_LOG=debug pnpm tauri dev
+
+# Check database directly
+sqlite3 ./data/ryn.db "SELECT * FROM violations LIMIT 10;"
+
+# View Tauri devtools
+# In dev mode: Right-click app → Inspect Element
+
+# Test API key
+echo $ANTHROPIC_API_KEY
+```
+
+## Security Considerations
+
+- **Path Traversal Protection**: All file operations validated via `security::path_validation::validate_project_path()`
+- **System Directory Blocking**: Cannot scan `/`, `/etc`, `/usr`, `/bin`, `/var`, etc.
+- **SQL Injection**: All queries use parameterized statements (`?` placeholders)
+- **Command Injection**: Git operations use `git2` library (no shell execution)
+- **API Key Storage**: Read from environment variables only, never stored in database
+
+## Documentation Resources
+
+- **Master Plan**: `rynspec/ryn-master-plan.md` - Complete 20-day implementation plan (1354 lines)
+- **README**: `README.md` - User-facing documentation
+- **Schema**: `src-tauri/src/db/schema.sql` - Complete database structure
+- **Context7 Docs**: Store in `.claude/docs/` (do not add redundant files)
+
+## User Instructions
+
+- Make granulated, unambiguous todo lists
+- Use Context7 to fetch documentation (never guess/assume)
+- Commit often
+- Be grounded in reality - verify implementations before claiming features work
