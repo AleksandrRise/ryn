@@ -3,6 +3,13 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Save, Download, Code, BarChart3, Sparkles } from "lucide-react"
 import {
   get_settings,
@@ -272,19 +279,20 @@ export function Settings() {
             {!state.autoDetectFramework && (
               <div>
                 <label className="block mb-2 text-sm font-medium">Select framework</label>
-                <select
-                  value={state.framework}
-                  onChange={(e) => updateSetting("framework", e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-white/30 transition-colors"
-                >
-                  <option value="Django">Django</option>
-                  <option value="Flask">Flask</option>
-                  <option value="Express">Express (Node.js)</option>
-                  <option value="Rails">Ruby on Rails</option>
-                  <option value="Spring Boot">Spring Boot</option>
-                  <option value="Go">Go (Gin/Echo)</option>
-                  <option value="Rust">Rust (Actix/Rocket)</option>
-                </select>
+                <Select value={state.framework} onValueChange={(value) => updateSetting("framework", value)}>
+                  <SelectTrigger className="w-full bg-black/40 border-white/10 rounded-xl hover:bg-black/50 focus:border-white/30 transition-all duration-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-black/95 border-white/10 backdrop-blur-xl">
+                    <SelectItem value="Django" className="focus:bg-white/10 cursor-pointer">Django</SelectItem>
+                    <SelectItem value="Flask" className="focus:bg-white/10 cursor-pointer">Flask</SelectItem>
+                    <SelectItem value="Express" className="focus:bg-white/10 cursor-pointer">Express (Node.js)</SelectItem>
+                    <SelectItem value="Rails" className="focus:bg-white/10 cursor-pointer">Ruby on Rails</SelectItem>
+                    <SelectItem value="Spring Boot" className="focus:bg-white/10 cursor-pointer">Spring Boot</SelectItem>
+                    <SelectItem value="Go" className="focus:bg-white/10 cursor-pointer">Go (Gin/Echo)</SelectItem>
+                    <SelectItem value="Rust" className="focus:bg-white/10 cursor-pointer">Rust (Actix/Rocket)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
@@ -432,16 +440,17 @@ export function Settings() {
 
             <div className="py-4 border-b border-[#1a1a1a]">
               <label className="block mb-2 text-sm font-medium">Scan frequency</label>
-              <select
-                value={state.scanFrequency}
-                onChange={(e) => updateSetting("scanFrequency", e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-white/30 transition-all duration-200 hover:bg-black/50"
-              >
-                <option value="on-commit">On every commit</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="manual">Manual only</option>
-              </select>
+              <Select value={state.scanFrequency} onValueChange={(value) => updateSetting("scanFrequency", value)}>
+                <SelectTrigger className="w-full bg-black/40 border-white/10 rounded-xl hover:bg-black/50 focus:border-white/30 transition-all duration-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-black/95 border-white/10 backdrop-blur-xl">
+                  <SelectItem value="on-commit" className="focus:bg-white/10 cursor-pointer">On every commit</SelectItem>
+                  <SelectItem value="daily" className="focus:bg-white/10 cursor-pointer">Daily</SelectItem>
+                  <SelectItem value="weekly" className="focus:bg-white/10 cursor-pointer">Weekly</SelectItem>
+                  <SelectItem value="manual" className="focus:bg-white/10 cursor-pointer">Manual only</SelectItem>
+                </SelectContent>
+              </Select>
               <p className="text-xs text-white/50 mt-2">When to automatically run compliance scans</p>
             </div>
           </div>
@@ -453,16 +462,17 @@ export function Settings() {
           <div className="space-y-6">
             <div className="py-4 border-b border-[#1a1a1a]">
               <label className="block mb-2 text-sm font-medium">Database type</label>
-              <select
-                value={state.databaseType}
-                onChange={(e) => updateSetting("databaseType", e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-white/30 transition-all duration-200 hover:bg-black/50"
-              >
-                <option value="PostgreSQL">PostgreSQL</option>
-                <option value="MongoDB">MongoDB</option>
-                <option value="MySQL">MySQL</option>
-                <option value="SQLite">SQLite</option>
-              </select>
+              <Select value={state.databaseType} onValueChange={(value) => updateSetting("databaseType", value)}>
+                <SelectTrigger className="w-full bg-black/40 border-white/10 rounded-xl hover:bg-black/50 focus:border-white/30 transition-all duration-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-black/95 border-white/10 backdrop-blur-xl">
+                  <SelectItem value="PostgreSQL" className="focus:bg-white/10 cursor-pointer">PostgreSQL</SelectItem>
+                  <SelectItem value="MongoDB" className="focus:bg-white/10 cursor-pointer">MongoDB</SelectItem>
+                  <SelectItem value="MySQL" className="focus:bg-white/10 cursor-pointer">MySQL</SelectItem>
+                  <SelectItem value="SQLite" className="focus:bg-white/10 cursor-pointer">SQLite</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="py-4 border-b border-[#1a1a1a]">
