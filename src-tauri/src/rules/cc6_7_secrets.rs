@@ -716,3 +716,12 @@ mod tests {
         );
     }
 }
+
+    #[test]
+    fn test_detect_db_password_exact() {
+        let code = r#"
+DB_PASSWORD = "production_secret_key_xyz"
+"#;
+        let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
+        assert!(!violations.is_empty(), "Should detect DB_PASSWORD secret. Found {} violations", violations.len());
+    }

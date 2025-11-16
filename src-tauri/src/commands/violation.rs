@@ -195,6 +195,8 @@ mod tests {
             confidence_score: None,
             llm_reasoning: None,
             regex_reasoning: None,
+            function_name: None,
+            class_name: None,
         };
 
         queries::insert_violation(&conn, &violation).unwrap()
@@ -269,6 +271,8 @@ mod tests {
                 confidence_score: None,
                 llm_reasoning: None,
                 regex_reasoning: None,
+            function_name: None,
+            class_name: None,
             };
             let _ = queries::insert_violation(&conn, &violation);
         }
@@ -313,6 +317,8 @@ mod tests {
                 confidence_score: None,
                 llm_reasoning: None,
                 regex_reasoning: None,
+            function_name: None,
+            class_name: None,
             };
             let _ = queries::insert_violation(&conn, &violation);
         }
@@ -439,6 +445,8 @@ mod tests {
                 confidence_score: None,
                 llm_reasoning: None,
                 regex_reasoning: None,
+            function_name: None,
+            class_name: None,
             };
             let _ = queries::insert_violation(&conn, &violation);
         }
@@ -483,6 +491,8 @@ mod tests {
                 confidence_score: None,
                 llm_reasoning: None,
                 regex_reasoning: None,
+            function_name: None,
+            class_name: None,
             };
             let _ = queries::insert_violation(&conn, &violation);
         }
@@ -526,6 +536,8 @@ mod tests {
             confidence_score: None,
             llm_reasoning: None,
             regex_reasoning: None,
+            function_name: None,
+            class_name: None,
         };
         let _ = queries::insert_violation(&conn, &violation);
 

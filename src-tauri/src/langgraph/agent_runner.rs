@@ -288,6 +288,8 @@ mod tests {
             confidence_score: None,
             llm_reasoning: None,
             regex_reasoning: None,
+            function_name: None,
+            class_name: None,
         };
 
         let agent_violation = violation_to_agent(&violation);
@@ -374,6 +376,8 @@ mod tests {
             confidence_score: None,
             llm_reasoning: None,
             regex_reasoning: None,
+            function_name: None,
+            class_name: None,
         };
 
         let result = runner
@@ -407,6 +411,8 @@ mod tests {
             confidence_score: None,
             llm_reasoning: None,
             regex_reasoning: None,
+            function_name: None,
+            class_name: None,
         };
 
         let result = runner
@@ -441,6 +447,8 @@ mod tests {
                 confidence_score: None,
                 llm_reasoning: None,
                 regex_reasoning: None,
+            function_name: None,
+            class_name: None,
             },
             Violation {
                 id: 2,
@@ -457,6 +465,8 @@ mod tests {
                 confidence_score: None,
                 llm_reasoning: None,
                 regex_reasoning: None,
+            function_name: None,
+            class_name: None,
             },
         ];
 
