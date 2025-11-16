@@ -431,18 +431,18 @@ export function Settings() {
             </div>
 
             <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-[14px]">Scan frequency</label>
+              <label className="block mb-2 text-sm font-medium">Scan frequency</label>
               <select
                 value={state.scanFrequency}
                 onChange={(e) => updateSetting("scanFrequency", e.target.value)}
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] focus:outline-none focus:border-white"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-white/30 transition-all duration-200 hover:bg-black/50"
               >
                 <option value="on-commit">On every commit</option>
                 <option value="daily">Daily</option>
                 <option value="weekly">Weekly</option>
                 <option value="manual">Manual only</option>
               </select>
-              <p className="text-[12px] text-[#aaaaaa] mt-2">When to automatically run compliance scans</p>
+              <p className="text-xs text-white/50 mt-2">When to automatically run compliance scans</p>
             </div>
           </div>
         </section>
@@ -452,11 +452,11 @@ export function Settings() {
           <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Database</h2>
           <div className="space-y-6">
             <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-[14px]">Database type</label>
+              <label className="block mb-2 text-sm font-medium">Database type</label>
               <select
                 value={state.databaseType}
                 onChange={(e) => updateSetting("databaseType", e.target.value)}
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] focus:outline-none focus:border-white"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-white/30 transition-all duration-200 hover:bg-black/50"
               >
                 <option value="PostgreSQL">PostgreSQL</option>
                 <option value="MongoDB">MongoDB</option>
@@ -466,15 +466,15 @@ export function Settings() {
             </div>
 
             <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-[14px]">Connection string</label>
+              <label className="block mb-2 text-sm font-medium">Connection string</label>
               <input
                 type="text"
                 value={state.connectionString}
                 onChange={(e) => updateSetting("connectionString", e.target.value)}
                 placeholder="postgresql://user:password@localhost:5432/dbname"
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] font-mono focus:outline-none focus:border-white"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-white/30 transition-all duration-200 hover:bg-black/50"
               />
-              <p className="text-[12px] text-[#aaaaaa] mt-2">Used for scanning database access patterns</p>
+              <p className="text-xs text-white/50 mt-2">Used for scanning database access patterns</p>
             </div>
 
             <div className="space-y-4">
@@ -528,15 +528,15 @@ export function Settings() {
             </div>
 
             <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-[14px]">Slack webhook URL</label>
+              <label className="block mb-2 text-sm font-medium">Slack webhook URL</label>
               <input
                 type="text"
                 value={state.slackWebhook}
                 onChange={(e) => updateSetting("slackWebhook", e.target.value)}
                 placeholder="https://hooks.slack.com/services/..."
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] font-mono focus:outline-none focus:border-white"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-white/30 transition-all duration-200 hover:bg-black/50"
               />
-              <p className="text-[12px] text-[#aaaaaa] mt-2">Send compliance updates to Slack</p>
+              <p className="text-xs text-white/50 mt-2">Send compliance updates to Slack</p>
             </div>
           </div>
         </section>
