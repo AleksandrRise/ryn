@@ -3,9 +3,9 @@
 //! Handles bidirectional communication between the Rust backend and TypeScript LangGraph agent
 //! via Tauri's IPC system.
 
-use crate::langgraph::agent_runner::{AgentResponse, AgentRequest};
+use crate::langgraph::agent_runner::{AgentResponse, AgentRequest, AgentRunner};
 use serde::Serialize;
-use tauri::Emitter;
+use tauri::{Emitter, State};
 
 /// Event payload emitted by Rust when requesting agent invocation
 #[derive(Clone, Serialize, Debug)]
@@ -20,26 +20,26 @@ pub struct RunAgentRequestEvent {
 ///
 /// This command is called by the TypeScript bridge (lib/langgraph/tauri-bridge.ts)
 /// after the LangGraph agent completes processing.
+///
+/// It delivers the response to the waiting AgentRunner::run() call via the
+/// oneshot channel stored in AgentRunner's pending_responses HashMap.
 #[tauri::command]
 pub async fn run_agent_response(
+    agent_runner: State<'_, AgentRunner>,
     request_id: String,
     response: AgentResponse,
 ) -> Result<(), String> {
-    // In this implementation, the response will be handled through a channel
-    // that was waiting in AgentRunner::run() (via oneshot channel)
-
-    // The actual response delivery happens through the pending_responses HashMap
-    // in the AgentRunner state that gets accessed via the Tauri app state
-
-    // For now, we just acknowledge receipt - actual dispatching happens in
-    // the calling AgentRunner::run() method which holds the receiver end
-
     println!(
         "[LangGraph] Received response for request_id: {} (success: {})",
         request_id, response.success
     );
 
-    Ok(())
+    // Deliver the response to the waiting AgentRunner::run() call
+    let state_arc = agent_runner.state();
+    let mut state = state_arc.lock().await;
+    state
+        .respond_to_request(&request_id, response)
+        .map_err(|e| format!("Failed to deliver agent response: {}", e))
 }
 
 /// Emit a run-agent-request event to the frontend

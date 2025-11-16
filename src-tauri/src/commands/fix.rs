@@ -4,14 +4,15 @@
 
 use crate::db::{self, queries};
 use crate::models::Fix;
-use crate::fix_generator::claude_client::ClaudeClient;
 use crate::git::GitOperations;
 use crate::security::path_validation;
 use crate::rate_limiter::{RateLimiter, RateLimiterConfig};
 use crate::utils::create_audit_event;
+use crate::langgraph::agent_runner::AgentRunner;
 use std::path::Path;
 use std::sync::Arc;
 use once_cell::sync::Lazy;
+use tauri::State;
 
 // Global rate limiter instance (shared across all fix generation calls)
 static RATE_LIMITER: Lazy<Arc<RateLimiter>> = Lazy::new(|| {
@@ -32,17 +33,23 @@ static RATE_LIMITER: Lazy<Arc<RateLimiter>> = Lazy::new(|| {
     Arc::new(RateLimiter::with_config(config))
 });
 
-/// Generate a fix for a violation using Claude AI
+/// Generate a fix for a violation using the LangGraph AI agent
 ///
-/// Calls the Claude API to generate a fix for a specific violation,
-/// stores the fix in the database with trust_level = "review"
+/// Invokes the TypeScript LangGraph agent via the Tauri bridge to generate a fix
+/// for a specific violation, stores the fix in the database with trust_level = "review"
 ///
 /// # Arguments
 /// * `violation_id` - ID of the violation to fix
+/// * `agent_runner` - Shared AgentRunner state for invoking the agent
+/// * `app` - Tauri AppHandle for emitting events to the frontend
 ///
 /// Returns: Generated Fix object or error
 #[tauri::command]
-pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
+pub async fn generate_fix(
+    violation_id: i64,
+    agent_runner: State<'_, AgentRunner>,
+    app: tauri::AppHandle,
+) -> Result<Fix, String> {
     // Phase 1: Read all required data from database (scoped to drop guard before awaits)
     let (violation, scan_project_id, _project_path, project_framework, file_path) = {
         let conn = db::get_connection();
@@ -71,28 +78,43 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
     }; // MutexGuard dropped here
 
     // Validate file exists (doesn't need DB connection)
-    let _file_content = std::fs::read_to_string(&file_path)
+    let file_content = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
-    // Phase 2: Async operations (no DB connection held)
-    // Check rate limit before calling Claude API
+    // Phase 2: Invoke LangGraph agent (no DB connection held)
+    // Check rate limit before calling agent
     RATE_LIMITER.check_rate_limit().await
         .map_err(|e| format!("API rate limit: {}", e))?;
 
-    // Call Claude API to generate fix
-    let client = ClaudeClient::new()
-        .map_err(|e| format!("Failed to create Claude client: {}", e))?;
+    // Run the LangGraph agent via the Tauri bridge
+    let agent_response = agent_runner
+        .run(
+            &app,
+            &violation.file_path,
+            &file_content,
+            &project_framework.as_deref().unwrap_or("unknown"),
+            vec![violation.clone()],
+        )
+        .await
+        .map_err(|e| format!("Failed to generate fix via agent: {}", e))?;
 
-    let fixed_code = client.generate_fix(
-        &violation.control_id,
-        &violation.description,
-        &violation.code_snippet,
-        &project_framework.as_deref().unwrap_or("unknown"),
-        violation.function_name.as_deref(),
-        violation.class_name.as_deref(),
-    )
-    .await
-    .map_err(|e| format!("Failed to generate fix: {}", e))?;
+    // Validate agent response
+    if !agent_response.success {
+        return Err(format!(
+            "Agent failed to generate fix: {}",
+            agent_response.error.unwrap_or_else(|| "Unknown error".to_string())
+        ));
+    }
+
+    // Extract the fix from the agent response
+    let agent_fix = agent_response
+        .fixes
+        .first()
+        .ok_or_else(|| "Agent did not generate any fixes".to_string())?;
+
+    // Convert agent fix to database fix
+    let fixed_code = agent_fix.fixed_code.clone();
+    let explanation = agent_fix.explanation.clone();
 
     // Phase 3: Write results back to database (scoped to drop guard immediately)
     let result = {
@@ -104,7 +126,7 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
             violation_id,
             original_code: violation.code_snippet.clone(),
             fixed_code,
-            explanation: format!("AI-generated fix for {}: {}", violation.control_id, violation.description),
+            explanation,
             trust_level: "review".to_string(),
             applied_at: None,
             applied_by: "ryn-ai".to_string(),

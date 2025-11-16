@@ -14,6 +14,7 @@
 use ryn::commands::{
     project, scan, violation, fix, audit, settings, analytics, langgraph
 };
+use ryn::langgraph::agent_runner::{AgentRunner, AgentRunnerConfig};
 
 fn main() {
     // Initialize database - REQUIRED for app to function properly
@@ -37,6 +38,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(scan::ScanResponseChannels::default())
         .manage(scan::FileWatcherState::default())
+        .manage(AgentRunner::new(AgentRunnerConfig::default()))
         .invoke_handler(tauri::generate_handler![
             // Project Commands (3)
             project::select_project_folder,
