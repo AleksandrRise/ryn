@@ -7,7 +7,7 @@ use crate::models::{Violation, Scan, DetectionMethod, Severity};
 use crate::scanner::framework_detector::FrameworkDetector;
 use crate::scanner::llm_file_selector;
 use crate::scanner::tree_sitter_utils::{CodeParser, find_context_at_line};
-use crate::scanner::SKIP_DIRECTORIES;
+use crate::scanner::{SKIP_DIRECTORIES, FileWatcher};
 use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12ResilienceRule};
 use crate::security::path_validation;
 use crate::fix_generator::claude_client::ClaudeClient;
@@ -21,6 +21,7 @@ use serde::Serialize;
 use tauri::Emitter;
 use tokio::sync::{oneshot, Semaphore};
 use tokio::time::{timeout, Duration};
+use crate::scanner::WatcherHandle;
 
 /// Progress event payload emitted during scan
 #[derive(Clone, Serialize)]
