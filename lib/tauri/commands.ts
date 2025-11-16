@@ -303,8 +303,8 @@ export async function complete_onboarding(
   costLimit: number
 ): Promise<void> {
   await invoke<void>("complete_onboarding", {
-    scan_mode: scanMode,
-    cost_limit: costLimit,
+    scanMode: scanMode,
+    costLimit: costLimit,
   })
 }
 
