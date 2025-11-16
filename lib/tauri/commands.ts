@@ -172,6 +172,21 @@ export async function get_scans(
   return await invoke<ScanResult[]>("get_scans", { projectId })
 }
 
+/**
+ * Start watching a project for real-time file changes
+ * Emits "file-changed" events whenever files are modified, created, or deleted
+ */
+export async function watch_project(projectId: number): Promise<string> {
+  return await invoke<string>("watch_project", { project_id: projectId })
+}
+
+/**
+ * Stop watching a project for file changes
+ */
+export async function stop_watching(projectId: number): Promise<string> {
+  return await invoke<string>("stop_watching", { project_id: projectId })
+}
+
 // ============================================================================
 // VIOLATION COMMANDS
 // ============================================================================

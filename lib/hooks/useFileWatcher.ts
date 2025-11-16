@@ -1,0 +1,222 @@
+/**
+ * Hook for real-time file watching functionality
+ *
+ * This hook manages the lifecycle of file watching for a project and listens
+ * for file change events emitted by the Rust backend. When files change, it
+ * displays toast notifications.
+ *
+ * Usage:
+ * ```typescript
+ * const { isWatching, startWatching, stopWatching } = useFileWatcher(projectId)
+ * ```
+ */
+
+"use client"
+
+import { useEffect, useState, useCallback } from "react"
+import { listen, type UnlistenFn } from "@tauri-apps/api/event"
+import { toast } from "sonner"
+import * as commands from "@/lib/tauri/commands"
+import type { FileChangedEvent } from "@/lib/types/events"
+
+interface UseFileWatcherOptions {
+  /**
+   * Whether to automatically start watching when the hook mounts
+   * @default false
+   */
+  autoStart?: boolean
+
+  /**
+   * Callback fired when a file change event is detected
+   * Useful for triggering UI updates like refreshing violations
+   */
+  onFileChanged?: (event: FileChangedEvent) => void
+
+  /**
+   * Whether to show toast notifications for file changes
+   * @default true
+   */
+  showNotifications?: boolean
+}
+
+interface UseFileWatcherReturn {
+  /** Whether the project is currently being watched */
+  isWatching: boolean
+
+  /** Whether a watch operation is currently in progress */
+  isLoading: boolean
+
+  /** Error message if watch/stop operations fail */
+  error: string | null
+
+  /** Start watching the project for file changes */
+  startWatching: () => Promise<void>
+
+  /** Stop watching the project for file changes */
+  stopWatching: () => Promise<void>
+}
+
+/**
+ * Hook for managing real-time file watching of a project
+ *
+ * @param projectId - The ID of the project to watch
+ * @param options - Configuration options
+ * @returns Object with watching state and control functions
+ *
+ * @example
+ * ```typescript
+ * function MyComponent() {
+ *   const { isWatching, startWatching, stopWatching } = useFileWatcher(123)
+ *
+ *   return (
+ *     <button onClick={startWatching} disabled={isWatching}>
+ *       {isWatching ? "Watching..." : "Start Watching"}
+ *     </button>
+ *   )
+ * }
+ * ```
+ */
+export function useFileWatcher(
+  projectId: number,
+  options: UseFileWatcherOptions = {}
+): UseFileWatcherReturn {
+  const {
+    autoStart = false,
+    onFileChanged,
+    showNotifications = true,
+  } = options
+
+  const [isWatching, setIsWatching] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Start watching for file changes
+  const startWatching = useCallback(async () => {
+    if (isWatching || isLoading) return
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      await commands.watch_project(projectId)
+      setIsWatching(true)
+
+      if (showNotifications) {
+        toast.success(`Started watching project for changes`)
+      }
+    } catch (err) {
+      const errorMsg =
+        err instanceof Error ? err.message : "Failed to start watching"
+      setError(errorMsg)
+
+      if (showNotifications) {
+        toast.error(`Failed to start watching: ${errorMsg}`)
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [projectId, isWatching, isLoading, showNotifications])
+
+  // Stop watching for file changes
+  const stopWatching = useCallback(async () => {
+    if (!isWatching || isLoading) return
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      await commands.stop_watching(projectId)
+      setIsWatching(false)
+
+      if (showNotifications) {
+        toast.success(`Stopped watching project`)
+      }
+    } catch (err) {
+      const errorMsg =
+        err instanceof Error ? err.message : "Failed to stop watching"
+      setError(errorMsg)
+
+      if (showNotifications) {
+        toast.error(`Failed to stop watching: ${errorMsg}`)
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [projectId, isWatching, isLoading, showNotifications])
+
+  // Set up event listener for file changes
+  useEffect(() => {
+    if (!isWatching) return
+
+    let unlisten: UnlistenFn | null = null
+
+    // Set up the event listener
+    const setupListener = async () => {
+      try {
+        unlisten = await listen<FileChangedEvent>(
+          "file-changed",
+          (event) => {
+            const payload = event.payload
+
+            // Only handle events for this project
+            if (payload.projectId !== projectId) return
+
+            // Call the user's callback if provided
+            if (onFileChanged) {
+              onFileChanged(payload)
+            }
+
+            // Show toast notification
+            if (showNotifications) {
+              const emoji =
+                payload.eventType === "deleted"
+                  ? "🗑️"
+                  : payload.eventType === "created"
+                    ? "✨"
+                    : "📝"
+
+              toast.info(
+                `File ${payload.eventType}: ${payload.filePath}`,
+                {
+                  description: `Project ID ${projectId}`,
+                }
+              )
+            }
+          }
+        )
+      } catch (err) {
+        const errorMsg =
+          err instanceof Error ? err.message : "Failed to set up listener"
+        setError(errorMsg)
+
+        if (showNotifications) {
+          toast.error(`File watcher error: ${errorMsg}`)
+        }
+      }
+    }
+
+    setupListener()
+
+    // Cleanup: unsubscribe from event when component unmounts or watching stops
+    return () => {
+      if (unlisten) {
+        unlisten()
+      }
+    }
+  }, [isWatching, projectId, onFileChanged, showNotifications])
+
+  // Auto-start watching if enabled
+  useEffect(() => {
+    if (autoStart && !isWatching && !isLoading) {
+      startWatching()
+    }
+  }, [autoStart, isWatching, isLoading, startWatching])
+
+  return {
+    isWatching,
+    isLoading,
+    error,
+    startWatching,
+    stopWatching,
+  }
+}

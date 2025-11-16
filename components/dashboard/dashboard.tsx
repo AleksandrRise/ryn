@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useProjectStore } from "@/lib/stores/project-store"
+import { useFileWatcher } from "@/lib/hooks/useFileWatcher"
 import {
   get_scans,
   get_violations,
@@ -15,6 +16,7 @@ import {
   type AuditEvent,
 } from "@/lib/tauri/commands"
 import { handleTauriError } from "@/lib/utils/error-handler"
+import type { FileChangedEvent } from "@/lib/types/events"
 
 export function Dashboard() {
   const router = useRouter()
@@ -30,6 +32,53 @@ export function Dashboard() {
   const [recentActivity, setRecentActivity] = useState<AuditEvent[]>([])
   const [totalScansCount, setTotalScansCount] = useState(0)
   const [fixesAppliedCount, setFixesAppliedCount] = useState(0)
+
+  // Callback for when files change - refresh dashboard data
+  const handleFileChanged = async (event: FileChangedEvent) => {
+    // Silently refresh dashboard data when files change
+    // Don't show loading state to avoid UI disruption
+    if (!selectedProject) return
+
+    try {
+      // Fetch latest scan for the project
+      const scans = await get_scans(selectedProject.id)
+      const latestScan = scans.length > 0 ? scans[0] : null
+      setLastScan(latestScan)
+
+      if (latestScan) {
+        // Fetch violations from latest scan
+        const allViolations = await get_violations(latestScan.id, {})
+
+        // Count violations by severity
+        const violationCounts = {
+          critical: allViolations.filter(v => v.severity === "critical").length,
+          high: allViolations.filter(v => v.severity === "high").length,
+          medium: allViolations.filter(v => v.severity === "medium").length,
+          low: allViolations.filter(v => v.severity === "low").length,
+        }
+        setViolations(violationCounts)
+      }
+
+      // Fetch recent audit events
+      const events = await get_audit_events({ limit: 4 })
+      setRecentActivity(events)
+
+      // Count fixes applied
+      const fixEvents = events.filter(e => e.event_type === "fix_applied")
+      setFixesAppliedCount(fixEvents.length)
+    } catch (error) {
+      // Silently fail on file change refresh - don't disturb user
+      console.error('[Dashboard] File change refresh error:', error)
+    }
+  }
+
+  // Set up file watcher for the selected project
+  // The hook will auto-start watching when selectedProject changes
+  useFileWatcher(selectedProject?.id || 0, {
+    autoStart: !!selectedProject,
+    onFileChanged: handleFileChanged,
+    showNotifications: true,
+  })
 
   const totalViolations = violations.critical + violations.high + violations.medium + violations.low
 

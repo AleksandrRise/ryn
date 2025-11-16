@@ -10,7 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Save, Download, Code, BarChart3, Sparkles } from "lucide-react"
+import { Save, Download, Code, BarChart3, Sparkles, Eye } from "lucide-react"
+import { useProjectStore } from "@/lib/stores/project-store"
+import { useFileWatcher } from "@/lib/hooks/useFileWatcher"
 import {
   get_settings,
   update_settings,
@@ -116,6 +118,12 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void 
 }
 
 export function Settings() {
+  const { selectedProject } = useProjectStore()
+  const { isWatching, startWatching, stopWatching, isLoading: isWatcherLoading } = useFileWatcher(
+    selectedProject?.id || 0,
+    { autoStart: false, showNotifications: true }
+  )
+
   const [state, setState] = useState<SettingsState>(defaultState)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -437,6 +445,33 @@ export function Settings() {
                 {state.continuousMonitoring ? "ON" : "OFF"}
               </button>
             </div>
+
+            {selectedProject && (
+              <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-white/60" />
+                    <p className="text-[14px] mb-1">Real-time file watching</p>
+                  </div>
+                  <p className="text-[12px] text-[#aaaaaa]">
+                    {isWatching
+                      ? `Monitoring ${selectedProject.name} for file changes`
+                      : "Watch project files for real-time changes"}
+                  </p>
+                </div>
+                <button
+                  onClick={isWatching ? stopWatching : startWatching}
+                  disabled={isWatcherLoading}
+                  className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 disabled:opacity-50 ${
+                    isWatching
+                      ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                      : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
+                  }`}
+                >
+                  {isWatcherLoading ? "..." : isWatching ? "ON" : "OFF"}
+                </button>
+              </div>
+            )}
 
             <div className="py-4 border-b border-[#1a1a1a]">
               <label className="block mb-2 text-sm font-medium">Scan frequency</label>
