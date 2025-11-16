@@ -12,7 +12,7 @@
 
 // Import command modules
 use ryn::commands::{
-    project, scan, violation, fix, audit, settings, analytics
+    project, scan, violation, fix, audit, settings, analytics, langgraph
 };
 
 fn main() {
@@ -67,6 +67,8 @@ fn main() {
             settings::complete_onboarding,
             // Analytics Commands (1)
             analytics::get_scan_costs,
+            // LangGraph Commands (1)
+            langgraph::run_agent_response,
         ])
         .run(tauri::generate_context!())
     {
