@@ -14,6 +14,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::Mutex;
 use std::collections::HashMap;
 use tokio::sync::oneshot;
+use tokio::time::{timeout, Duration};
+use crate::commands::langgraph::emit_agent_request_event;
 
 /**
  * Request payload sent to the TypeScript agent
@@ -253,13 +255,102 @@ impl AgentRunner {
     }
 
     /**
-     * Run the agent on code
+     * Run the agent on code via Tauri IPC
      *
-     * This method would invoke the TypeScript agent via Tauri IPC.
-     * Phase 3: Returns mock response for testing
-     * Phase 8+: Implements real Tauri invoke call
+     * This method implements the event-based bridge for communicating with the TypeScript agent.
+     * It registers a pending request, emits the run-agent-request event to the frontend,
+     * and awaits the response with a 30-second timeout.
+     *
+     * # Arguments
+     * * `app` - Tauri AppHandle for emitting events
+     * * `file_path` - Path to the file being analyzed
+     * * `code` - Source code to analyze
+     * * `framework` - Framework/language (django, flask, express, etc.)
+     * * `violations` - Database violations to include in the request
+     *
+     * # Returns
+     * AgentResponse with analysis results or an error if the request fails
      */
     pub async fn run(
+        &self,
+        app: &tauri::AppHandle,
+        file_path: &str,
+        code: &str,
+        framework: &str,
+        violations: Vec<Violation>,
+    ) -> Result<AgentResponse> {
+        // Validate input
+        if code.trim().is_empty() {
+            return Err(anyhow::anyhow!("Code cannot be empty"));
+        }
+
+        if file_path.trim().is_empty() {
+            return Err(anyhow::anyhow!("File path cannot be empty"));
+        }
+
+        // Convert violations for agent
+        let agent_violations: Vec<AgentViolation> = violations
+            .iter()
+            .map(violation_to_agent)
+            .collect();
+
+        // Create request
+        let request = AgentRequest {
+            file_path: file_path.to_string(),
+            code: code.to_string(),
+            framework: framework.to_string(),
+            violations: agent_violations,
+        };
+
+        // Register a pending request and get its ID
+        let (request_id, receiver) = {
+            let mut state = self.state.lock().await;
+            state.register_request()
+        };
+
+        // Emit the run-agent-request event to the TypeScript bridge
+        emit_agent_request_event(app, request_id.clone(), request)
+            .map_err(|e| anyhow::anyhow!("Failed to emit agent request: {}", e))?;
+
+        // Await the response with a 30-second timeout
+        match timeout(Duration::from_secs(30), receiver).await {
+            Ok(Ok(response)) => {
+                println!("[LangGraph] Received agent response for request {}", request_id);
+                Ok(response)
+            }
+            Ok(Err(_)) => {
+                Err(anyhow::anyhow!(
+                    "Agent sender dropped before sending response for request {}",
+                    request_id
+                ))
+            }
+            Err(_) => {
+                // Timeout occurred - clean up the pending request
+                {
+                    let mut state = self.state.lock().await;
+                    state.respond_to_request(&request_id, AgentResponse {
+                        success: false,
+                        violations: vec![],
+                        fixes: vec![],
+                        current_step: "timeout".to_string(),
+                        error: Some("Agent request timed out after 30 seconds".to_string()),
+                    }).ok();
+                }
+                Err(anyhow::anyhow!(
+                    "Agent request {} timed out after 30 seconds",
+                    request_id
+                ))
+            }
+        }
+    }
+
+    /**
+     * Run the agent using mock responses (for testing without Tauri AppHandle)
+     *
+     * This method is useful for unit tests that don't have access to a Tauri AppHandle.
+     * It bypasses the event-based bridge and returns pre-determined responses based on control IDs.
+     */
+    pub async fn run_mock(
         &self,
         file_path: &str,
         code: &str,
@@ -289,12 +380,8 @@ impl AgentRunner {
             violations: agent_violations,
         };
 
-        // In Phase 3, return mock response
-        // In Phase 8, this would be:
-        // let response: AgentResponse = invoke("run_agent", &request).await?;
-        let response = self.mock_run(&request)?;
-
-        Ok(response)
+        // Return mock response
+        self.mock_run(&request)
     }
 
     /**
