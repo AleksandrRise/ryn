@@ -6,13 +6,9 @@ pub mod constants;
 pub mod framework_detector;
 pub mod file_watcher;
 pub mod tree_sitter_utils;
-pub mod python_scanner;
-pub mod javascript_scanner;
 pub mod llm_file_selector;
 
 pub use constants::SKIP_DIRECTORIES;
 pub use framework_detector::FrameworkDetector;
 pub use file_watcher::{FileWatcher, FileEvent, WatcherHandle};
 pub use tree_sitter_utils::{CodeParser, ParseResult, ASTNode};
-pub use python_scanner::PythonScanner;
-pub use javascript_scanner::JavaScriptScanner;
