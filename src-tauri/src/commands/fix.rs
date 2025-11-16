@@ -33,22 +33,20 @@ static RATE_LIMITER: Lazy<Arc<RateLimiter>> = Lazy::new(|| {
     Arc::new(RateLimiter::with_config(config))
 });
 
-/// Generate a fix for a violation using the LangGraph AI agent
+/// Generate a fix for a violation using the AI agent (langchain-rust + Claude)
 ///
-/// Invokes the TypeScript LangGraph agent via the Tauri bridge to generate a fix
-/// for a specific violation, stores the fix in the database with trust_level = "review"
+/// Calls Claude API directly via langchain-rust to generate a fix for a specific violation,
+/// stores the fix in the database with trust_level = "review"
 ///
 /// # Arguments
 /// * `violation_id` - ID of the violation to fix
 /// * `agent_runner` - Shared AgentRunner state for invoking the agent
-/// * `app` - Tauri AppHandle for emitting events to the frontend
 ///
 /// Returns: Generated Fix object or error
 #[tauri::command]
 pub async fn generate_fix(
     violation_id: i64,
     agent_runner: State<'_, AgentRunner>,
-    app: tauri::AppHandle,
 ) -> Result<Fix, String> {
     // Phase 1: Read all required data from database (scoped to drop guard before awaits)
     let (violation, scan_project_id, _project_path, project_framework, file_path) = {
@@ -86,10 +84,9 @@ pub async fn generate_fix(
     RATE_LIMITER.check_rate_limit().await
         .map_err(|e| format!("API rate limit: {}", e))?;
 
-    // Run the LangGraph agent via the Tauri bridge
+    // Run the AI agent via langchain-rust Claude integration
     let agent_response = agent_runner
         .run(
-            &app,
             &violation.file_path,
             &file_content,
             &project_framework.as_deref().unwrap_or("unknown"),

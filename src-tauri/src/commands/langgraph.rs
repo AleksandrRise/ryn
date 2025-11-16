@@ -3,65 +3,48 @@
 //! Handles bidirectional communication between the Rust backend and TypeScript LangGraph agent
 //! via Tauri's IPC system.
 
-use crate::langgraph::agent_runner::{AgentResponse, AgentRequest, AgentRunner};
+use crate::langgraph::agent_runner::AgentResponse;
 use serde::Serialize;
-use tauri::{Emitter, State};
 
-/// Event payload emitted by Rust when requesting agent invocation
+/// Legacy event payload - no longer used since switching to direct Claude integration
 #[derive(Clone, Serialize, Debug)]
+#[allow(dead_code)]
 pub struct RunAgentRequestEvent {
-    /// Unique request ID for matching responses
     pub request_id: String,
-    /// Request payload sent to agent
-    pub request: AgentRequest,
 }
 
 /// Response from the TypeScript bridge after agent execution
 ///
-/// This command is called by the TypeScript bridge (lib/langgraph/tauri-bridge.ts)
-/// after the LangGraph agent completes processing.
-///
-/// It delivers the response to the waiting AgentRunner::run() call via the
-/// oneshot channel stored in AgentRunner's pending_responses HashMap.
+/// NOTE: This command is a legacy stub from the event-based bridge architecture.
+/// It's no longer used since we switched to direct Claude API integration via langchain-rust.
+/// Kept for backwards compatibility.
 #[tauri::command]
 pub async fn run_agent_response(
-    agent_runner: State<'_, AgentRunner>,
     request_id: String,
     response: AgentResponse,
 ) -> Result<(), String> {
     println!(
-        "[LangGraph] Received response for request_id: {} (success: {})",
+        "[LangGraph] Received legacy response for request_id: {} (success: {}) - No-op, using direct Claude integration",
         request_id, response.success
     );
-
-    // Deliver the response to the waiting AgentRunner::run() call
-    let state_arc = agent_runner.state();
-    let mut state = state_arc.lock().await;
-    state
-        .respond_to_request(&request_id, response)
-        .map_err(|e| format!("Failed to deliver agent response: {}", e))
+    Ok(())
 }
 
-/// Emit a run-agent-request event to the frontend
+/// Legacy event emission function - no longer used since switching to direct Claude integration
 ///
-/// Called by AgentRunner::run() to invoke the TypeScript agent
-///
-/// # Arguments
-/// * `app` - Tauri app handle for emitting events
-/// * `request_id` - Unique request ID for matching responses
-/// * `request` - Agent request payload
+/// NOTE: This function is a legacy stub from the event-based bridge architecture.
+/// It's no longer used since we switched to direct Claude API integration via langchain-rust.
+/// Kept for backwards compatibility.
+#[allow(dead_code)]
 pub fn emit_agent_request_event(
-    app: &tauri::AppHandle,
+    _app: &tauri::AppHandle,
     request_id: String,
-    request: AgentRequest,
 ) -> Result<(), String> {
-    let event = RunAgentRequestEvent {
-        request_id,
-        request,
-    };
-
-    app.emit("run-agent-request", &event)
-        .map_err(|e| format!("Failed to emit agent request: {}", e))
+    println!(
+        "[LangGraph] Legacy emit_agent_request_event called for request_id: {} - No-op, using direct Claude integration",
+        request_id
+    );
+    Ok(())
 }
 
 #[cfg(test)]
