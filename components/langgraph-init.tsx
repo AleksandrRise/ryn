@@ -11,7 +11,7 @@ import { initializeLangGraphBridge } from '@/lib/langgraph/tauri-bridge'
  */
 export function LangGraphInit() {
   useEffect(() => {
-    let unlistener: ReturnType<typeof initializeLangGraphBridge> | null = null
+    let unlistener: Awaited<ReturnType<typeof initializeLangGraphBridge>> | null = null
 
     const initialize = async () => {
       try {
