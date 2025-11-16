@@ -4,6 +4,7 @@
 
 use crate::db::{self, queries};
 use crate::models::Settings;
+use crate::utils::create_audit_event;
 
 /// Get all application settings
 ///
@@ -221,29 +222,6 @@ pub async fn complete_onboarding(scan_mode: String, cost_limit: f64) -> Result<(
     Ok(())
 }
 
-/// Helper function to create audit events
-fn create_audit_event(
-    _conn: &rusqlite::Connection,
-    event_type: &str,
-    project_id: Option<i64>,
-    violation_id: Option<i64>,
-    fix_id: Option<i64>,
-    description: &str,
-) -> anyhow::Result<crate::models::AuditEvent> {
-    use crate::models::AuditEvent;
-
-    Ok(AuditEvent {
-        id: 0,
-        event_type: event_type.to_string(),
-        project_id,
-        violation_id,
-        fix_id,
-        description: description.to_string(),
-        metadata: None,
-        created_at: chrono::Utc::now().to_rfc3339(),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use crate::db::test_helpers::TestDbGuard;
@@ -344,7 +322,7 @@ mod tests {
         let _ = update_settings("test_key".to_string(), "test_value".to_string()).await;
 
         // Verify audit event was created
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let mut stmt = conn
             .prepare("SELECT COUNT(*) FROM audit_events WHERE event_type = 'settings_updated'")
             .unwrap();

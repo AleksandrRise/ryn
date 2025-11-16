@@ -9,6 +9,7 @@ use crate::scanner::llm_file_selector;
 use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12ResilienceRule};
 use crate::security::path_validation;
 use crate::fix_generator::claude_client::ClaudeClient;
+use crate::utils::create_audit_event;
 use std::path::Path;
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -749,29 +750,6 @@ fn should_skip_path(path: &Path) -> bool {
     false
 }
 
-/// Helper function to create audit events
-fn create_audit_event(
-    _conn: &rusqlite::Connection,
-    event_type: &str,
-    project_id: Option<i64>,
-    violation_id: Option<i64>,
-    fix_id: Option<i64>,
-    description: &str,
-) -> anyhow::Result<crate::models::AuditEvent> {
-    use crate::models::AuditEvent;
-
-    Ok(AuditEvent {
-        id: 0,
-        event_type: event_type.to_string(),
-        project_id,
-        violation_id,
-        fix_id,
-        description: description.to_string(),
-        metadata: None,
-        created_at: chrono::Utc::now().to_rfc3339(),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -782,7 +760,7 @@ mod tests {
         let project_dir = tempfile::TempDir::new().unwrap();
         let path = project_dir.path().to_string_lossy().to_string();
 
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let project_id = queries::insert_project(&conn, "test-project", &path, None).unwrap();
         (project_dir, project_id)
     }
@@ -911,7 +889,7 @@ def get_user(user_id):
         assert!(scan.id > 0);
 
         // Verify scan exists in database
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let db_scan = queries::select_scan(&conn, scan.id).unwrap();
         assert!(db_scan.is_some());
     }
@@ -1058,7 +1036,7 @@ api_key = "sk-1234567890abcdef"
         let app = tauri::test::mock_app();
         let _scan_id = scan_project(app.handle().clone(), project_id).await.unwrap();
 
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let project = queries::select_project(&conn, project_id).unwrap().unwrap();
 
         // Framework should be detected during project creation or scan

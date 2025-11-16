@@ -2,8 +2,10 @@
 //!
 //! Provides environment variable handling, validation, and other common utilities.
 
+pub mod audit;
 pub mod env;
 
+pub use audit::create_audit_event;
 pub use env::{
     load_env, get_anthropic_key, validate_api_key, get_and_validate_api_key,
 };

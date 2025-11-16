@@ -75,7 +75,7 @@ mod tests {
     use crate::db::test_helpers::TestDbGuard;
 
     fn create_test_project(project_id: i64) -> i64 {
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let project_path = format!("/tmp/test-project-{}", project_id);
 
         // Create the directory
@@ -87,7 +87,7 @@ mod tests {
     }
 
     fn create_test_audit_event(event_type: &str, project_id: Option<i64>) -> i64 {
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
 
         // Ensure project exists if specified
         if let Some(pid) = project_id {

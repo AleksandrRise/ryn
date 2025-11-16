@@ -4,6 +4,7 @@
 
 use crate::db::{self, queries};
 use crate::models::{Violation, Control};
+use crate::utils::create_audit_event;
 use serde::{Deserialize, Serialize};
 
 /// Violation filter options
@@ -165,29 +166,6 @@ pub struct ViolationDetail {
     pub scan: Option<crate::models::Scan>,
 }
 
-/// Helper function to create audit events
-fn create_audit_event(
-    _conn: &rusqlite::Connection,
-    event_type: &str,
-    project_id: Option<i64>,
-    violation_id: Option<i64>,
-    fix_id: Option<i64>,
-    description: &str,
-) -> anyhow::Result<crate::models::AuditEvent> {
-    use crate::models::AuditEvent;
-
-    Ok(AuditEvent {
-        id: 0,
-        event_type: event_type.to_string(),
-        project_id,
-        violation_id,
-        fix_id,
-        description: description.to_string(),
-        metadata: None,
-        created_at: chrono::Utc::now().to_rfc3339(),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use crate::db::test_helpers::TestDbGuard;
@@ -201,7 +179,7 @@ mod tests {
     }
 
     fn create_test_violation(scan_id: i64) -> i64 {
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let violation = Violation {
             id: 0,
             scan_id,
@@ -223,14 +201,14 @@ mod tests {
     }
 
     fn create_test_scan(project_id: i64) -> i64 {
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         queries::insert_scan(&conn, project_id).unwrap()
     }
 
     fn create_test_project() -> i64 {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let path = temp_dir.path().to_string_lossy().to_string();
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let project_id = queries::insert_project(&conn, "test-project", &path, None).unwrap();
         std::mem::forget(temp_dir);
         project_id
@@ -273,7 +251,7 @@ mod tests {
         let scan_id = create_test_scan(project_id);
 
         // Create violations with different severities
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
 
         for severity in ["critical", "high", "medium"] {
             let violation = Violation {
@@ -317,7 +295,7 @@ mod tests {
         let scan_id = create_test_scan(project_id);
 
         // Create violations with different severities in random order
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
 
         for (i, severity) in ["low", "critical", "high", "medium"].iter().enumerate() {
             let violation = Violation {
@@ -401,7 +379,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify status changed
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let violation = queries::select_violation(&conn, violation_id)
             .unwrap()
             .unwrap();
@@ -427,7 +405,7 @@ mod tests {
         let _ = dismiss_violation(violation_id).await;
 
         // Verify audit event created
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let mut stmt = conn
             .prepare("SELECT COUNT(*) FROM audit_events WHERE violation_id = ?")
             .unwrap();
@@ -442,7 +420,7 @@ mod tests {
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
 
         // Create violations with different controls
         for control_id in ["CC6.1", "CC6.7", "CC7.2"] {
@@ -486,7 +464,7 @@ mod tests {
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
 
         // Create violations with different statuses
         for (i, status) in ["open", "fixed", "dismissed"].iter().enumerate() {
@@ -530,7 +508,7 @@ mod tests {
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
 
         // Create test violations
         let violation = Violation {

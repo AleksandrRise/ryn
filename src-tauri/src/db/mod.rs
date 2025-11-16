@@ -69,8 +69,9 @@ pub fn get_connection() -> std::sync::MutexGuard<'static, Connection> {
 }
 
 /// Initialize the database connection and run migrations
-/// DEPRECATED: Use get_connection() instead
-/// Kept for backward compatibility during migration
+/// NOTE: This creates a NEW connection each time. For most use cases, prefer get_connection()
+/// which returns the singleton connection. This function is primarily used in main.rs for
+/// early initialization with explicit error handling.
 pub fn init_db() -> Result<Connection> {
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)

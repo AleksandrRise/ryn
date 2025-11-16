@@ -8,6 +8,7 @@ use crate::fix_generator::claude_client::ClaudeClient;
 use crate::git::GitOperations;
 use crate::security::path_validation;
 use crate::rate_limiter::{RateLimiter, RateLimiterConfig};
+use crate::utils::create_audit_event;
 use std::path::Path;
 use std::sync::Arc;
 use once_cell::sync::Lazy;
@@ -265,29 +266,6 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
     Ok(commit_sha)
 }
 
-/// Helper function to create audit events
-fn create_audit_event(
-    _conn: &rusqlite::Connection,
-    event_type: &str,
-    project_id: Option<i64>,
-    violation_id: Option<i64>,
-    fix_id: Option<i64>,
-    description: &str,
-) -> anyhow::Result<crate::models::AuditEvent> {
-    use crate::models::AuditEvent;
-
-    Ok(AuditEvent {
-        id: 0,
-        event_type: event_type.to_string(),
-        project_id,
-        violation_id,
-        fix_id,
-        description: description.to_string(),
-        metadata: None,
-        created_at: chrono::Utc::now().to_rfc3339(),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use crate::db::test_helpers::TestDbGuard;
@@ -330,14 +308,14 @@ mod tests {
         );
 
         // Create project in database
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let project_id = queries::insert_project(&conn, "test-project", &path, None).unwrap();
 
         (project_dir, project_id)
     }
 
     fn create_test_violation_with_file(project_id: i64) -> (i64, i64) {
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
 
         // Get project path
         let project = queries::select_project(&conn, project_id).unwrap().unwrap();
@@ -409,7 +387,7 @@ mod tests {
         let path = project_dir.path().to_string_lossy().to_string();
 
         // Create project without git
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let project_id = queries::insert_project(&conn, "test-project", &path, None).unwrap();
 
         let scan_id = queries::insert_scan(&conn, project_id).unwrap();
@@ -475,7 +453,7 @@ mod tests {
 
         let result = generate_fix(violation_id).await;
         if result.is_ok() {
-            let conn = db::init_db().unwrap();
+            let conn = db::get_connection();
             let mut stmt = conn
                 .prepare("SELECT COUNT(*) FROM audit_events WHERE event_type = 'fix_generated'")
                 .unwrap();
@@ -492,7 +470,7 @@ mod tests {
         let (_scan_id, violation_id) = create_test_violation_with_file(project_id);
 
         // Create a fix manually for testing apply
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let fix = Fix {
             id: 0,
             violation_id,
@@ -525,7 +503,7 @@ mod tests {
         let (_project_dir, project_id) = create_test_project_with_git();
         let (_scan_id, violation_id) = create_test_violation_with_file(project_id);
 
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let fix = Fix {
             id: 0,
             violation_id,
@@ -570,7 +548,7 @@ mod tests {
         let _guard = TestDbGuard::new();
         let (project_dir, project_id) = create_test_project_with_git();
 
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let project = queries::select_project(&conn, project_id).unwrap().unwrap();
 
         // Create a file with the SAME CODE on multiple lines
@@ -662,7 +640,7 @@ mod tests {
         let _guard = TestDbGuard::new();
         let (project_dir, project_id) = create_test_project_with_git();
 
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let project = queries::select_project(&conn, project_id).unwrap().unwrap();
 
         // Create a file with only 3 lines
@@ -717,7 +695,7 @@ mod tests {
         let _guard = TestDbGuard::new();
         let (project_dir, project_id) = create_test_project_with_git();
 
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         let project = queries::select_project(&conn, project_id).unwrap().unwrap();
 
         // Create a file

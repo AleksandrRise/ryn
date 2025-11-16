@@ -4,6 +4,7 @@
 
 use crate::db::{self, queries};
 use crate::models::Project;
+use crate::utils::create_audit_event;
 use std::path::Path;
 
 /// Open a file dialog to select a project folder
@@ -110,28 +111,6 @@ pub async fn get_projects() -> Result<Vec<Project>, String> {
     Ok(projects)
 }
 
-/// Helper function to create audit events
-fn create_audit_event(
-    _conn: &rusqlite::Connection,
-    event_type: &str,
-    project_id: Option<i64>,
-    violation_id: Option<i64>,
-    fix_id: Option<i64>,
-    description: &str,
-) -> anyhow::Result<crate::models::AuditEvent> {
-    use crate::models::AuditEvent;
-
-    Ok(AuditEvent {
-        id: 0,
-        event_type: event_type.to_string(),
-        project_id,
-        violation_id,
-        fix_id,
-        description: description.to_string(),
-        metadata: None,
-        created_at: chrono::Utc::now().to_rfc3339(),
-    })
-}
 
 #[cfg(test)]
 mod tests {
