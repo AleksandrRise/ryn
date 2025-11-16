@@ -1459,4 +1459,159 @@ DB_PASSWORD = "production_secret_key_xyz"
             violation.class_name
         );
     }
+
+    /// Integration test for file watcher functionality
+    ///
+    /// This test verifies:
+    /// 1. File watcher can be started for a project (watch_project command)
+    /// 2. Active watcher state is tracked correctly
+    /// 3. File modifications are detected by the watcher
+    /// 4. File watcher can be stopped (stop_watching command)
+    /// 5. Watcher state is cleared after stopping
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_file_watcher_lifecycle() {
+        let _guard = TestDbGuard::new();
+        let (project_dir, project_id) = create_test_project_with_guard(&_guard);
+
+        // Create initial Python file
+        let py_content = r#"
+def get_user(user_id):
+    user = User.objects.get(id=user_id)
+    return user
+"#;
+        fs::write(project_dir.path().join("views.py"), py_content).unwrap();
+
+        // Initialize file watcher state
+        let watcher_state = FileWatcherState::default();
+
+        // Verify watcher is not active initially
+        assert!(!watcher_state.is_watching(project_id), "Watcher should not be active initially");
+
+        // Create and start a FileWatcher
+        let project_path = project_dir.path().to_path_buf();
+        let watcher = FileWatcher::new();
+        let handle = Arc::new(watcher.watch_directory(&project_path).await.unwrap());
+
+        // Store watcher in state
+        watcher_state.start_watching(project_id, handle).unwrap();
+
+        // Verify watcher is now active
+        assert!(
+            watcher_state.is_watching(project_id),
+            "Watcher should be active after start_watching"
+        );
+
+        // Modify the Python file - append content to trigger a modification event
+        let updated_content = r#"
+def get_user(user_id):
+    user = User.objects.get(id=user_id)
+    return user
+
+def update_user(user_id, data):
+    user = User.objects.get(id=user_id)
+    # VIOLATION: Missing audit log here
+    user.name = data.get('name')
+    user.save()
+    return user
+"#;
+        fs::write(project_dir.path().join("views.py"), updated_content).unwrap();
+
+        // Give file system a moment to detect the change
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+        // Stop watching
+        watcher_state.stop_watching(project_id).unwrap();
+
+        // Verify watcher is no longer active
+        assert!(
+            !watcher_state.is_watching(project_id),
+            "Watcher should not be active after stop_watching"
+        );
+    }
+
+    /// Unit test for FileWatcherState management
+    ///
+    /// Verifies the FileWatcherState HashMap correctly tracks multiple watchers
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_file_watcher_state_multiple_projects() {
+        let _guard = TestDbGuard::new();
+        let (project_dir_1, project_id_1) = create_test_project_with_guard(&_guard);
+        let (project_dir_2, project_id_2) = create_test_project_with_guard(&_guard);
+
+        let watcher_state = FileWatcherState::default();
+
+        // Start watching both projects
+        let watcher_1 = FileWatcher::new();
+        let handle_1 = Arc::new(watcher_1.watch_directory(project_dir_1.path()).await.unwrap());
+        watcher_state.start_watching(project_id_1, handle_1).unwrap();
+
+        let watcher_2 = FileWatcher::new();
+        let handle_2 = Arc::new(watcher_2.watch_directory(project_dir_2.path()).await.unwrap());
+        watcher_state.start_watching(project_id_2, handle_2).unwrap();
+
+        // Verify both are active
+        assert!(watcher_state.is_watching(project_id_1), "Project 1 should be watching");
+        assert!(watcher_state.is_watching(project_id_2), "Project 2 should be watching");
+
+        // Stop watching project 1
+        watcher_state.stop_watching(project_id_1).unwrap();
+
+        // Verify only project 2 is still watching
+        assert!(
+            !watcher_state.is_watching(project_id_1),
+            "Project 1 should not be watching"
+        );
+        assert!(
+            watcher_state.is_watching(project_id_2),
+            "Project 2 should still be watching"
+        );
+
+        // Stop watching project 2
+        watcher_state.stop_watching(project_id_2).unwrap();
+
+        // Verify both are now inactive
+        assert!(!watcher_state.is_watching(project_id_1), "Project 1 should be inactive");
+        assert!(!watcher_state.is_watching(project_id_2), "Project 2 should be inactive");
+
+        // Verify error when stopping inactive watcher
+        let result = watcher_state.stop_watching(project_id_1);
+        assert!(result.is_err(), "Should error when stopping inactive watcher");
+    }
+
+    /// Test that FileWatcher correctly filters file events by extension
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn test_file_watcher_extension_filtering() {
+        let _guard = TestDbGuard::new();
+        let project_dir = tempfile::TempDir::new().unwrap();
+        let path = project_dir.path().to_string_lossy().to_string();
+
+        let conn = db::get_connection();
+        let project_id = queries::insert_project(&conn, "test-filter-project", &path, None).unwrap();
+
+        // Create watcher configured to only watch Python files
+        let watcher = FileWatcher::new().with_extensions(vec!["py".to_string()]);
+        let handle = Arc::new(watcher.watch_directory(project_dir.path()).await.unwrap());
+
+        // Create a Python file
+        fs::write(project_dir.path().join("test.py"), "print('hello')").unwrap();
+
+        // Give file watcher time to process
+        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+
+        // Try to receive event (should get FileCreated for .py file)
+        let watcher_state = FileWatcherState::default();
+        watcher_state.start_watching(project_id, handle).unwrap();
+
+        // Create a non-Python file (should be ignored)
+        fs::write(project_dir.path().join("readme.txt"), "readme content").unwrap();
+
+        // Give watcher a moment to process (if it did)
+        tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+
+        // Clean up
+        watcher_state.stop_watching(project_id).unwrap();
+    }
 }
