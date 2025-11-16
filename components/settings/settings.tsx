@@ -102,13 +102,13 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void 
   return (
     <button
       onClick={onChange}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-        enabled ? "bg-white" : "bg-white/20"
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 hover:scale-105 active:scale-95 ${
+        enabled ? "bg-white shadow-md" : "bg-white/20 hover:bg-white/30"
       }`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
-          enabled ? "translate-x-6 bg-black" : "translate-x-1 bg-white/60"
+        className={`inline-block h-4 w-4 transform rounded-full transition-all duration-300 ${
+          enabled ? "translate-x-6 bg-black shadow-sm" : "translate-x-1 bg-white/60"
         }`}
       />
     </button>
@@ -388,10 +388,10 @@ export function Settings() {
               </div>
               <button
                 onClick={() => updateSetting("autoApplyLow", !state.autoApplyLow)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
                   state.autoApplyLow
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
                 }`}
               >
                 {state.autoApplyLow ? "ON" : "OFF"}
@@ -405,10 +405,10 @@ export function Settings() {
               </div>
               <button
                 onClick={() => updateSetting("autoApplyMedium", !state.autoApplyMedium)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
                   state.autoApplyMedium
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
                 }`}
               >
                 {state.autoApplyMedium ? "ON" : "OFF"}
@@ -428,10 +428,10 @@ export function Settings() {
               </div>
               <button
                 onClick={() => updateSetting("continuousMonitoring", !state.continuousMonitoring)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
                   state.continuousMonitoring
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
                 }`}
               >
                 {state.continuousMonitoring ? "ON" : "OFF"}
@@ -488,11 +488,11 @@ export function Settings() {
             </div>
 
             <div className="space-y-4">
-              <button onClick={handleClearDatabase} className="text-[13px] hover:underline">
+              <button onClick={handleClearDatabase} className="text-[13px] hover:underline transition-all duration-200 hover:text-white hover:translate-x-0.5">
                 Clear scan history
               </button>
               <span className="text-[#aaaaaa] mx-2">•</span>
-              <button onClick={handleExportAll} className="text-[13px] hover:underline">
+              <button onClick={handleExportAll} className="text-[13px] hover:underline transition-all duration-200 hover:text-white hover:translate-x-0.5">
                 Export all data
               </button>
             </div>
@@ -510,10 +510,10 @@ export function Settings() {
               </div>
               <button
                 onClick={() => updateSetting("desktopNotifications", !state.desktopNotifications)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
                   state.desktopNotifications
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
                 }`}
               >
                 {state.desktopNotifications ? "ON" : "OFF"}
@@ -527,10 +527,10 @@ export function Settings() {
               </div>
               <button
                 onClick={() => updateSetting("emailAlerts", !state.emailAlerts)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
                   state.emailAlerts
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
                 }`}
               >
                 {state.emailAlerts ? "ON" : "OFF"}
@@ -560,7 +560,7 @@ export function Settings() {
               <p className="text-[12px] text-[#aaaaaa] mb-4">
                 Get real-time compliance feedback as you code
               </p>
-              <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-colors">
+              <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-white/20">
                 Download Extension →
               </button>
             </div>
@@ -570,7 +570,7 @@ export function Settings() {
               <p className="text-[12px] text-[#aaaaaa] mb-4">
                 Support for IntelliJ IDEA, PyCharm, WebStorm, and more
               </p>
-              <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-colors">
+              <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-white/20 opacity-60 cursor-not-allowed" disabled>
                 Coming Soon
               </button>
             </div>
