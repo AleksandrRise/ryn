@@ -97,6 +97,54 @@ impl ScanResponseChannels {
     }
 }
 
+/// File watcher state for managing active file watchers by project
+///
+/// This state manages WatcherHandle instances for each project_id.
+/// When a project's watcher is stopped, its handle is dropped, which
+/// causes the watcher task to terminate gracefully.
+#[derive(Default, Clone)]
+pub struct FileWatcherState {
+    /// Map of project_id -> WatcherHandle for active watchers
+    ///
+    /// When watch_project is called:
+    /// 1. Create FileWatcher for project path
+    /// 2. Spawn task to receive events and emit file-changed events
+    /// 3. Store WatcherHandle in this map
+    ///
+    /// When stop_watching is called:
+    /// 1. Remove WatcherHandle from map (causing drop, stopping watcher)
+    active_watchers: Arc<Mutex<HashMap<i64, Arc<WatcherHandle>>>>,
+}
+
+impl FileWatcherState {
+    /// Start watching a project for file changes
+    ///
+    /// Creates and stores a FileWatcher for the given project
+    pub fn start_watching(&self, project_id: i64, handle: Arc<WatcherHandle>) -> Result<(), String> {
+        let mut watchers = self.active_watchers.lock().unwrap();
+        watchers.insert(project_id, handle);
+        Ok(())
+    }
+
+    /// Stop watching a project
+    ///
+    /// Removes and drops the WatcherHandle, stopping the file watcher
+    pub fn stop_watching(&self, project_id: i64) -> Result<(), String> {
+        let mut watchers = self.active_watchers.lock().unwrap();
+        if watchers.remove(&project_id).is_some() {
+            Ok(())
+        } else {
+            Err(format!("No active watcher for project {}", project_id))
+        }
+    }
+
+    /// Check if a project is being watched
+    pub fn is_watching(&self, project_id: i64) -> bool {
+        let watchers = self.active_watchers.lock().unwrap();
+        watchers.contains_key(&project_id)
+    }
+}
+
 /// Detect the framework of a project
 ///
 /// Uses file analysis to identify the web framework in use
@@ -353,6 +401,119 @@ async fn scan_project_internal<R: tauri::Runtime>(
     }; // Connection dropped here
 
     Ok(scan)
+}
+
+/// Start watching a project for file changes
+///
+/// Spawns a FileWatcher on the project directory and emits "file-changed" events
+/// to the frontend whenever files are modified, created, or deleted.
+///
+/// # Arguments
+/// * `app` - Tauri application handle for emitting events
+/// * `watcher_state` - Global state for managing active watchers
+/// * `project_id` - ID of the project to start watching
+///
+/// Returns: Success message or error
+#[tauri::command]
+pub async fn watch_project<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    watcher_state: tauri::State<'_, FileWatcherState>,
+    project_id: i64,
+) -> Result<String, String> {
+    // Check if already watching this project
+    if watcher_state.is_watching(project_id) {
+        return Err(format!("Project {} is already being watched", project_id));
+    }
+
+    // Get project from database
+    let project = {
+        let conn = db::get_connection();
+        queries::select_project(&conn, project_id)
+            .map_err(|e| format!("Failed to fetch project: {}", e))?
+            .ok_or_else(|| format!("Project not found: {}", project_id))?
+    };
+
+    // Validate project path
+    path_validation::validate_project_path(Path::new(&project.path))
+        .map_err(|e| format!("Invalid project path: {}", e))?;
+
+    // Create file watcher with default settings (filters .py, .js, .ts, .jsx, .tsx files)
+    let watcher = FileWatcher::new();
+    let watch_path = Path::new(&project.path);
+
+    // Start watching the directory
+    let watcher_handle = watcher
+        .watch_directory(watch_path)
+        .await
+        .map_err(|e| format!("Failed to start file watcher: {}", e))?;
+
+    let handle = Arc::new(watcher_handle);
+    let handle_clone = handle.clone();
+
+    // Store handle in state immediately
+    watcher_state.start_watching(project_id, handle)?;
+
+    // Spawn task to receive events and emit to frontend
+    tokio::spawn(async move {
+        loop {
+            match handle_clone.recv().await {
+                Some(event) => {
+                    // Create event payload
+                    #[derive(Serialize)]
+                    struct FileChangedEvent {
+                        project_id: i64,
+                        file_path: String,
+                        event_type: String,
+                    }
+
+                    let (file_path, event_type) = match event {
+                        crate::scanner::FileEvent::FileModified { path } => {
+                            (path.to_string_lossy().to_string(), "modified".to_string())
+                        }
+                        crate::scanner::FileEvent::FileCreated { path } => {
+                            (path.to_string_lossy().to_string(), "created".to_string())
+                        }
+                        crate::scanner::FileEvent::FileDeleted { path } => {
+                            (path.to_string_lossy().to_string(), "deleted".to_string())
+                        }
+                    };
+
+                    let payload = FileChangedEvent {
+                        project_id,
+                        file_path,
+                        event_type,
+                    };
+
+                    // Emit event to all frontend listeners
+                    let _ = app.emit("file-changed", &payload);
+                }
+                None => {
+                    // Watcher closed - exit loop
+                    break;
+                }
+            }
+        }
+    });
+
+    Ok(format!("Started watching project {}", project_id))
+}
+
+/// Stop watching a project for file changes
+///
+/// Stops the file watcher for the given project and cleans up resources.
+///
+/// # Arguments
+/// * `watcher_state` - Global state for managing active watchers
+/// * `project_id` - ID of the project to stop watching
+///
+/// Returns: Success message or error if project wasn't being watched
+#[tauri::command]
+pub async fn stop_watching(
+    watcher_state: tauri::State<'_, FileWatcherState>,
+    project_id: i64,
+) -> Result<String, String> {
+    watcher_state.stop_watching(project_id)?;
+    Ok(format!("Stopped watching project {}", project_id))
 }
 
 /// Analyze collected files with Claude Haiku LLM

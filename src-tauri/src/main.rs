@@ -36,14 +36,17 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(scan::ScanResponseChannels::default())
+        .manage(scan::FileWatcherState::default())
         .invoke_handler(tauri::generate_handler![
             // Project Commands (3)
             project::select_project_folder,
             project::create_project,
             project::get_projects,
-            // Scan Commands (5)
+            // Scan Commands (7) - added watch_project and stop_watching
             scan::detect_framework,
             scan::scan_project,
+            scan::watch_project,
+            scan::stop_watching,
             scan::get_scan_progress,
             scan::get_scans,
             scan::respond_to_cost_limit,
