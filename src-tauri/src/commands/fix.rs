@@ -367,8 +367,8 @@ mod tests {
         // Note: This will fail without proper Claude API key, but we're testing the structure
         // In production, this would call the actual API
         let result = generate_fix(violation_id).await;
-        // We expect error due to no API key, but verify it tried to process
-        assert!(result.is_err() || result.is_ok());
+        // We expect error due to no API key
+        assert!(result.is_err(), "Should return error when API key is not configured");
     }
 
     #[tokio::test]

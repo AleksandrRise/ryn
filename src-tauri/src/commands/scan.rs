@@ -6,6 +6,7 @@ use crate::db::{self, queries};
 use crate::models::{Violation, Scan, DetectionMethod, Severity};
 use crate::scanner::framework_detector::FrameworkDetector;
 use crate::scanner::llm_file_selector;
+use crate::scanner::SKIP_DIRECTORIES;
 use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12ResilienceRule};
 use crate::security::path_validation;
 use crate::fix_generator::claude_client::ClaudeClient;
@@ -731,16 +732,10 @@ fn run_all_rules(code: &str, file_path: &str, scan_id: i64) -> Vec<Violation> {
 
 /// Determine if a path should be skipped during scanning
 fn should_skip_path(path: &Path) -> bool {
-    let skip_dirs = [
-        "node_modules", ".git", "venv", ".venv", "__pycache__", "dist", "build",
-        ".tox", ".pytest_cache", ".coverage", "target", ".cargo", "vendor",
-        ".next", "out", "build", ".babel_cache", ".cache", "coverage"
-    ];
-
     for component in path.components() {
         if let std::path::Component::Normal(name) = component {
             if let Some(name_str) = name.to_str() {
-                if skip_dirs.contains(&name_str) || name_str.starts_with('.') {
+                if SKIP_DIRECTORIES.contains(&name_str) || name_str.starts_with('.') {
                     return true;
                 }
             }
@@ -1039,8 +1034,8 @@ api_key = "sk-1234567890abcdef"
         let conn = db::get_connection();
         let project = queries::select_project(&conn, project_id).unwrap().unwrap();
 
-        // Framework should be detected during project creation or scan
-        assert!(project.framework.is_some() || project.framework.is_none());
+        // Framework should be detected during scan (manage.py indicates Django)
+        assert!(project.framework.is_some(), "Framework should be detected from manage.py file");
     }
 
     #[tokio::test]

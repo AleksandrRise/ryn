@@ -2,6 +2,7 @@
 //!
 //! Monitors project files for changes in real-time using the notify crate.
 
+use super::SKIP_DIRECTORIES;
 use anyhow::{anyhow, Result};
 use notify::{RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
@@ -186,14 +187,7 @@ impl FileWatcher {
 impl Default for FileWatcher {
     fn default() -> Self {
         Self {
-            ignore_patterns: vec![
-                ".git".to_string(),
-                "__pycache__".to_string(),
-                "node_modules".to_string(),
-                ".pytest_cache".to_string(),
-                ".venv".to_string(),
-                "target".to_string(),
-            ],
+            ignore_patterns: SKIP_DIRECTORIES.iter().map(|s| s.to_string()).collect(),
             extensions: vec![
                 "py".to_string(),
                 "js".to_string(),
@@ -216,7 +210,7 @@ mod tests {
     #[test]
     fn test_file_watcher_default() {
         let watcher = FileWatcher::default();
-        assert_eq!(watcher.ignore_patterns.len(), 6);
+        assert_eq!(watcher.ignore_patterns.len(), SKIP_DIRECTORIES.len());
         assert_eq!(watcher.extensions.len(), 5);
         assert!(watcher.ignore_patterns.contains(&".git".to_string()));
         assert!(watcher.extensions.contains(&"py".to_string()));
