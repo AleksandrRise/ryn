@@ -12,12 +12,34 @@ pub struct TestDbGuard {
 }
 
 impl TestDbGuard {
-    /// Create a new test environment with isolated database
+    /// Create a new test environment with SHARED test database
     ///
-    /// Uses a unique temporary directory and sets RYN_DATA_DIR env var
+    /// All tests use /tmp/ryn-test/ to work with the singleton DB_CONNECTION
+    /// Tests run serially (#[serial_test::serial]) so no conflicts occur
     pub fn new() -> Self {
+        let test_dir = std::path::PathBuf::from("/tmp/ryn-test");
+        std::fs::create_dir_all(&test_dir).unwrap();
+        std::env::set_var("RYN_DATA_DIR", &test_dir);
+
+        // Clear all data from existing database tables
+        // Don't delete the DB file since singleton holds a connection to it
+        let db_path = test_dir.join("ryn.db");
+        if db_path.exists() {
+            if let Ok(conn) = Connection::open(&db_path) {
+                let _ = conn.execute("DELETE FROM fixes", []);
+                let _ = conn.execute("DELETE FROM violations", []);
+                let _ = conn.execute("DELETE FROM scans", []);
+                let _ = conn.execute("DELETE FROM scan_costs", []);
+                let _ = conn.execute("DELETE FROM audit_events", []);
+                let _ = conn.execute("DELETE FROM projects", []);
+                let _ = conn.execute("DELETE FROM settings", []);
+                // Reset auto-increment counters so IDs start from 1 in each test
+                let _ = conn.execute("DELETE FROM sqlite_sequence", []);
+            }
+        }
+
+        // Use a fake temp_dir to satisfy struct requirement
         let temp_dir = tempfile::TempDir::new().unwrap();
-        std::env::set_var("RYN_DATA_DIR", temp_dir.path());
 
         TestDbGuard { temp_dir }
     }

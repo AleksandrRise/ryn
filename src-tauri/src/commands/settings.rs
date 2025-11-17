@@ -322,12 +322,14 @@ mod tests {
         let _ = update_settings("test_key".to_string(), "test_value".to_string()).await;
 
         // Verify audit event was created
-        let conn = db::get_connection();
-        let mut stmt = conn
-            .prepare("SELECT COUNT(*) FROM audit_events WHERE event_type = 'settings_updated'")
-            .unwrap();
-        let count: i64 = stmt.query_row([], |row| row.get(0)).unwrap();
-        assert_eq!(count, 1);
+        {
+            let conn = db::get_connection();
+            let mut stmt = conn
+                .prepare("SELECT COUNT(*) FROM audit_events WHERE event_type = 'settings_updated'")
+                .unwrap();
+            let count: i64 = stmt.query_row([], |row| row.get(0)).unwrap();
+            assert_eq!(count, 1);
+        }
     }
 
     #[tokio::test]

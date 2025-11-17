@@ -1294,11 +1294,13 @@ api_key = "sk-1234567890abcdef"
         let app = tauri::test::mock_app();
         let _scan_id = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await.unwrap();
 
-        let conn = db::get_connection();
-        let project = queries::select_project(&conn, project_id).unwrap().unwrap();
+        {
+            let conn = db::get_connection();
+            let project = queries::select_project(&conn, project_id).unwrap().unwrap();
 
-        // Framework should be detected during scan (manage.py indicates Django)
-        assert!(project.framework.is_some(), "Framework should be detected from manage.py file");
+            // Framework should be detected during scan (manage.py indicates Django)
+            assert!(project.framework.is_some(), "Framework should be detected from manage.py file");
+        }
     }
 
     #[tokio::test]

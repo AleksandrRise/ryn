@@ -80,33 +80,52 @@ mod tests {
     #[serial_test::serial]
     async fn test_get_scan_costs_all() {
         let _guard = TestDbGuard::new();
-        let conn = db::get_connection();
 
-        // Create a scan cost record
-        let scan_cost = ScanCost::new(1, 10, 10_000, 2_000, 5_000, 3_000);
-        queries::insert_scan_cost(&conn, &scan_cost).unwrap();
+        let scan_id = {
+            let conn = db::get_connection();
+
+            // Create parent project and scan first (required for foreign key constraint)
+            let project_id = queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
+            let scan_id = queries::insert_scan(&conn, project_id).unwrap();
+
+            // Create a scan cost record
+            let scan_cost = ScanCost::new(scan_id, 10, 10_000, 2_000, 5_000, 3_000);
+            queries::insert_scan_cost(&conn, &scan_cost).unwrap();
+
+            scan_id
+        }; // MutexGuard dropped here
 
         let result = get_scan_costs(TimeRange::All).await;
         assert!(result.is_ok());
         let costs = result.unwrap();
         assert_eq!(costs.len(), 1);
-        assert_eq!(costs[0].scan_id, 1);
+        assert_eq!(costs[0].scan_id, scan_id);
     }
 
     #[tokio::test]
     #[serial_test::serial]
     async fn test_get_scan_costs_24h() {
         let _guard = TestDbGuard::new();
-        let conn = db::get_connection();
 
-        // Create a recent scan cost (within 24h)
-        let recent_cost = ScanCost::new(1, 10, 10_000, 2_000, 0, 0);
-        queries::insert_scan_cost(&conn, &recent_cost).unwrap();
+        let scan_id_1 = {
+            let conn = db::get_connection();
 
-        // Create an old scan cost (older than 24h)
-        let mut old_cost = ScanCost::new(2, 5, 5_000, 1_000, 0, 0);
-        old_cost.created_at = (chrono::Utc::now() - chrono::Duration::days(2)).to_rfc3339();
-        queries::insert_scan_cost(&conn, &old_cost).unwrap();
+            // Create parent project and scans first (required for foreign key constraint)
+            let project_id = queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
+            let scan_id_1 = queries::insert_scan(&conn, project_id).unwrap();
+            let scan_id_2 = queries::insert_scan(&conn, project_id).unwrap();
+
+            // Create a recent scan cost (within 24h)
+            let recent_cost = ScanCost::new(scan_id_1, 10, 10_000, 2_000, 0, 0);
+            queries::insert_scan_cost(&conn, &recent_cost).unwrap();
+
+            // Create an old scan cost (older than 24h)
+            let mut old_cost = ScanCost::new(scan_id_2, 5, 5_000, 1_000, 0, 0);
+            old_cost.created_at = (chrono::Utc::now() - chrono::Duration::days(2)).to_rfc3339();
+            queries::insert_scan_cost(&conn, &old_cost).unwrap();
+
+            scan_id_1
+        }; // MutexGuard dropped here
 
         let result = get_scan_costs(TimeRange::TwentyFourHours).await;
         assert!(result.is_ok());
@@ -114,26 +133,35 @@ mod tests {
 
         // Should only get the recent one
         assert_eq!(costs.len(), 1);
-        assert_eq!(costs[0].scan_id, 1);
+        assert_eq!(costs[0].scan_id, scan_id_1);
     }
 
     #[tokio::test]
     #[serial_test::serial]
     async fn test_get_scan_costs_7d() {
         let _guard = TestDbGuard::new();
-        let conn = db::get_connection();
 
-        // Create costs at different times
-        let recent = ScanCost::new(1, 10, 10_000, 2_000, 0, 0);
-        queries::insert_scan_cost(&conn, &recent).unwrap();
+        {
+            let conn = db::get_connection();
 
-        let mut week_old = ScanCost::new(2, 5, 5_000, 1_000, 0, 0);
-        week_old.created_at = (chrono::Utc::now() - chrono::Duration::days(5)).to_rfc3339();
-        queries::insert_scan_cost(&conn, &week_old).unwrap();
+            // Create parent project and scans first (required for foreign key constraint)
+            let project_id = queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
+            let scan_id_1 = queries::insert_scan(&conn, project_id).unwrap();
+            let scan_id_2 = queries::insert_scan(&conn, project_id).unwrap();
+            let scan_id_3 = queries::insert_scan(&conn, project_id).unwrap();
 
-        let mut month_old = ScanCost::new(3, 3, 3_000, 500, 0, 0);
-        month_old.created_at = (chrono::Utc::now() - chrono::Duration::days(20)).to_rfc3339();
-        queries::insert_scan_cost(&conn, &month_old).unwrap();
+            // Create costs at different times
+            let recent = ScanCost::new(scan_id_1, 10, 10_000, 2_000, 0, 0);
+            queries::insert_scan_cost(&conn, &recent).unwrap();
+
+            let mut week_old = ScanCost::new(scan_id_2, 5, 5_000, 1_000, 0, 0);
+            week_old.created_at = (chrono::Utc::now() - chrono::Duration::days(5)).to_rfc3339();
+            queries::insert_scan_cost(&conn, &week_old).unwrap();
+
+            let mut month_old = ScanCost::new(scan_id_3, 3, 3_000, 500, 0, 0);
+            month_old.created_at = (chrono::Utc::now() - chrono::Duration::days(20)).to_rfc3339();
+            queries::insert_scan_cost(&conn, &month_old).unwrap();
+        }; // MutexGuard dropped here
 
         let result = get_scan_costs(TimeRange::SevenDays).await;
         assert!(result.is_ok());
@@ -147,15 +175,23 @@ mod tests {
     #[serial_test::serial]
     async fn test_get_scan_costs_30d() {
         let _guard = TestDbGuard::new();
-        let conn = db::get_connection();
 
-        // Create costs at different times
-        let recent = ScanCost::new(1, 10, 10_000, 2_000, 0, 0);
-        queries::insert_scan_cost(&conn, &recent).unwrap();
+        {
+            let conn = db::get_connection();
 
-        let mut month_old = ScanCost::new(2, 5, 5_000, 1_000, 0, 0);
-        month_old.created_at = (chrono::Utc::now() - chrono::Duration::days(20)).to_rfc3339();
-        queries::insert_scan_cost(&conn, &month_old).unwrap();
+            // Create parent project and scans first (required for foreign key constraint)
+            let project_id = queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
+            let scan_id_1 = queries::insert_scan(&conn, project_id).unwrap();
+            let scan_id_2 = queries::insert_scan(&conn, project_id).unwrap();
+
+            // Create costs at different times
+            let recent = ScanCost::new(scan_id_1, 10, 10_000, 2_000, 0, 0);
+            queries::insert_scan_cost(&conn, &recent).unwrap();
+
+            let mut month_old = ScanCost::new(scan_id_2, 5, 5_000, 1_000, 0, 0);
+            month_old.created_at = (chrono::Utc::now() - chrono::Duration::days(20)).to_rfc3339();
+            queries::insert_scan_cost(&conn, &month_old).unwrap();
+        }; // MutexGuard dropped here
 
         let result = get_scan_costs(TimeRange::ThirtyDays).await;
         assert!(result.is_ok());

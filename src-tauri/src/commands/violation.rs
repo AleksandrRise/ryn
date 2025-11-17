@@ -179,7 +179,6 @@ mod tests {
     }
 
     fn create_test_violation(scan_id: i64) -> i64 {
-        let conn = db::get_connection();
         let violation = Violation {
             id: 0,
             scan_id,
@@ -199,6 +198,7 @@ mod tests {
             class_name: None,
         };
 
+        let conn = db::get_connection();
         queries::insert_violation(&conn, &violation).unwrap()
     }
 
@@ -210,8 +210,10 @@ mod tests {
     fn create_test_project() -> i64 {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let path = temp_dir.path().to_string_lossy().to_string();
-        let conn = db::get_connection();
-        let project_id = queries::insert_project(&conn, "test-project", &path, None).unwrap();
+        let project_id = {
+            let conn = db::get_connection();
+            queries::insert_project(&conn, "test-project", &path, None).unwrap()
+        };
         std::mem::forget(temp_dir);
         project_id
     }
@@ -253,28 +255,30 @@ mod tests {
         let scan_id = create_test_scan(project_id);
 
         // Create violations with different severities
-        let conn = db::get_connection();
+        {
+            let conn = db::get_connection();
 
-        for severity in ["critical", "high", "medium"] {
-            let violation = Violation {
-                id: 0,
-                scan_id,
-                control_id: "CC6.1".to_string(),
-                severity: severity.to_string(),
-                description: format!("Violation with {} severity", severity),
-                file_path: "test.py".to_string(),
-                line_number: 1,
-                code_snippet: "code".to_string(),
-                status: "open".to_string(),
-                detected_at: chrono::Utc::now().to_rfc3339(),
-                detection_method: "regex".to_string(),
-                confidence_score: None,
-                llm_reasoning: None,
-                regex_reasoning: None,
-            function_name: None,
-            class_name: None,
-            };
-            let _ = queries::insert_violation(&conn, &violation);
+            for severity in ["critical", "high", "medium"] {
+                let violation = Violation {
+                    id: 0,
+                    scan_id,
+                    control_id: "CC6.1".to_string(),
+                    severity: severity.to_string(),
+                    description: format!("Violation with {} severity", severity),
+                    file_path: "test.py".to_string(),
+                    line_number: 1,
+                    code_snippet: "code".to_string(),
+                    status: "open".to_string(),
+                    detected_at: chrono::Utc::now().to_rfc3339(),
+                    detection_method: "regex".to_string(),
+                    confidence_score: None,
+                    llm_reasoning: None,
+                    regex_reasoning: None,
+                function_name: None,
+                class_name: None,
+                };
+                let _ = queries::insert_violation(&conn, &violation);
+            }
         }
 
         let filters = ViolationFilters {
@@ -299,28 +303,30 @@ mod tests {
         let scan_id = create_test_scan(project_id);
 
         // Create violations with different severities in random order
-        let conn = db::get_connection();
+        {
+            let conn = db::get_connection();
 
-        for (i, severity) in ["low", "critical", "high", "medium"].iter().enumerate() {
-            let violation = Violation {
-                id: 0,
-                scan_id,
-                control_id: "CC6.1".to_string(),
-                severity: severity.to_string(),
-                description: format!("Violation {}", i),
-                file_path: "test.py".to_string(),
-                line_number: (i as i64) + 1,
-                code_snippet: "code".to_string(),
-                status: "open".to_string(),
-                detected_at: chrono::Utc::now().to_rfc3339(),
-                detection_method: "regex".to_string(),
-                confidence_score: None,
-                llm_reasoning: None,
-                regex_reasoning: None,
-            function_name: None,
-            class_name: None,
-            };
-            let _ = queries::insert_violation(&conn, &violation);
+            for (i, severity) in ["low", "critical", "high", "medium"].iter().enumerate() {
+                let violation = Violation {
+                    id: 0,
+                    scan_id,
+                    control_id: "CC6.1".to_string(),
+                    severity: severity.to_string(),
+                    description: format!("Violation {}", i),
+                    file_path: "test.py".to_string(),
+                    line_number: (i as i64) + 1,
+                    code_snippet: "code".to_string(),
+                    status: "open".to_string(),
+                    detected_at: chrono::Utc::now().to_rfc3339(),
+                    detection_method: "regex".to_string(),
+                    confidence_score: None,
+                    llm_reasoning: None,
+                    regex_reasoning: None,
+                function_name: None,
+                class_name: None,
+                };
+                let _ = queries::insert_violation(&conn, &violation);
+            }
         }
 
         let result = get_violations(scan_id, None).await;
@@ -385,11 +391,13 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify status changed
-        let conn = db::get_connection();
-        let violation = queries::select_violation(&conn, violation_id)
-            .unwrap()
-            .unwrap();
-        assert_eq!(violation.status, "dismissed");
+        {
+            let conn = db::get_connection();
+            let violation = queries::select_violation(&conn, violation_id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(violation.status, "dismissed");
+        }
     }
 
     #[tokio::test]
@@ -411,12 +419,14 @@ mod tests {
         let _ = dismiss_violation(violation_id).await;
 
         // Verify audit event created
-        let conn = db::get_connection();
-        let mut stmt = conn
-            .prepare("SELECT COUNT(*) FROM audit_events WHERE violation_id = ?")
-            .unwrap();
-        let count: i64 = stmt.query_row([violation_id], |row| row.get(0)).unwrap();
-        assert_eq!(count, 1);
+        {
+            let conn = db::get_connection();
+            let mut stmt = conn
+                .prepare("SELECT COUNT(*) FROM audit_events WHERE violation_id = ?")
+                .unwrap();
+            let count: i64 = stmt.query_row([violation_id], |row| row.get(0)).unwrap();
+            assert_eq!(count, 1);
+        }
     }
 
     #[tokio::test]
@@ -426,29 +436,31 @@ mod tests {
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
-        let conn = db::get_connection();
+        {
+            let conn = db::get_connection();
 
-        // Create violations with different controls
-        for control_id in ["CC6.1", "CC6.7", "CC7.2"] {
-            let violation = Violation {
-                id: 0,
-                scan_id,
-                control_id: control_id.to_string(),
-                severity: "high".to_string(),
-                description: "Test".to_string(),
-                file_path: "test.py".to_string(),
-                line_number: 1,
-                code_snippet: "code".to_string(),
-                status: "open".to_string(),
-                detected_at: chrono::Utc::now().to_rfc3339(),
-                detection_method: "regex".to_string(),
-                confidence_score: None,
-                llm_reasoning: None,
-                regex_reasoning: None,
-            function_name: None,
-            class_name: None,
-            };
-            let _ = queries::insert_violation(&conn, &violation);
+            // Create violations with different controls
+            for control_id in ["CC6.1", "CC6.7", "CC7.2"] {
+                let violation = Violation {
+                    id: 0,
+                    scan_id,
+                    control_id: control_id.to_string(),
+                    severity: "high".to_string(),
+                    description: "Test".to_string(),
+                    file_path: "test.py".to_string(),
+                    line_number: 1,
+                    code_snippet: "code".to_string(),
+                    status: "open".to_string(),
+                    detected_at: chrono::Utc::now().to_rfc3339(),
+                    detection_method: "regex".to_string(),
+                    confidence_score: None,
+                    llm_reasoning: None,
+                    regex_reasoning: None,
+                function_name: None,
+                class_name: None,
+                };
+                let _ = queries::insert_violation(&conn, &violation);
+            }
         }
 
         let filters = ViolationFilters {
@@ -472,29 +484,31 @@ mod tests {
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
-        let conn = db::get_connection();
+        {
+            let conn = db::get_connection();
 
-        // Create violations with different statuses
-        for (i, status) in ["open", "fixed", "dismissed"].iter().enumerate() {
-            let violation = Violation {
-                id: 0,
-                scan_id,
-                control_id: "CC6.1".to_string(),
-                severity: "high".to_string(),
-                description: format!("Test {}", i),
-                file_path: "test.py".to_string(),
-                line_number: i as i64,
-                code_snippet: "code".to_string(),
-                status: status.to_string(),
-                detected_at: chrono::Utc::now().to_rfc3339(),
-                detection_method: "regex".to_string(),
-                confidence_score: None,
-                llm_reasoning: None,
-                regex_reasoning: None,
-            function_name: None,
-            class_name: None,
-            };
-            let _ = queries::insert_violation(&conn, &violation);
+            // Create violations with different statuses
+            for (i, status) in ["open", "fixed", "dismissed"].iter().enumerate() {
+                let violation = Violation {
+                    id: 0,
+                    scan_id,
+                    control_id: "CC6.1".to_string(),
+                    severity: "high".to_string(),
+                    description: format!("Test {}", i),
+                    file_path: "test.py".to_string(),
+                    line_number: i as i64,
+                    code_snippet: "code".to_string(),
+                    status: status.to_string(),
+                    detected_at: chrono::Utc::now().to_rfc3339(),
+                    detection_method: "regex".to_string(),
+                    confidence_score: None,
+                    llm_reasoning: None,
+                    regex_reasoning: None,
+                function_name: None,
+                class_name: None,
+                };
+                let _ = queries::insert_violation(&conn, &violation);
+            }
         }
 
         let filters = ViolationFilters {
@@ -518,28 +532,30 @@ mod tests {
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
-        let conn = db::get_connection();
+        {
+            let conn = db::get_connection();
 
-        // Create test violations
-        let violation = Violation {
-            id: 0,
-            scan_id,
-            control_id: "CC6.1".to_string(),
-            severity: "critical".to_string(),
-            description: "Test".to_string(),
-            file_path: "test.py".to_string(),
-            line_number: 1,
-            code_snippet: "code".to_string(),
-            status: "open".to_string(),
-            detected_at: chrono::Utc::now().to_rfc3339(),
-            detection_method: "regex".to_string(),
-            confidence_score: None,
-            llm_reasoning: None,
-            regex_reasoning: None,
-            function_name: None,
-            class_name: None,
-        };
-        let _ = queries::insert_violation(&conn, &violation);
+            // Create test violations
+            let violation = Violation {
+                id: 0,
+                scan_id,
+                control_id: "CC6.1".to_string(),
+                severity: "critical".to_string(),
+                description: "Test".to_string(),
+                file_path: "test.py".to_string(),
+                line_number: 1,
+                code_snippet: "code".to_string(),
+                status: "open".to_string(),
+                detected_at: chrono::Utc::now().to_rfc3339(),
+                detection_method: "regex".to_string(),
+                confidence_score: None,
+                llm_reasoning: None,
+                regex_reasoning: None,
+                function_name: None,
+                class_name: None,
+            };
+            let _ = queries::insert_violation(&conn, &violation);
+        }
 
         let filters = ViolationFilters {
             severity: Some(vec!["critical".to_string()]),
