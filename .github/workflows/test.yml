@@ -8,69 +8,48 @@ on:
 
 jobs:
   rust-tests:
-    name: Rust Tests & Coverage
+    name: Rust Tests
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-      
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      
-      - name: Run tests with coverage
+
+      - name: Run tests
         working-directory: src-tauri
-        run: cargo llvm-cov --lib --lcov --output-path ../coverage-rust.lcov -- --test-threads=1
-      
-      - name: Upload Rust coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage-rust.lcov
-          flags: rust
-          name: rust-coverage
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+        run: cargo test --lib -- --test-threads=1
 
   frontend-tests:
-    name: Frontend Tests & Coverage
+    name: Frontend Tests
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'pnpm'
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
-      - name: Run tests with coverage
-        run: pnpm test:coverage
-      
-      - name: Upload frontend coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage/lcov.info
-          flags: frontend
-          name: frontend-coverage
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+
+      - name: Run tests
+        run: pnpm test:run
