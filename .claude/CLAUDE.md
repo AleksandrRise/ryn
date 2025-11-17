@@ -7,10 +7,10 @@
 **Tech Stack**: Tauri 2.0 (Rust backend) + Next.js 16.0.1 (React 19) + SQLite + Claude Haiku 4.5
 
 **Status**:
-- ✅ Complete backend (20 Tauri commands), hybrid scanning (regex + LLM), cost tracking, full UI, database with migrations, 455 Rust tests passing
+- ✅ Complete backend (20 Tauri commands), hybrid scanning (regex + LLM), cost tracking, full UI, database with migrations, 457 Rust tests passing
 - ✅ Tree-sitter enriches violations with code context
-- ✅ File watcher backend implemented (2 tests ignored, UI integration pending)
-- ⚠️ LangGraph Rust bridge returns mock data (no actual LangGraph calls)
+- ✅ File watcher fully integrated with graceful shutdown mechanism (all tests passing)
+- ✅ Fix generation uses ClaudeClient with real Claude Haiku 4.5 API integration
 
 ## Development
 
@@ -21,7 +21,7 @@ pnpm tauri dev             # Run with hot-reload (recommended)
 pnpm build && pnpm tauri build  # Production build
 
 # Testing
-cd src-tauri && cargo test  # Backend tests (455 passing, 2 ignored)
+cd src-tauri && cargo test  # Backend tests (457 passing, 0 ignored)
 pnpm test                   # Frontend unit tests
 pnpm test:coverage          # Frontend tests with coverage
 pnpm test:e2e               # End-to-end tests
@@ -87,9 +87,8 @@ lib/tauri/        # TypeScript command wrappers
 - Parameterized SQL queries
 
 ## Known Issues
-- File watcher not integrated (manual scans only)
-- LangGraph Rust bridge returns mocks
 - Frontend E2E tests mock Tauri IPC instead of calling backend
+- LangGraph module kept for historical reference but deprecated (not actively used)
 
 ## Key Instructions
 - Verify implementations before claiming features work
