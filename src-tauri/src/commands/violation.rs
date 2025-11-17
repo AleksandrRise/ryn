@@ -170,13 +170,6 @@ pub struct ViolationDetail {
 mod tests {
     use crate::db::test_helpers::TestDbGuard;
     use super::*;
-    use tempfile::TempDir;
-
-    fn setup_test_env() -> TempDir {
-        let temp_dir = tempfile::TempDir::new().unwrap();
-        std::env::set_var("RYN_DATA_DIR", temp_dir.path());
-        temp_dir
-    }
 
     fn create_test_violation(scan_id: i64) -> i64 {
         let violation = Violation {

@@ -226,13 +226,6 @@ pub async fn complete_onboarding(scan_mode: String, cost_limit: f64) -> Result<(
 mod tests {
     use crate::db::test_helpers::TestDbGuard;
     use super::*;
-    use tempfile::TempDir;
-
-    fn setup_test_env() -> TempDir {
-        let temp_dir = tempfile::TempDir::new().unwrap();
-        std::env::set_var("RYN_DATA_DIR", temp_dir.path());
-        temp_dir
-    }
 
     #[tokio::test]
     #[serial_test::serial]

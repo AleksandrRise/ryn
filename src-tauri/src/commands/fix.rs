@@ -44,7 +44,7 @@ pub async fn generate_fix(
     violation_id: i64,
 ) -> Result<Fix, String> {
     // Phase 1: Read all required data from database (scoped to drop guard before awaits)
-    let (violation, scan_project_id, _project_path, project_framework, file_path) = {
+    let (_violation, _scan_project_id, _project_path, _project_framework, file_path) = {
         let conn = db::get_connection();
 
         // Get violation from database
@@ -71,7 +71,7 @@ pub async fn generate_fix(
     }; // MutexGuard dropped here
 
     // Validate file exists (doesn't need DB connection)
-    let file_content = std::fs::read_to_string(&file_path)
+    let _file_content = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
     // Phase 2: Invoke AI fix generation (no DB connection held)
@@ -321,14 +321,6 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
 mod tests {
     use crate::db::test_helpers::TestDbGuard;
     use super::*;
-    use tempfile::TempDir;
-    use std::fs;
-
-    fn setup_test_env() -> TempDir {
-        let temp_dir = tempfile::TempDir::new().unwrap();
-        std::env::set_var("RYN_DATA_DIR", temp_dir.path());
-        temp_dir
-    }
 
     #[tokio::test]
     #[serial_test::serial]
