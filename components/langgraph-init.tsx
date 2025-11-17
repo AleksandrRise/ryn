@@ -27,13 +27,16 @@ export function LangGraphInit() {
     // Cleanup: stop listening when component unmounts
     return () => {
       if (unlistener) {
-        unlistener()
-          .then(() => {
+        // Call unlistener but don't await - just fire and forget
+        // as the cleanup function cannot be async
+        Promise.resolve(unlistener()).then(
+          () => {
             console.log('[App] LangGraph bridge listener stopped')
-          })
-          .catch((error) => {
+          },
+          (error: any) => {
             console.error('[App] Error stopping LangGraph bridge listener:', error)
-          })
+          }
+        )
       }
     }
   }, [])

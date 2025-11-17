@@ -120,7 +120,7 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void 
 export function Settings() {
   const { selectedProject } = useProjectStore()
   const { isWatching, startWatching, stopWatching, isLoading: isWatcherLoading } = useFileWatcher(
-    selectedProject?.id || 0,
+    selectedProject?.id,
     { autoStart: false, showNotifications: true }
   )
 

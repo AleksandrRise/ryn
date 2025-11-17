@@ -74,7 +74,7 @@ export function Dashboard() {
 
   // Set up file watcher for the selected project
   // The hook will auto-start watching when selectedProject changes
-  useFileWatcher(selectedProject?.id || 0, {
+  useFileWatcher(selectedProject?.id, {
     autoStart: !!selectedProject,
     onFileChanged: handleFileChanged,
     showNotifications: true,

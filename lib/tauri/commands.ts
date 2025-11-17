@@ -42,6 +42,10 @@ export interface Violation {
   file_path: string
   status: string
   created_at: string
+  detection_method: "regex" | "llm" | "hybrid"
+  confidence_score?: number
+  llm_reasoning?: string
+  regex_reasoning?: string
 }
 
 export interface Fix {

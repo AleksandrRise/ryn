@@ -59,7 +59,7 @@ interface UseFileWatcherReturn {
 /**
  * Hook for managing real-time file watching of a project
  *
- * @param projectId - The ID of the project to watch
+ * @param projectId - The ID of the project to watch (undefined if no project selected)
  * @param options - Configuration options
  * @returns Object with watching state and control functions
  *
@@ -77,7 +77,7 @@ interface UseFileWatcherReturn {
  * ```
  */
 export function useFileWatcher(
-  projectId: number,
+  projectId: number | undefined,
   options: UseFileWatcherOptions = {}
 ): UseFileWatcherReturn {
   const {
@@ -92,6 +92,12 @@ export function useFileWatcher(
 
   // Start watching for file changes
   const startWatching = useCallback(async () => {
+    // Don't attempt to watch if no valid project
+    if (projectId === undefined || projectId <= 0) {
+      console.warn('[useFileWatcher] Cannot watch: invalid project ID', projectId)
+      return
+    }
+
     if (isWatching || isLoading) return
 
     setIsLoading(true)
@@ -119,6 +125,12 @@ export function useFileWatcher(
 
   // Stop watching for file changes
   const stopWatching = useCallback(async () => {
+    // Don't attempt to stop watching if no valid project
+    if (projectId === undefined || projectId <= 0) {
+      console.warn('[useFileWatcher] Cannot stop watching: invalid project ID', projectId)
+      return
+    }
+
     if (!isWatching || isLoading) return
 
     setIsLoading(true)

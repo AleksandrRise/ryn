@@ -85,7 +85,7 @@ async function handleAgentRequest(payload: RunAgentRequestEvent): Promise<void> 
       filePath: request.file_path,
       code: request.code,
       framework: request.framework as any,
-      violations: request.violations,
+      violations: request.violations as any, // Convert Rust format to agent format
       fixes: [],
       currentStep: 'parse',
       error: undefined,
@@ -104,10 +104,19 @@ async function handleAgentRequest(payload: RunAgentRequestEvent): Promise<void> 
 
     // Send error response back to Rust
     const errorResponse: AgentResponse = {
+      state: {
+        filePath: request.file_path,
+        code: request.code,
+        framework: request.framework as any,
+        violations: [],
+        fixes: [],
+        currentStep: 'parse',
+        error: error instanceof Error ? error.message : 'Unknown error occurred in agent',
+        timestamp: new Date().toISOString(),
+      },
       success: false,
       violations: [],
       fixes: [],
-      current_step: 'error',
       error: error instanceof Error ? error.message : 'Unknown error occurred in agent',
     }
 
@@ -128,12 +137,12 @@ async function sendAgentResponse(request_id: string, response: AgentResponse): P
   try {
     console.log(`[LangGraph Bridge] Sending response for request ${request_id}`)
 
-    // Convert agent response format to Rust-compatible format
+    // Convert agent response format to Rust-compatible format (snake_case for Rust)
     const rustResponse = {
       success: response.success ?? (response.error ? false : true),
       violations: response.violations || [],
       fixes: response.fixes || [],
-      current_step: response.current_step || response.currentStep || 'complete',
+      current_step: response.state?.currentStep || 'complete',
       error: response.error || undefined,
     }
 

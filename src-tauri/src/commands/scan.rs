@@ -420,6 +420,11 @@ pub async fn watch_project<R: tauri::Runtime>(
     watcher_state: tauri::State<'_, FileWatcherState>,
     project_id: i64,
 ) -> Result<String, String> {
+    // Validate project ID
+    if project_id <= 0 {
+        return Err("Invalid project ID: must be greater than 0".to_string());
+    }
+
     // Check if already watching this project
     if watcher_state.is_watching(project_id) {
         return Err(format!("Project {} is already being watched", project_id));

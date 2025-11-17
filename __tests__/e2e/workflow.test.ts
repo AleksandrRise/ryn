@@ -229,6 +229,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
           file_path: "app.py",
           status: "open",
           created_at: new Date().toISOString(),
+          detection_method: "regex",
         },
         {
           id: 2,
@@ -241,6 +242,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
           file_path: "config.py",
           status: "open",
           created_at: new Date().toISOString(),
+          detection_method: "regex",
         },
       ]
 
@@ -270,6 +272,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
           file_path: "app.py",
           status: "open",
           created_at: new Date().toISOString(),
+          detection_method: "regex",
         },
       ]
 
@@ -298,6 +301,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
           file_path: "src/views.py",
           status: "open",
           created_at: new Date().toISOString(),
+          detection_method: "regex",
         },
         control: {
           id: "CC6.1",
@@ -518,6 +522,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
           file_path: "app.py",
           status: "open",
           created_at: new Date().toISOString(),
+          detection_method: "regex",
         },
       ]
       mockInvoke.mockResolvedValueOnce(mockViolations)
@@ -587,6 +592,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
           file_path: "api.py",
           status: "open",
           created_at: new Date().toISOString(),
+          detection_method: "regex",
         },
         {
           id: 2,
@@ -599,6 +605,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
           file_path: "config.py",
           status: "open",
           created_at: new Date().toISOString(),
+          detection_method: "regex",
         },
       ]
 
