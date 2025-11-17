@@ -1,5 +1,11 @@
 import '@testing-library/jest-dom/vitest'
 
+// Type declaration for Tauri internals
+declare global {
+  // eslint-disable-next-line no-var
+  var __TAURI_INTERNALS__: any
+}
+
 // Mock Tauri APIs for unit tests
 globalThis.__TAURI_INTERNALS__ = {
   metadata: {
