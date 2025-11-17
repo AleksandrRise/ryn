@@ -27,11 +27,24 @@ pub async fn get_violations(
     scan_id: i64,
     filters: Option<ViolationFilters>,
 ) -> Result<Vec<Violation>, String> {
+    println!("[ryn] get_violations called: scan_id={}, filters={:?}", scan_id, filters);
+
+    // Validate scan ID
+    if scan_id <= 0 {
+        let err_msg = format!("Invalid scan ID: must be greater than 0, got {}", scan_id);
+        println!("[ryn] get_violations validation failed: {}", err_msg);
+        return Err(err_msg);
+    }
+
     let conn = db::get_connection();
 
     // Get all violations for scan
     let mut violations = queries::select_violations(&conn, scan_id)
-        .map_err(|e| format!("Failed to fetch violations: {}", e))?;
+        .map_err(|e| {
+            let err_msg = format!("Failed to fetch violations: {}", e);
+            println!("[ryn] get_violations query failed: {}", err_msg);
+            err_msg
+        })?;
 
     // Apply filters if provided
     if let Some(f) = filters {
@@ -77,6 +90,7 @@ pub async fn get_violations(
         }
     });
 
+    println!("[ryn] get_violations success: found {} violations for scan_id={}", violations.len(), scan_id);
     Ok(violations)
 }
 
@@ -88,12 +102,29 @@ pub async fn get_violations(
 /// Returns: Violation detail object with related control and fix information
 #[tauri::command]
 pub async fn get_violation(violation_id: i64) -> Result<ViolationDetail, String> {
+    println!("[ryn] get_violation called: violation_id={}", violation_id);
+
+    // Validate violation ID
+    if violation_id <= 0 {
+        let err_msg = format!("Invalid violation ID: must be greater than 0, got {}", violation_id);
+        println!("[ryn] get_violation validation failed: {}", err_msg);
+        return Err(err_msg);
+    }
+
     let conn = db::get_connection();
 
     // Get violation
     let violation = queries::select_violation(&conn, violation_id)
-        .map_err(|e| format!("Failed to fetch violation: {}", e))?
-        .ok_or_else(|| format!("Violation not found: {}", violation_id))?;
+        .map_err(|e| {
+            let err_msg = format!("Failed to fetch violation: {}", e);
+            println!("[ryn] get_violation query failed: {}", err_msg);
+            err_msg
+        })?
+        .ok_or_else(|| {
+            let err_msg = format!("Violation not found: {}", violation_id);
+            println!("[ryn] get_violation not found: {}", err_msg);
+            err_msg
+        })?;
 
     // Get related control
     let control = queries::select_control(&conn, &violation.control_id)
@@ -105,8 +136,13 @@ pub async fn get_violation(violation_id: i64) -> Result<ViolationDetail, String>
 
     // Get related scan
     let scan = queries::select_scan(&conn, violation.scan_id)
-        .map_err(|e| format!("Failed to fetch scan: {}", e))?;
+        .map_err(|e| {
+            let err_msg = format!("Failed to fetch scan: {}", e);
+            println!("[ryn] get_violation scan query failed: {}", err_msg);
+            err_msg
+        })?;
 
+    println!("[ryn] get_violation success: violation_id={}", violation_id);
     Ok(ViolationDetail {
         violation,
         control,
@@ -125,16 +161,37 @@ pub async fn get_violation(violation_id: i64) -> Result<ViolationDetail, String>
 /// Returns: Success or error
 #[tauri::command]
 pub async fn dismiss_violation(violation_id: i64) -> Result<(), String> {
+    println!("[ryn] dismiss_violation called: violation_id={}", violation_id);
+
+    // Validate violation ID
+    if violation_id <= 0 {
+        let err_msg = format!("Invalid violation ID: must be greater than 0, got {}", violation_id);
+        println!("[ryn] dismiss_violation validation failed: {}", err_msg);
+        return Err(err_msg);
+    }
+
     let conn = db::get_connection();
 
     // Get violation to extract scan_id
     let violation = queries::select_violation(&conn, violation_id)
-        .map_err(|e| format!("Failed to fetch violation: {}", e))?
-        .ok_or_else(|| format!("Violation not found: {}", violation_id))?;
+        .map_err(|e| {
+            let err_msg = format!("Failed to fetch violation: {}", e);
+            println!("[ryn] dismiss_violation query failed: {}", err_msg);
+            err_msg
+        })?
+        .ok_or_else(|| {
+            let err_msg = format!("Violation not found: {}", violation_id);
+            println!("[ryn] dismiss_violation not found: {}", err_msg);
+            err_msg
+        })?;
 
     // Update status to dismissed
     queries::update_violation_status(&conn, violation_id, "dismissed")
-        .map_err(|e| format!("Failed to dismiss violation: {}", e))?;
+        .map_err(|e| {
+            let err_msg = format!("Failed to dismiss violation: {}", e);
+            println!("[ryn] dismiss_violation update failed: {}", err_msg);
+            err_msg
+        })?;
 
     // Get scan and project info for audit
     let scan = queries::select_scan(&conn, violation.scan_id)
@@ -154,6 +211,7 @@ pub async fn dismiss_violation(violation_id: i64) -> Result<(), String> {
         }
     }
 
+    println!("[ryn] dismiss_violation success: violation_id={}", violation_id);
     Ok(())
 }
 

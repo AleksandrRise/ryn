@@ -94,7 +94,12 @@ export function useFileWatcher(
   const startWatching = useCallback(async () => {
     // Don't attempt to watch if no valid project
     if (projectId === undefined || projectId <= 0) {
-      console.warn('[useFileWatcher] Cannot watch: invalid project ID', projectId)
+      console.warn('[useFileWatcher] Cannot start watching: invalid project ID', projectId)
+      const errorMsg = `Cannot start watching: ${projectId === undefined ? 'no project selected' : 'invalid project ID'}`
+      setError(errorMsg)
+      if (showNotifications) {
+        toast.error(errorMsg)
+      }
       return
     }
 
@@ -104,19 +109,36 @@ export function useFileWatcher(
     setError(null)
 
     try {
+      console.log('[useFileWatcher] Calling watch_project with project_id=', projectId)
       await commands.watch_project(projectId)
       setIsWatching(true)
+      console.log('[useFileWatcher] Successfully started watching project_id=', projectId)
 
       if (showNotifications) {
         toast.success(`Started watching project for changes`)
       }
-    } catch (err) {
-      const errorMsg =
-        err instanceof Error ? err.message : "Failed to start watching"
+    } catch (err: any) {
+      // Tauri errors - extract message from various possible properties
+      let errorMsg = 'Failed to start watching'
+
+      if (typeof err === 'string') {
+        errorMsg = err
+      } else if (err instanceof Error) {
+        errorMsg = err.message
+      } else if (err && typeof err === 'object') {
+        // Try common error properties
+        errorMsg = err.message || err.error || err.msg || String(err) || errorMsg
+      }
+
+      console.error('[useFileWatcher] watch_project failed:', errorMsg)
+      console.error('[useFileWatcher] project_id:', projectId)
+      console.error('[useFileWatcher] error type:', typeof err)
+      console.error('[useFileWatcher] error keys:', err ? Object.getOwnPropertyNames(err) : [])
       setError(errorMsg)
 
       if (showNotifications) {
-        toast.error(`Failed to start watching: ${errorMsg}`)
+        // Don't add prefix if error already has context
+        toast.error(errorMsg)
       }
     } finally {
       setIsLoading(false)

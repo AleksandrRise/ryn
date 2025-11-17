@@ -106,12 +106,24 @@ export function Dashboard() {
   useEffect(() => {
     const loadDashboardData = async () => {
       if (!selectedProject) {
+        console.log('[Dashboard] No project selected, showing empty state')
+        setIsLoading(false)
+        return
+      }
+
+      // Validate project ID
+      if (!selectedProject.id || selectedProject.id <= 0) {
+        console.error('[Dashboard] Invalid project ID:', selectedProject)
+        const { clearProject } = useProjectStore.getState()
+        clearProject()
+        toast.error('Invalid project selected')
         setIsLoading(false)
         return
       }
 
       try {
         setIsLoading(true)
+        console.log('[Dashboard] Loading data for project:', selectedProject.id)
 
         // Fetch latest scan for the project
         const scans = await get_scans(selectedProject.id)
@@ -140,9 +152,21 @@ export function Dashboard() {
         // Count fixes applied from audit events
         const fixEvents = events.filter(e => e.event_type === "fix_applied")
         setFixesAppliedCount(fixEvents.length)
-      } catch (error) {
-        // Log the actual error for debugging
-        console.error('[Dashboard] Load error:', { error, selectedProject })
+      } catch (error: any) {
+        // Extract error message from various possible properties
+        let errorMsg = 'Failed to load dashboard data'
+        if (typeof error === 'string') {
+          errorMsg = error
+        } else if (error instanceof Error) {
+          errorMsg = error.message
+        } else if (error && typeof error === 'object') {
+          errorMsg = error.message || error.error || error.msg || String(error) || errorMsg
+        }
+
+        console.error('[Dashboard] Load error:', errorMsg)
+        console.error('[Dashboard] Error type:', typeof error)
+        console.error('[Dashboard] Error keys:', error ? Object.getOwnPropertyNames(error) : [])
+        console.error('[Dashboard] Project:', selectedProject?.id, selectedProject?.path)
 
         // Check if error is due to project not existing in database
         // This can happen when database is reset but localStorage still has project reference
@@ -151,14 +175,17 @@ export function Dashboard() {
           const projectExists = projects.some((p) => p.id === selectedProject?.id)
 
           if (!projectExists) {
+            console.warn('[Dashboard] Project not found in database, clearing reference')
             // Project was deleted or database was reset - clear the reference gracefully
             const { clearProject } = useProjectStore.getState()
             clearProject()
+            toast.info('Project no longer exists')
             setIsLoading(false)
             return
           }
-        } catch {
+        } catch (checkError) {
           // If get_projects fails, assume database issue and fall through to show error
+          console.error('[Dashboard] Failed to check if project exists:', checkError)
         }
 
         handleTauriError(error, "Failed to load dashboard data")

@@ -307,11 +307,11 @@ async fn scan_project_internal<R: tauri::Runtime>(
     }
 
     // Merge regex and LLM violations, then insert deduplicated results
-    eprintln!("[ryn] Merging {} regex violations with LLM results", regex_violations.len());
+    println!("[ryn] Merging {} regex violations with LLM results", regex_violations.len());
 
     // Analyze collected files with LLM if any were selected (smart/analyze_all modes)
     let llm_violations_vec = if !files_for_llm_analysis.is_empty() {
-        eprintln!("[ryn] Analyzing {} files with Claude Haiku LLM (mode: {})",
+        println!("[ryn] Analyzing {} files with Claude Haiku LLM (mode: {})",
                   files_for_llm_analysis.len(), llm_scan_mode);
 
         // Clone channels for async tasks (Arc makes this cheap)
@@ -324,20 +324,20 @@ async fn scan_project_internal<R: tauri::Runtime>(
             app.clone(),
         ).await {
             Ok((llm_violations, total_cost)) => {
-                eprintln!("[ryn] LLM analysis complete: {} violations, ${:.4} cost",
+                println!("[ryn] LLM analysis complete: {} violations, ${:.4} cost",
                           llm_violations.len(), total_cost);
                 // TODO: Store detailed token usage in scan_costs table (requires ScanCost model)
-                eprintln!("[ryn] Total scan cost: ${:.4}", total_cost);
+                println!("[ryn] Total scan cost: ${:.4}", total_cost);
                 llm_violations
             }
             Err(e) => {
-                eprintln!("[ryn] LLM analysis failed: {}", e);
+                println!("[ryn] LLM analysis failed: {}", e);
                 // Continue with empty LLM violations
                 Vec::new()
             }
         }
     } else {
-        eprintln!("[ryn] No files selected for LLM analysis (mode: {})", llm_scan_mode);
+        println!("[ryn] No files selected for LLM analysis (mode: {})", llm_scan_mode);
         Vec::new()
     };
 
@@ -357,7 +357,7 @@ async fn scan_project_internal<R: tauri::Runtime>(
         }
     } // Connection dropped here
 
-    eprintln!("[ryn] Inserted {} final violations after deduplication", violations_found);
+    println!("[ryn] Inserted {} final violations after deduplication", violations_found);
 
     // Update scan with results and fetch final data (scoped to drop connection)
     let scan = {
@@ -420,9 +420,13 @@ pub async fn watch_project<R: tauri::Runtime>(
     watcher_state: tauri::State<'_, FileWatcherState>,
     project_id: i64,
 ) -> Result<String, String> {
+    println!("[ryn] watch_project called: project_id={}", project_id);
+
     // Validate project ID
     if project_id <= 0 {
-        return Err("Invalid project ID: must be greater than 0".to_string());
+        let err_msg = format!("Invalid project ID: must be greater than 0, got {}", project_id);
+        println!("[ryn] watch_project validation failed: {}", err_msg);
+        return Err(err_msg);
     }
 
     // Check if already watching this project
@@ -500,6 +504,7 @@ pub async fn watch_project<R: tauri::Runtime>(
         }
     });
 
+    println!("[ryn] watch_project success: started watching project_id={}", project_id);
     Ok(format!("Started watching project {}", project_id))
 }
 
@@ -636,11 +641,11 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
                     total_cost += cost;
                 }
                 Ok(Err(e)) => {
-                    eprintln!("[ryn] LLM analysis error: {}", e);
+                    println!("[ryn] LLM analysis error: {}", e);
                     // Continue processing other files even if one fails
                 }
                 Err(e) => {
-                    eprintln!("[ryn] Task join error: {}", e);
+                    println!("[ryn] Task join error: {}", e);
                 }
             }
         }
@@ -663,7 +668,7 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
             };
 
             if let Err(e) = app_handle.emit("cost-limit-reached", event) {
-                eprintln!("[ryn] Failed to emit cost-limit-reached event: {}", e);
+                println!("[ryn] Failed to emit cost-limit-reached event: {}", e);
                 // Continue anyway - treat as "stop scanning"
                 break;
             }
@@ -680,7 +685,7 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
                 }
                 Err(_) => {
                     // Channel closed (user closed dialog?) - stop scanning
-                    eprintln!("[ryn] Cost limit response channel closed - stopping scan");
+                    println!("[ryn] Cost limit response channel closed - stopping scan");
                     break;
                 }
             }
@@ -783,7 +788,7 @@ fn merge_violations(
             // Use LLM's confidence score
             // confidence_score already set from llm_violation
 
-            eprintln!(
+            println!(
                 "[ryn] Merged hybrid violation: {} at {} line {} (±{} lines from regex)",
                 hybrid.control_id,
                 hybrid.file_path,
@@ -813,7 +818,7 @@ fn merge_violations(
         }
     }
 
-    eprintln!(
+    println!(
         "[ryn] Merge complete: {} total violations ({} hybrid, {} regex-only, {} llm-only)",
         merged.len(),
         merged.iter().filter(|v| v.detection_method == "hybrid").count(),
@@ -931,7 +936,7 @@ fn enrich_violations_with_context(violations: Vec<Violation>, project_path: &str
     let parser = match CodeParser::new() {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("[ryn] Failed to initialize tree-sitter parser: {}", e);
+            println!("[ryn] Failed to initialize tree-sitter parser: {}", e);
             // Return violations unchanged if parser fails
             return violations_by_file.into_values().flatten().collect();
         }
@@ -948,7 +953,7 @@ fn enrich_violations_with_context(violations: Vec<Violation>, project_path: &str
         let code = match std::fs::read_to_string(&full_path) {
             Ok(content) => content,
             Err(e) => {
-                eprintln!("[ryn] Failed to read file for tree-sitter parsing: {} - {}", file_path, e);
+                println!("[ryn] Failed to read file for tree-sitter parsing: {} - {}", file_path, e);
                 // Keep violations as-is if file can't be read
                 enriched_violations.extend(file_violations);
                 continue;
@@ -979,7 +984,7 @@ fn enrich_violations_with_context(violations: Vec<Violation>, project_path: &str
                 enriched_violations.extend(file_violations);
             }
             Err(e) => {
-                eprintln!("[ryn] Failed to parse {} with tree-sitter: {}", file_path, e);
+                println!("[ryn] Failed to parse {} with tree-sitter: {}", file_path, e);
                 // Keep violations as-is if parsing fails
                 enriched_violations.extend(file_violations);
             }
