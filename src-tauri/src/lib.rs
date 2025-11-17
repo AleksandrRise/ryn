@@ -8,7 +8,6 @@ pub mod scanner;
 pub mod langgraph;
 pub mod rules;
 pub mod fix_generator;
-pub mod git;
 pub mod utils;
 pub mod security;
 pub mod rate_limiter;

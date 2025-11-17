@@ -238,8 +238,10 @@ mod tests {
     #[serial_test::serial]
     async fn test_get_settings_empty() {
         let _guard = TestDbGuard::new();
+
         let result = get_settings().await;
         assert!(result.is_ok());
+        // TestDbGuard clears all settings, so expect empty
         assert_eq!(result.unwrap().len(), 0);
     }
 
@@ -247,6 +249,7 @@ mod tests {
     #[serial_test::serial]
     async fn test_update_settings_new() {
         let _guard = TestDbGuard::new();
+
         let result = update_settings("scan_interval".to_string(), "3600".to_string()).await;
         assert!(result.is_ok());
 
@@ -279,6 +282,7 @@ mod tests {
     #[serial_test::serial]
     async fn test_update_settings_empty_key() {
         let _guard = TestDbGuard::new();
+
         let result = update_settings("".to_string(), "value".to_string()).await;
         assert!(result.is_err());
     }
@@ -322,14 +326,14 @@ mod tests {
         let _ = update_settings("test_key".to_string(), "test_value".to_string()).await;
 
         // Verify audit event was created
-        {
+        let count: i64 = {
             let conn = db::get_connection();
             let mut stmt = conn
                 .prepare("SELECT COUNT(*) FROM audit_events WHERE event_type = 'settings_updated'")
                 .unwrap();
-            let count: i64 = stmt.query_row([], |row| row.get(0)).unwrap();
-            assert_eq!(count, 1);
-        }
+            stmt.query_row([], |row| row.get(0)).unwrap()
+        };
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]

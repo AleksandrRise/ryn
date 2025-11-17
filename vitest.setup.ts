@@ -1,12 +1,15 @@
-import '@testing-library/jest-dom'
-import { beforeAll } from 'vitest'
+import '@testing-library/jest-dom/vitest'
 
-beforeAll(() => {
-  Object.defineProperty(window, 'crypto', {
-    value: {
-      getRandomValues: (buffer: any) => {
-        return crypto.getRandomValues(buffer)
-      },
-    },
-  })
+// Mock Tauri APIs for unit tests
+globalThis.__TAURI_INTERNALS__ = {
+  metadata: {
+    currentWindow: { label: 'main' },
+  },
+  postMessage: () => {},
+}
+
+// Mock window.__TAURI_INTERNALS__
+Object.defineProperty(window, '__TAURI_INTERNALS__', {
+  value: globalThis.__TAURI_INTERNALS__,
+  writable: true,
 })

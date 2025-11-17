@@ -238,15 +238,16 @@ mod tests {
     async fn test_get_projects_ordered_by_creation() {
         let _guard = TestDbGuard::new();
 
-        let dirs: Vec<tempfile::TempDir> = (0..3)
-            .map(|i| {
-                let dir = tempfile::TempDir::new().unwrap();
-                let path = dir.path().to_string_lossy().to_string();
-                let _ = create_project(path, Some(format!("project-{}", i)), None);
-                std::thread::sleep(std::time::Duration::from_millis(10));
-                dir
-            })
-            .collect();
+        let mut dirs = Vec::new();
+        for i in 0..3 {
+            let dir = tempfile::TempDir::new().unwrap();
+            let path = dir.path().to_string_lossy().to_string();
+            let result = create_project(path, Some(format!("project-{}", i)), None).await;
+            assert!(result.is_ok());
+            // Use tokio sleep for async context and 1 second delay for distinct timestamps
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            dirs.push(dir);
+        }
 
         let result = get_projects().await;
         assert!(result.is_ok());

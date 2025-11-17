@@ -213,7 +213,7 @@ mod tests {
         let project_id = {
             let conn = db::get_connection();
             queries::insert_project(&conn, "test-project", &path, None).unwrap()
-        };
+        }; // Drop MutexGuard here
         std::mem::forget(temp_dir);
         project_id
     }
