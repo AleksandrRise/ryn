@@ -7,6 +7,7 @@ use crate::models::Fix;
 use crate::security::path_validation;
 use crate::rate_limiter::{RateLimiter, RateLimiterConfig};
 use crate::utils::create_audit_event;
+use crate::fix_generator::claude_client::ClaudeClient;
 use std::path::Path;
 use std::sync::Arc;
 use once_cell::sync::Lazy;
@@ -79,15 +80,31 @@ pub async fn generate_fix(
     RATE_LIMITER.check_rate_limit().await
         .map_err(|e| format!("API rate limit: {}", e))?;
 
-    // TODO(IMPLEMENT): Replace AgentRunner stub with real Claude API client
-    // The LangGraph AgentRunner was a stub. We need to implement direct Claude API integration
-    // using fix_generator/claude_client.rs. For now, return an error to make tests compile.
-    return Err("Fix generation not yet fully implemented - AgentRunner stub removed".to_string());
+    // Call Claude API to generate fix
+    let claude_client = ClaudeClient::new()
+        .map_err(|e| format!("Failed to create Claude client: {}", e))?;
 
-    /*
-    // UNREACHABLE CODE - Commented out until fix generation is properly implemented
-    // This code depends on fixed_code and explanation variables that would come from
-    // the Claude API integration above.
+    let framework_str = _project_framework.as_deref().unwrap_or("unknown");
+
+    let fixed_code = claude_client.generate_fix(
+        &_violation.control_id,
+        &_violation.description,
+        &_violation.code_snippet,
+        framework_str,
+        _violation.function_name.as_deref(),
+        _violation.class_name.as_deref(),
+    )
+    .await
+    .map_err(|e| format!("Claude API error: {}", e))?;
+
+    // Generate explanation based on control ID
+    let explanation = match _violation.control_id.as_str() {
+        "CC6.1" => "Added access control protection to ensure only authorized users can access this resource.",
+        "CC6.7" => "Moved hardcoded secret to environment variable. Use secure secret management in production.",
+        "CC7.2" => "Added audit logging to track this sensitive operation for compliance monitoring.",
+        "A1.2" => "Added error handling with proper recovery logic to improve system resilience.",
+        _ => "Applied security fix to address compliance violation.",
+    }.to_string();
 
     // Phase 3: Write results back to database (scoped to drop guard immediately)
     let result = {
@@ -97,7 +114,7 @@ pub async fn generate_fix(
         let fix = Fix {
             id: 0,
             violation_id,
-            original_code: violation.code_snippet.clone(),
+            original_code: _violation.code_snippet.clone(),
             fixed_code,
             explanation,
             trust_level: "review".to_string(),
@@ -114,10 +131,10 @@ pub async fn generate_fix(
         if let Ok(event) = create_audit_event(
             &conn,
             "fix_generated",
-            Some(scan_project_id),
+            Some(_scan_project_id),
             Some(violation_id),
             Some(fix_id),
-            &format!("Generated fix for violation: {}", violation.description),
+            &format!("Generated fix for violation: {}", _violation.description),
         ) {
             let _ = queries::insert_audit_event(&conn, &event);
         }
@@ -129,7 +146,6 @@ pub async fn generate_fix(
     }; // MutexGuard dropped here
 
     Ok(result)
-    */
 }
 
 /// Apply a fix to file content at a specific line number (pure function)
