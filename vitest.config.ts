@@ -8,6 +8,13 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
+    exclude: [
+      'node_modules/**',
+      'e2e-tests/**/*.spec.js', // WebDriverIO tests, not Vitest tests
+      '.next/**',
+      'out/**',
+      'dist/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],

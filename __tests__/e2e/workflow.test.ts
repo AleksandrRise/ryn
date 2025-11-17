@@ -636,7 +636,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
         await commands.apply_fix(fix.id)
       }
 
-      expect(mockInvoke).toHaveBeenCalledTimes(4)
+      expect(mockInvoke).toHaveBeenCalledTimes(5) // 1 get_violations + 2 generate_fix + 2 apply_fix
     })
   })
 

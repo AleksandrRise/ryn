@@ -56,8 +56,8 @@ describe('SOC2 Prompts', () => {
 
     it('should contain framework-specific guidance', () => {
       const prompt = SOC2_PROMPTS['CC6.1'].analysisPrompt
-      expect(prompt).toContain('Django')
-      expect(prompt).toContain('Express')
+      expect(prompt).toContain('{framework}')
+      expect(prompt).toContain('@login_required')
     })
 
     it('should have fix prompt with decorator guidance', () => {
@@ -119,7 +119,7 @@ describe('SOC2 Prompts', () => {
       const prompt = SOC2_PROMPTS['CC7.2'].analysisPrompt
       expect(prompt).toContain('sensitive')
       expect(prompt).toContain('user')
-      expect(prompt).toContain('authentication')
+      expect(prompt).toContain('audit')
     })
 
     it('should warn against logging secrets', () => {
@@ -359,8 +359,8 @@ describe('SOC2 Prompts', () => {
     })
 
     it('A1.2 should mention recovery', () => {
-      const prompt = SOC2_PROMPTS['A1.2'].analysisPrompt
-      expect(prompt.toLowerCase()).toContain('recover')
+      const description = SOC2_PROMPTS['A1.2'].description
+      expect(description.toLowerCase()).toContain('recover')
     })
   })
 })

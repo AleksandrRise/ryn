@@ -155,7 +155,7 @@ export async function detect_framework(path: string): Promise<string> {
 export async function scan_project(
   projectId: number
 ): Promise<ScanResult> {
-  return await invoke<ScanResult>("scan_project", { projectId })
+  return await invoke<ScanResult>("scan_project", { project_id: projectId })
 }
 
 /**
@@ -173,7 +173,7 @@ export async function get_scan_progress(
 export async function get_scans(
   projectId: number
 ): Promise<ScanResult[]> {
-  return await invoke<ScanResult[]>("get_scans", { projectId })
+  return await invoke<ScanResult[]>("get_scans", { project_id: projectId })
 }
 
 /**
@@ -209,7 +209,7 @@ export async function get_violations(
   filters?: ViolationFilters
 ): Promise<Violation[]> {
   return await invoke<Violation[]>("get_violations", {
-    scanId,
+    scan_id: scanId,
     filters,
   })
 }
@@ -221,7 +221,7 @@ export async function get_violation(
   violationId: number
 ): Promise<ViolationDetail> {
   return await invoke<ViolationDetail>("get_violation", {
-    violationId,
+    violation_id: violationId,
   })
 }
 
@@ -231,7 +231,7 @@ export async function get_violation(
 export async function dismiss_violation(
   violationId: number
 ): Promise<void> {
-  await invoke<void>("dismiss_violation", { violationId })
+  await invoke<void>("dismiss_violation", { violation_id: violationId })
 }
 
 // ============================================================================
