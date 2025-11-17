@@ -1,12 +1,19 @@
 /**
- * E2E Tests: Scan Workflow
+ * E2E Tests: Basic Scan Workflow
  *
- * Tests the complete scanning workflow from launching the app to applying fixes:
- * - Application launch and main window display
- * - Project folder selection via file dialog
- * - Violation detection for all 4 SOC 2 controls (CC6.1, CC6.7, CC7.2, A1.2)
- * - AI fix generation for detected violations
- * - Fix application and git commit creation
+ * Tests the complete scan workflow from project creation through violation management.
+ * This test suite invokes REAL Tauri commands (no mocks) to verify end-to-end functionality.
+ *
+ * Test Coverage (9 test cases):
+ * 1. Project creation flow
+ * 2. Framework detection
+ * 3. Basic scan (regex_only mode)
+ * 4. Violations displayed with detection badges
+ * 5. Violation detail view
+ * 6. Dismiss violation
+ * 7. Smart scan mode selection
+ * 8. Analyze_all scan mode selection
+ * 9. Verify database state after operations
  */
 
 import { browser, expect } from '@wdio/globals';
@@ -18,9 +25,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Path to Django violations fixture folder
-const DJANGO_FIXTURES_PATH = path.resolve(__dirname, '../fixtures/django-violations');
+const DJANGO_FIXTURES_PATH = path.resolve(__dirname, '../fixtures/vulnerable-django');
 
-describe('Scan Workflow E2E Tests', () => {
+describe('01 - Basic Scan Workflow', () => {
   /**
    * Test: Application Launch
    *
@@ -278,5 +285,180 @@ describe('Scan Workflow E2E Tests', () => {
     expect(foundFixedViolation).toBe(true);
 
     console.log('✓ Fix applied successfully and git commit created');
+  });
+
+  /**
+   * Test 6: Dismiss Violation
+   *
+   * Tests the dismiss violation functionality by invoking the Tauri command directly.
+   *
+   * Expected: Violation status should change to "dismissed"
+   */
+  it('should dismiss a violation successfully', async () => {
+    // Get violations to find one to dismiss
+    const violations = await browser.execute(async () => {
+      // @ts-ignore - Tauri API available in app context
+      const { invoke } = window.__TAURI__.core;
+      const projects = await invoke('get_projects');
+      const project = projects.find(p => p.name === 'Django E2E Test');
+      const scans = await invoke('get_scans', { projectId: project.project_id });
+      const latestScan = scans[0];
+      return await invoke('get_violations', { scanId: latestScan.scan_id });
+    });
+
+    expect(violations.length).toBeGreaterThan(0);
+
+    // Dismiss the first open violation
+    const violationToDismiss = violations.find(v => v.status === 'open');
+    expect(violationToDismiss).toBeDefined();
+
+    await browser.execute(async (violationId) => {
+      // @ts-ignore - Tauri API available in app context
+      const { invoke } = window.__TAURI__.core;
+      await invoke('dismiss_violation', { violationId: violationId });
+    }, violationToDismiss.violation_id);
+
+    // Verify violation was dismissed
+    const dismissedViolation = await browser.execute(async (violationId) => {
+      // @ts-ignore - Tauri API available in app context
+      const { invoke } = window.__TAURI__.core;
+      return await invoke('get_violation', { violationId: violationId });
+    }, violationToDismiss.violation_id);
+
+    expect(dismissedViolation.status).toBe('dismissed');
+
+    console.log('✓ Violation dismissed successfully');
+  });
+
+  /**
+   * Test 7: Smart Scan Mode Selection
+   *
+   * Tests updating settings to use "smart" scan mode via Tauri command.
+   *
+   * Expected: Settings should be updated with llm_scan_mode = "smart"
+   */
+  it('should update scan mode to "smart" in settings', async () => {
+    await browser.execute(async () => {
+      // @ts-ignore - Tauri API available in app context
+      const { invoke } = window.__TAURI__.core;
+      await invoke('update_settings', {
+        llmScanMode: 'smart',
+        costLimitPerScan: 5.0
+      });
+    });
+
+    // Verify settings were updated
+    const settings = await browser.execute(async () => {
+      // @ts-ignore - Tauri API available in app context
+      const { invoke } = window.__TAURI__.core;
+      return await invoke('get_settings');
+    });
+
+    expect(settings.llm_scan_mode).toBe('smart');
+    expect(settings.cost_limit_per_scan).toBe(5.0);
+
+    console.log('✓ Scan mode updated to "smart"');
+  });
+
+  /**
+   * Test 8: Analyze All Scan Mode Selection
+   *
+   * Tests updating settings to use "analyze_all" scan mode via Tauri command.
+   *
+   * Expected: Settings should be updated with llm_scan_mode = "analyze_all"
+   */
+  it('should update scan mode to "analyze_all" in settings', async () => {
+    await browser.execute(async () => {
+      // @ts-ignore - Tauri API available in app context
+      const { invoke } = window.__TAURI__.core;
+      await invoke('update_settings', {
+        llmScanMode: 'analyze_all',
+        costLimitPerScan: 10.0
+      });
+    });
+
+    // Verify settings were updated
+    const settings = await browser.execute(async () => {
+      // @ts-ignore - Tauri API available in app context
+      const { invoke } = window.__TAURI__.core;
+      return await invoke('get_settings');
+    });
+
+    expect(settings.llm_scan_mode).toBe('analyze_all');
+    expect(settings.cost_limit_per_scan).toBe(10.0);
+
+    console.log('✓ Scan mode updated to "analyze_all"');
+  });
+
+  /**
+   * Test 9: Verify Database State After Operations
+   *
+   * Tests that all operations are properly logged in the audit trail.
+   *
+   * Expected:
+   * - Audit events should exist for project creation, scan completion, settings updates
+   * - Project should be stored correctly with framework info
+   * - Scans should be recorded with status and timestamps
+   */
+  it('should verify database state has audit events logged', async () => {
+    // Get audit events
+    const auditEvents = await browser.execute(async () => {
+      // @ts-ignore - Tauri API available in app context
+      const { invoke } = window.__TAURI__.core;
+      return await invoke('get_audit_events', { limit: 50 });
+    });
+
+    // Verify we have audit events
+    expect(auditEvents.length).toBeGreaterThan(0);
+
+    // Verify expected event types exist
+    const projectCreatedEvent = auditEvents.find(e => e.event_type === 'project_created');
+    expect(projectCreatedEvent).toBeDefined();
+
+    const scanCompletedEvent = auditEvents.find(e => e.event_type === 'scan_completed');
+    expect(scanCompletedEvent).toBeDefined();
+
+    const settingsUpdatedEvent = auditEvents.find(e => e.event_type === 'settings_updated');
+    expect(settingsUpdatedEvent).toBeDefined();
+
+    // Verify project data is correct
+    const projects = await browser.execute(async () => {
+      // @ts-ignore - Tauri API available in app context
+      const { invoke } = window.__TAURI__.core;
+      return await invoke('get_projects');
+    });
+
+    const djangoProject = projects.find(p => p.name === 'Django E2E Test');
+    expect(djangoProject).toBeDefined();
+    expect(djangoProject.framework).toBe('Django');
+    expect(djangoProject.path).toContain('vulnerable-django');
+
+    // Verify scans are recorded
+    const scans = await browser.execute(async (projectId) => {
+      // @ts-ignore - Tauri API available in app context
+      const { invoke } = window.__TAURI__.core;
+      return await invoke('get_scans', { projectId: projectId });
+    }, djangoProject.project_id);
+
+    expect(scans.length).toBeGreaterThan(0);
+    expect(scans[0].status).toBe('completed');
+    expect(scans[0].started_at).toBeDefined();
+    expect(scans[0].completed_at).toBeDefined();
+
+    console.log('✓ Database state verified with audit events');
+  });
+
+  after(async () => {
+    // Clean up: Reset settings to default
+    await browser.execute(async () => {
+      // @ts-ignore - Tauri API available in app context
+      const { invoke } = window.__TAURI__.core;
+      await invoke('update_settings', {
+        llmScanMode: 'regex_only',
+        costLimitPerScan: 5.0
+      });
+    });
+
+    console.log('✓ Cleanup completed');
   });
 });

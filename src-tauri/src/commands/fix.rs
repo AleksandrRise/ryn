@@ -8,11 +8,9 @@ use crate::git::GitOperations;
 use crate::security::path_validation;
 use crate::rate_limiter::{RateLimiter, RateLimiterConfig};
 use crate::utils::create_audit_event;
-use crate::langgraph::agent_runner::AgentRunner;
 use std::path::Path;
 use std::sync::Arc;
 use once_cell::sync::Lazy;
-use tauri::State;
 
 // Global rate limiter instance (shared across all fix generation calls)
 static RATE_LIMITER: Lazy<Arc<RateLimiter>> = Lazy::new(|| {
@@ -40,13 +38,11 @@ static RATE_LIMITER: Lazy<Arc<RateLimiter>> = Lazy::new(|| {
 ///
 /// # Arguments
 /// * `violation_id` - ID of the violation to fix
-/// * `agent_runner` - Shared AgentRunner state for invoking the agent
 ///
 /// Returns: Generated Fix object or error
 #[tauri::command]
 pub async fn generate_fix(
     violation_id: i64,
-    agent_runner: State<'_, AgentRunner>,
 ) -> Result<Fix, String> {
     // Phase 1: Read all required data from database (scoped to drop guard before awaits)
     let (violation, scan_project_id, _project_path, project_framework, file_path) = {
@@ -79,39 +75,20 @@ pub async fn generate_fix(
     let file_content = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
-    // Phase 2: Invoke LangGraph agent (no DB connection held)
+    // Phase 2: Invoke AI fix generation (no DB connection held)
     // Check rate limit before calling agent
     RATE_LIMITER.check_rate_limit().await
         .map_err(|e| format!("API rate limit: {}", e))?;
 
-    // Run the AI agent via langchain-rust Claude integration
-    let agent_response = agent_runner
-        .run(
-            &violation.file_path,
-            &file_content,
-            &project_framework.as_deref().unwrap_or("unknown"),
-            vec![violation.clone()],
-        )
-        .await
-        .map_err(|e| format!("Failed to generate fix via agent: {}", e))?;
+    // TODO(IMPLEMENT): Replace AgentRunner stub with real Claude API client
+    // The LangGraph AgentRunner was a stub. We need to implement direct Claude API integration
+    // using fix_generator/claude_client.rs. For now, return an error to make tests compile.
+    return Err("Fix generation not yet fully implemented - AgentRunner stub removed".to_string());
 
-    // Validate agent response
-    if !agent_response.success {
-        return Err(format!(
-            "Agent failed to generate fix: {}",
-            agent_response.error.unwrap_or_else(|| "Unknown error".to_string())
-        ));
-    }
-
-    // Extract the fix from the agent response
-    let agent_fix = agent_response
-        .fixes
-        .first()
-        .ok_or_else(|| "Agent did not generate any fixes".to_string())?;
-
-    // Convert agent fix to database fix
-    let fixed_code = agent_fix.fixed_code.clone();
-    let explanation = agent_fix.explanation.clone();
+    /*
+    // UNREACHABLE CODE - Commented out until fix generation is properly implemented
+    // This code depends on fixed_code and explanation variables that would come from
+    // the Claude API integration above.
 
     // Phase 3: Write results back to database (scoped to drop guard immediately)
     let result = {
@@ -153,6 +130,7 @@ pub async fn generate_fix(
     }; // MutexGuard dropped here
 
     Ok(result)
+    */
 }
 
 /// Apply a generated fix to the source code

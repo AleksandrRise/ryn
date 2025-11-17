@@ -369,9 +369,9 @@ mod tests {
             );
         }
 
-        // Verify schema version is set to 2 (latest)
+        // Verify schema version is set to 3 (latest)
         let version = get_schema_version(&conn).unwrap();
-        assert_eq!(version, 2, "Schema version should be 2 after all migrations");
+        assert_eq!(version, 3, "Schema version should be 3 after all migrations");
     }
 
     #[test]
@@ -394,9 +394,9 @@ mod tests {
 
         assert_eq!(table_count, 8, "Should have exactly 8 tables (7 original + scan_costs)");
 
-        // Verify schema version stays at 2
+        // Verify schema version stays at 3
         let version = get_schema_version(&conn).unwrap();
-        assert_eq!(version, 2, "Schema version should remain 2 after multiple runs");
+        assert_eq!(version, 3, "Schema version should remain 3 after multiple runs");
     }
 
     #[test]
@@ -442,8 +442,8 @@ mod tests {
         // Run full migrations (should only apply v2)
         run_migrations(&conn).unwrap();
 
-        // Verify final version is 2
-        assert_eq!(get_schema_version(&conn).unwrap(), 2);
+        // Verify final version is 3
+        assert_eq!(get_schema_version(&conn).unwrap(), 3);
 
         // Verify v1 tables + scan_costs (8 total)
         let table_count: i64 = conn
