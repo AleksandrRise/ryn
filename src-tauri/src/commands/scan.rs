@@ -1493,7 +1493,6 @@ DB_PASSWORD = "production_secret_key_xyz"
     /// 5. Watcher state is cleared after stopping
     #[tokio::test]
     #[serial_test::serial]
-    #[ignore]
     async fn test_file_watcher_lifecycle() {
         let _guard = TestDbGuard::new();
         let (project_dir, project_id) = create_test_project_with_guard(&_guard);
@@ -1607,7 +1606,6 @@ def update_user(user_id, data):
     /// Test that FileWatcher correctly filters file events by extension
     #[tokio::test]
     #[serial_test::serial]
-    #[ignore] // TODO: Fix FileWatcher deadlock when integrating UI (items 36-39)
     async fn test_file_watcher_extension_filtering() {
         let _guard = TestDbGuard::new();
         let project_dir = tempfile::TempDir::new().unwrap();

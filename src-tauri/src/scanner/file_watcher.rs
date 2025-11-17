@@ -23,7 +23,8 @@ pub enum FileEvent {
 /// Handle to manage the file watcher lifecycle
 pub struct WatcherHandle {
     rx: async_channel::Receiver<FileEvent>,
-    #[allow(dead_code)]
+    shutdown_tx: async_channel::Sender<()>,
+    #[allow(dead_code)] // Kept alive to prevent thread from being dropped prematurely
     watcher_handle: JoinHandle<()>,
 }
 
@@ -31,6 +32,18 @@ impl WatcherHandle {
     /// Receive the next file event
     pub async fn recv(&self) -> Option<FileEvent> {
         self.rx.recv().await.ok()
+    }
+
+    /// Signal the watcher to shut down gracefully
+    pub fn shutdown(&self) {
+        let _ = self.shutdown_tx.send_blocking(());
+    }
+}
+
+impl Drop for WatcherHandle {
+    fn drop(&mut self) {
+        // Signal shutdown
+        let _ = self.shutdown_tx.send_blocking(());
     }
 }
 
@@ -76,6 +89,7 @@ impl FileWatcher {
         let extensions = self.extensions.clone();
 
         let (tx, rx) = async_channel::unbounded::<FileEvent>();
+        let (shutdown_tx, shutdown_rx) = async_channel::unbounded::<()>();
 
         // Spawn blocking task for file watching
         let watcher_handle = tokio::task::spawn_blocking(move || {
@@ -145,9 +159,12 @@ impl FileWatcher {
                         return;
                     }
 
-                    // Keep watcher alive
+                    // Keep watcher alive until shutdown signal
                     loop {
-                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        if shutdown_rx.try_recv().is_ok() {
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                     }
                 }
                 Err(e) => {
@@ -156,7 +173,11 @@ impl FileWatcher {
             }
         });
 
-        Ok(WatcherHandle { rx, watcher_handle })
+        Ok(WatcherHandle {
+            rx,
+            shutdown_tx,
+            watcher_handle,
+        })
     }
 
     fn should_watch_path(
