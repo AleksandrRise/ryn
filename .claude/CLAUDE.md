@@ -7,10 +7,12 @@
 **Tech Stack**: Tauri 2.0 (Rust backend) + Next.js 16.0.1 (React 19) + SQLite + Claude Haiku 4.5
 
 **Status**:
-- ✅ Complete backend (20 Tauri commands), hybrid scanning (regex + LLM), cost tracking, full UI, database with migrations, 457 Rust tests passing
+- ✅ Complete backend (20 Tauri commands), hybrid scanning (regex + LLM), cost tracking, full UI, database with migrations
+- ✅ 660 Rust tests passing (457 library + 200 integration + 3 doctests, 0 ignored)
 - ✅ Tree-sitter enriches violations with code context
 - ✅ File watcher fully integrated with graceful shutdown mechanism (all tests passing)
 - ✅ Fix generation uses ClaudeClient with real Claude Haiku 4.5 API integration
+- ✅ All doctests fixed and passing
 
 ## Development
 
@@ -21,7 +23,7 @@ pnpm tauri dev             # Run with hot-reload (recommended)
 pnpm build && pnpm tauri build  # Production build
 
 # Testing
-cd src-tauri && cargo test  # Backend tests (457 passing, 0 ignored)
+cd src-tauri && cargo test  # Backend tests (660 total: 457 library + 200 integration + 3 doctests)
 pnpm test                   # Frontend unit tests
 pnpm test:coverage          # Frontend tests with coverage
 pnpm test:e2e               # End-to-end tests

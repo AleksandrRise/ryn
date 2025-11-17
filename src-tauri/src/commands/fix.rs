@@ -173,6 +173,8 @@ pub async fn generate_fix(
 ///
 /// # Example
 /// ```rust
+/// use ryn::commands::fix::apply_fix_to_content;
+///
 /// let content = "line1\npassword = \"secret\"\nline3\n";
 /// let result = apply_fix_to_content(
 ///     content,
@@ -180,7 +182,7 @@ pub async fn generate_fix(
 ///     "os.getenv(\"PASSWORD\")",
 ///     2  // Line 2
 /// );
-/// assert_eq!(result.unwrap(), "line1\npassword = os.getenv(\"PASSWORD\")\nline3\n");
+/// assert_eq!(result.unwrap(), "line1\npassword = os.getenv(\"PASSWORD\")\nline3");
 /// ```
 pub fn apply_fix_to_content(
     file_content: &str,

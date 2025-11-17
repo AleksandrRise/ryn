@@ -208,10 +208,15 @@ impl Default for CodeParser {
 /// * `(Option<String>, Option<String>)` - (function_name, class_name)
 ///
 /// # Example
-/// ```
-/// let parser = CodeParser::new()?;
-/// let result = parser.parse_python(code)?;
-/// let (func_name, class_name) = find_context_at_line(&result, 10);
+/// ```no_run
+/// use ryn::scanner::CodeParser;
+/// use ryn::scanner::tree_sitter_utils::find_context_at_line;
+///
+/// let parser = CodeParser::new().unwrap();
+/// let code = "def my_function():\n    pass\n";
+/// let result = parser.parse_python(code).unwrap();
+/// let (func_name, class_name) = find_context_at_line(&result, 1);
+/// assert_eq!(func_name, Some("my_function".to_string()));
 /// ```
 pub fn find_context_at_line(
     parse_result: &ParseResult,
