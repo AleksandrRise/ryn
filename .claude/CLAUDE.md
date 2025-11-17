@@ -85,7 +85,6 @@ lib/tauri/        # TypeScript command wrappers
 - Path traversal protection via `validate_project_path()`
 - System directories blocked (`/etc`, `/usr`, etc.)
 - Parameterized SQL queries
-- Git operations via `git2` library (no shell execution)
 
 ## Known Issues
 - File watcher not integrated (manual scans only)
