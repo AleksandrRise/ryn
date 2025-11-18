@@ -608,3 +608,244 @@ fn test_fastapi_framework_detected() {
         println!("[Test] ℹ️ No framework detected (FastAPI detection may need implementation)");
     }
 }
+
+// ============================================================================
+// PHASE 1.3: Line Number Accuracy & Code Snippet Extraction
+// ============================================================================
+
+/// Test 8: Verify line numbers are accurate for all rule engines
+#[test]
+fn test_line_number_accuracy() {
+    println!("[Test] Testing line number accuracy for all rule engines...");
+
+    let scan_id = 1;
+
+    // Test CC6.1 - Flask route at specific line
+    let cc61_code = r#"# Line 1: Comment
+from flask import Flask  # Line 2
+
+app = Flask(__name__)  # Line 4
+
+@app.route('/admin')  # Line 6 - This should be flagged
+def admin_panel():     # Line 7
+    return "Admin Panel"
+"#;
+
+    let cc61_violations = ryn::rules::CC61AccessControlRule::analyze(cc61_code, "app.py", scan_id).unwrap();
+
+    if !cc61_violations.is_empty() {
+        println!("[Test] CC6.1: Found violation at line {}", cc61_violations[0].line_number);
+        // Flask route violations can be reported at decorator (line 6) or function def (line 7)
+        assert!(
+            cc61_violations[0].line_number >= 6 && cc61_violations[0].line_number <= 7,
+            "CC6.1: Expected line 6-7 (Flask route declaration), got line {}",
+            cc61_violations[0].line_number
+        );
+        println!("[Test] ✅ CC6.1 line number accurate (line {}, decorator or function def)", cc61_violations[0].line_number);
+    } else {
+        println!("[Test] ℹ️ CC6.1 detected no violations (may not detect /admin without @login_required)");
+    }
+
+    // Test CC6.7 - Hardcoded secret at specific line
+    let cc67_code = r#"# Configuration file
+# Line 2: Comment
+
+import os  # Line 4
+
+# Database configuration  # Line 6
+password = "MyS3cr3tP@ssw0rd"  # Line 7 - This should be flagged
+db_host = os.getenv("DB_HOST")  # Line 8 - Should NOT be flagged
+"#;
+
+    let cc67_violations = ryn::rules::CC67SecretsRule::analyze(cc67_code, "config.py", scan_id).unwrap();
+
+    println!("[Test] CC6.7: Found {} violations", cc67_violations.len());
+    for v in &cc67_violations {
+        println!("[Test]   - Line {}: {}", v.line_number, v.description);
+    }
+
+    assert!(
+        !cc67_violations.is_empty(),
+        "CC6.7: Should detect hardcoded password at line 7. Code:\n{}",
+        cc67_code
+    );
+
+    println!("[Test] CC6.7: Found violation at line {}", cc67_violations[0].line_number);
+    assert_eq!(
+        cc67_violations[0].line_number, 7,
+        "CC6.7: Expected line 7 (hardcoded password), got line {}",
+        cc67_violations[0].line_number
+    );
+    println!("[Test] ✅ CC6.7 line number accurate (line 7)");
+
+    // Test CC7.2 - Missing audit log at specific line
+    let cc72_code = r#"from flask import request
+# Line 2
+
+def update_user_role(user_id, new_role):  # Line 4
+    # Line 5: Comment
+    user = User.query.get(user_id)  # Line 6 - Sensitive operation should be logged
+    user.role = new_role
+    db.session.commit()
+"#;
+
+    let cc72_violations = ryn::rules::CC72LoggingRule::analyze(cc72_code, "auth.py", scan_id).unwrap();
+
+    if !cc72_violations.is_empty() {
+        println!("[Test] CC7.2: Found violation at line {}", cc72_violations[0].line_number);
+        // CC7.2 might flag the function definition or the actual operation
+        assert!(
+            cc72_violations[0].line_number >= 4 && cc72_violations[0].line_number <= 8,
+            "CC7.2: Expected line 4-8 (function with sensitive operation), got line {}",
+            cc72_violations[0].line_number
+        );
+        println!("[Test] ✅ CC7.2 line number in expected range");
+    } else {
+        println!("[Test] ℹ️ CC7.2 detected no violations (may need pattern improvements)");
+    }
+
+    // Test A1.2 - Missing error handling at specific line
+    let a12_code = r#"import requests
+# Line 2
+
+def fetch_user_data(user_id):  # Line 4
+    # Line 5
+    response = requests.get(f"https://api.example.com/users/{user_id}")  # Line 6 - Should be flagged
+    return response.json()
+"#;
+
+    let a12_violations = ryn::rules::A12ResilienceRule::analyze(a12_code, "api.py", scan_id).unwrap();
+
+    if !a12_violations.is_empty() {
+        println!("[Test] A1.2: Found violation at line {}", a12_violations[0].line_number);
+        assert_eq!(
+            a12_violations[0].line_number, 6,
+            "A1.2: Expected line 6 (requests.get without error handling), got line {}",
+            a12_violations[0].line_number
+        );
+        println!("[Test] ✅ A1.2 line number accurate (line 6)");
+    } else {
+        println!("[Test] ⚠️ A1.2 detected no violations - may need investigation");
+    }
+
+    println!("[Test] ✅ Line number accuracy test completed!");
+}
+
+/// Test 9: Verify code snippets are extracted correctly
+#[test]
+fn test_code_snippet_extraction() {
+    println!("[Test] Testing code snippet extraction accuracy...");
+
+    let scan_id = 1;
+
+    // Test that code snippets match the actual violating lines
+    let test_code = r#"
+import os
+
+token = "Pr0duct10nT0k3n"  # This is the violation
+DATABASE_URL = os.getenv("DATABASE_URL")  # This is safe
+"#;
+
+    let violations = ryn::rules::CC67SecretsRule::analyze(test_code, "config.py", scan_id).unwrap();
+
+    assert!(
+        !violations.is_empty(),
+        "Should detect hardcoded secret"
+    );
+
+    let snippet = &violations[0].code_snippet;
+    println!("[Test] Extracted snippet: '{}'", snippet);
+
+    // ASSERTION 1: Snippet should contain the actual violation
+    assert!(
+        snippet.contains("token") || snippet.contains("Pr0duct10n"),
+        "Code snippet should contain the violating code. Got: '{}'",
+        snippet
+    );
+
+    // ASSERTION 2: Snippet should not be empty
+    assert!(
+        !snippet.trim().is_empty(),
+        "Code snippet should not be empty"
+    );
+
+    // ASSERTION 3: Snippet should not be excessively long (should be just the line, not entire file)
+    assert!(
+        snippet.len() < 200,
+        "Code snippet should be concise (< 200 chars). Got {} chars: '{}'",
+        snippet.len(),
+        snippet
+    );
+
+    // Test snippet for multi-line context (if applicable)
+    let multiline_code = r#"
+def process_payment(amount):
+    api_key = "sk_live_hardcoded_stripe_key_12345"
+    stripe.charge(amount, api_key)
+"#;
+
+    let multiline_violations = ryn::rules::CC67SecretsRule::analyze(multiline_code, "payment.py", scan_id).unwrap();
+
+    if !multiline_violations.is_empty() {
+        let multiline_snippet = &multiline_violations[0].code_snippet;
+        println!("[Test] Multi-line snippet: '{}'", multiline_snippet);
+
+        assert!(
+            multiline_snippet.contains("api_key") || multiline_snippet.contains("sk_live"),
+            "Snippet should contain the violation context"
+        );
+    }
+
+    println!("[Test] ✅ Code snippet extraction verified!");
+}
+
+/// Test 10: Verify line numbers match across file scanning (integration)
+#[test]
+fn test_line_numbers_in_file_scanning() {
+    println!("[Test] Testing line number accuracy in file scanning context...");
+
+    // Use vulnerable-flask as it has known violations at known lines
+    let fixture = PathBuf::from("/Users/seane/test-repos/vulnerable-flask");
+
+    if !fixture.exists() {
+        eprintln!("Skipping test: vulnerable-flask not found");
+        return;
+    }
+
+    let scan_id = 1;
+    let violations = scan_python_files(&fixture, scan_id);
+
+    println!("[Test] Found {} total violations across all files", violations.len());
+
+    // ASSERTION 1: All violations have positive line numbers
+    for v in &violations {
+        assert!(
+            v.line_number > 0,
+            "Line number should be positive. Found {} in file {}",
+            v.line_number,
+            v.file_path
+        );
+    }
+
+    // ASSERTION 2: All violations have non-empty code snippets
+    for v in &violations {
+        assert!(
+            !v.code_snippet.trim().is_empty(),
+            "Code snippet should not be empty for violation at {}:{}",
+            v.file_path,
+            v.line_number
+        );
+    }
+
+    // ASSERTION 3: Line numbers should be reasonable (not absurdly high)
+    for v in &violations {
+        assert!(
+            v.line_number < 10000,
+            "Line number seems unreasonably high: {} in file {}. Possible bug?",
+            v.line_number,
+            v.file_path
+        );
+    }
+
+    println!("[Test] ✅ All {} violations have valid line numbers and snippets", violations.len());
+}
