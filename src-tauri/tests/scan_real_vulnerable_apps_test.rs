@@ -780,7 +780,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")  # This is safe
     // Test snippet for multi-line context (if applicable)
     let multiline_code = r#"
 def process_payment(amount):
-    api_key = "sk_live_hardcoded_stripe_key_12345"
+    api_key = "test_stripe_key_FAKE_NOT_REAL"
     stripe.charge(amount, api_key)
 "#;
 
@@ -1059,7 +1059,7 @@ fn test_cc67_secrets_in_config_files() {
         "host": "localhost"
     },
     "api": {
-        "key": "sk_live_prod_key_abc123def456"
+        "key": "test_stripe_key_FAKE_NOT_REAL"
     }
 }
 "#;
