@@ -31,7 +31,7 @@ export default function RootLayout({
         <ErrorBoundary>
           <ConsoleLogger />
           <WaterBackground />
-          <div className="fixed inset-0 bg-black/65 z-[5]" />
+          <div className="fixed inset-0 bg-black/78 backdrop-blur-[2px] z-[5]" />
           <div className="relative z-10">{children}</div>
           <Toaster theme="dark" richColors />
         </ErrorBoundary>
