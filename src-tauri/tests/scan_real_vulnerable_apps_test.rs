@@ -1294,3 +1294,139 @@ def create_user(username):
 
     println!("[Test] Structured logging test completed");
 }
+
+// ============================================================================
+// PHASE 2.4: A1.2 Edge Case Testing - Resilience & Error Handling Patterns
+// ============================================================================
+
+/// Test 20: A1.2 timeout value reasonableness - does it validate timeout values?
+#[test]
+fn test_a12_timeout_value_reasonableness() {
+    println!("[Test] Testing A1.2 detection of timeout value reasonableness...");
+
+    let scan_id = 1;
+
+    // Unreasonably small timeout (1ms for network request)
+    let tiny_timeout_code = r#"
+import requests
+
+def fetch_user_data(user_id):
+    response = requests.get(
+        f'https://api.example.com/users/{user_id}',
+        timeout=0.001  # 1ms - unreasonably small
+    )
+    return response.json()
+"#;
+
+    let tiny_violations = ryn::rules::A12ResilienceRule::analyze(tiny_timeout_code, "api.py", scan_id).unwrap();
+
+    println!("[Test] Tiny timeout (1ms): Found {} violations", tiny_violations.len());
+
+    let has_timeout_violation = tiny_violations.iter().any(|v| v.description.contains("timeout"));
+
+    if has_timeout_violation {
+        println!("[Test] ⚠️ FALSE POSITIVE: 1ms timeout flagged (but timeout exists)");
+    } else {
+        println!("[Test] ✅ No violation - timeout present (doesn't validate reasonableness)");
+    }
+
+    // Extremely large timeout (1 hour)
+    let huge_timeout_code = r#"
+import requests
+
+def sync_data():
+    response = requests.post(
+        'https://api.example.com/sync',
+        timeout=3600  # 1 hour - extremely large
+    )
+    return response.status_code
+"#;
+
+    let huge_violations = ryn::rules::A12ResilienceRule::analyze(huge_timeout_code, "sync.py", scan_id).unwrap();
+
+    println!("[Test] Huge timeout (1 hour): Found {} violations", huge_violations.len());
+
+    if huge_violations.is_empty() {
+        println!("[Test] ℹ️ A1.2 does NOT validate timeout value reasonableness");
+        println!("[Test] Only checks presence of timeout, not the actual value");
+    } else {
+        println!("[Test] ✅ Validates timeout reasonableness");
+    }
+
+    println!("[Test] Timeout value reasonableness test completed");
+}
+
+/// Test 21: A1.2 connection pooling patterns - recognized as resilience mechanism?
+#[test]
+fn test_a12_connection_pooling_patterns() {
+    println!("[Test] Testing A1.2 detection of connection pooling patterns...");
+
+    let scan_id = 1;
+
+    // Connection pooling with requests.Session (best practice for resilience)
+    let session_pooling_code = r#"
+import requests
+
+session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(
+    pool_connections=10,
+    pool_maxsize=20,
+    max_retries=3
+)
+session.mount('https://', adapter)
+
+def api_call(endpoint):
+    response = session.get(f'https://api.example.com/{endpoint}', timeout=30)
+    return response.json()
+"#;
+
+    let session_violations = ryn::rules::A12ResilienceRule::analyze(session_pooling_code, "client.py", scan_id).unwrap();
+
+    println!("[Test] Session pooling: Found {} violations", session_violations.len());
+
+    // Check for error handling violation (session.get without try/except)
+    let has_error_handling_violation = session_violations.iter()
+        .any(|v| v.description.contains("error handling"));
+
+    if has_error_handling_violation {
+        println!("[Test] ⚠️ Session pooling NOT recognized as error handling");
+        println!("[Test] Still requires explicit try/except even with connection pooling");
+    } else {
+        println!("[Test] ✅ Session pooling recognized as sufficient resilience");
+    }
+
+    // Database connection pooling (sqlalchemy, psycopg2 pool)
+    let db_pooling_code = r#"
+from sqlalchemy.pool import QueuePool
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    'postgresql://user:pass@localhost/db',
+    poolclass=QueuePool,
+    pool_size=10,
+    max_overflow=20,
+    pool_timeout=30,
+    pool_recycle=3600
+)
+
+def query_users():
+    result = engine.execute("SELECT * FROM users")
+    return result.fetchall()
+"#;
+
+    let db_pool_violations = ryn::rules::A12ResilienceRule::analyze(db_pooling_code, "database.py", scan_id).unwrap();
+
+    println!("[Test] Database pooling: Found {} violations", db_pool_violations.len());
+
+    let has_db_error_violation = db_pool_violations.iter()
+        .any(|v| v.description.contains("error handling") || v.description.contains("Database operation"));
+
+    if has_db_error_violation {
+        println!("[Test] ⚠️ Database connection pooling NOT recognized");
+        println!("[Test] engine.execute() still requires try/except");
+    } else {
+        println!("[Test] ✅ Database pooling recognized as resilience mechanism");
+    }
+
+    println!("[Test] Connection pooling test completed");
+}
