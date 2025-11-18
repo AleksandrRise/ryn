@@ -35,6 +35,7 @@ fn main() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_mcp_bridge::init())
         .manage(scan::ScanResponseChannels::default())
         .manage(scan::FileWatcherState::default())
         .invoke_handler(tauri::generate_handler![
