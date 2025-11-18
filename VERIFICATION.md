@@ -146,20 +146,7 @@ This was deemed lower priority than backend verification.
 
 ## Phase 6: Cleanup & Documentation ✅
 
-### 6.1: Legacy LangGraph Removal ✅
-
-**Frontend:** All TypeScript files already removed (lib/langgraph/ directory doesn't exist)
-
-**Backend:** Removed active references, kept module for historical reference:
-- Removed `AgentRunner` from Tauri state management (main.rs:41)
-- Removed `run_agent_response` command registration (main.rs:73)
-- Removed langgraph imports (main.rs:15)
-- Added deprecation notices to module files
-- Kept module with `#[allow(dead_code)]` for reference
-
-**Commit:** `refactor: Remove unused LangGraph integration from app initialization`
-
-### 6.2: CLAUDE.md Updates ✅
+### 6.1: CLAUDE.md Updates ✅
 
 Updated project documentation with verified status:
 ```diff
@@ -169,13 +156,12 @@ Updated project documentation with verified status:
 - File watcher backend implemented (2 tests ignored, UI integration pending)
 + File watcher fully integrated with graceful shutdown mechanism (all tests passing)
 
-- LangGraph Rust bridge returns mock data (no actual LangGraph calls)
 + Fix generation uses ClaudeClient with real Claude Haiku 4.5 API integration
 
 + All doctests fixed and passing
 ```
 
-### 6.3: ErrorBoundary TODOs ✅
+### 6.2: ErrorBoundary TODOs ✅
 
 **Status:** Skipped - no ErrorBoundary file exists, only one TODO found
 
@@ -310,10 +296,6 @@ Finished `dev` profile [unoptimized + debuginfo] target(s) in 3m 58s
 1. **Frontend E2E Tests:** Mock Tauri IPC instead of calling real backend
    - **Impact:** Cannot test full integration flow in E2E suite
    - **Mitigation:** 660 comprehensive tests cover backend logic (457 library + 200 integration + 3 doctests)
-
-2. **LangGraph Module:** Kept for historical reference but deprecated
-   - **Impact:** None - module not used, marked with `#[allow(dead_code)]`
-   - **Mitigation:** Clear deprecation notices in code
 
 ### Future Enhancements
 1. Store detailed token usage breakdown in scan_costs table

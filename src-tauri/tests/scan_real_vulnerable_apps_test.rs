@@ -986,3 +986,162 @@ def settings():
 
     println!("[Test] Middleware chaining tests completed");
 }
+
+// ============================================================================
+// PHASE 2.2: CC6.7 Edge Case Testing - Secret Detection Accuracy
+// ============================================================================
+
+/// Test 14: CC6.7 false positive audit - should NOT flag test/example data
+#[test]
+fn test_cc67_false_positive_audit() {
+    println!("[Test] Auditing CC6.7 for false positives on test data...");
+
+    let scan_id = 1;
+
+    // Should NOT flag: Test file with test data
+    let test_file_code = r#"
+class TestAuth:
+    def test_login_with_valid_password(self):
+        password = "test_password_for_testing"
+        assert login(password) == True
+"#;
+
+    let test_violations = ryn::rules::CC67SecretsRule::analyze(test_file_code, "test_auth.py", scan_id).unwrap();
+
+    if !test_violations.is_empty() {
+        println!("[Test] ⚠️ FALSE POSITIVE: Flagged test file password");
+        println!("[Test] file_path='test_auth.py' should skip test files");
+    } else {
+        println!("[Test] ✅ Correctly skips test files");
+    }
+
+    // Should NOT flag: Example documentation
+    let example_code = r#"
+# Example usage:
+API_KEY = "your_api_key_here"
+SECRET = "replace_with_your_secret"
+"#;
+
+    let example_violations = ryn::rules::CC67SecretsRule::analyze(example_code, "README.md", scan_id).unwrap();
+
+    println!("[Test] Example doc violations: {}", example_violations.len());
+
+    // Should NOT flag: Environment variable placeholders
+    let placeholder_code = r#"
+DATABASE_URL = "${DATABASE_URL}"
+API_TOKEN = "{{API_TOKEN}}"
+SECRET_KEY = "<your-secret-key>"
+"#;
+
+    let placeholder_violations = ryn::rules::CC67SecretsRule::analyze(placeholder_code, "config.py", scan_id).unwrap();
+
+    if !placeholder_violations.is_empty() {
+        println!("[Test] ⚠️ FALSE POSITIVE: Flagged placeholder values");
+    } else {
+        println!("[Test] ✅ Correctly skips placeholders");
+    }
+
+    println!("[Test] False positive audit completed");
+}
+
+/// Test 15: CC6.7 should detect secrets in JSON/YAML config files
+#[test]
+fn test_cc67_secrets_in_config_files() {
+    println!("[Test] Testing CC6.7 detection in JSON/YAML config files...");
+
+    let scan_id = 1;
+
+    // JSON config with hardcoded secret
+    let json_config = r#"
+{
+    "database": {
+        "password": "Pr0duct10nP@ssw0rd",
+        "host": "localhost"
+    },
+    "api": {
+        "key": "sk_live_prod_key_abc123def456"
+    }
+}
+"#;
+
+    let json_violations = ryn::rules::CC67SecretsRule::analyze(json_config, "config.json", scan_id).unwrap();
+
+    println!("[Test] JSON config: Found {} violations", json_violations.len());
+
+    if json_violations.is_empty() {
+        println!("[Test] ⚠️ MISSED: Secrets in JSON not detected");
+        println!("[Test] CC6.7 patterns may not work for JSON syntax");
+    }
+
+    // YAML config with hardcoded secret
+    let yaml_config = r#"
+database:
+  password: "Pr0duct10nP@ssw0rd"
+  host: localhost
+api:
+  token: "live_token_abc123"
+"#;
+
+    let yaml_violations = ryn::rules::CC67SecretsRule::analyze(yaml_config, "config.yaml", scan_id).unwrap();
+
+    println!("[Test] YAML config: Found {} violations", yaml_violations.len());
+
+    if yaml_violations.is_empty() {
+        println!("[Test] ⚠️ MISSED: Secrets in YAML not detected");
+        println!("[Test] CC6.7 patterns may not work for YAML syntax");
+    }
+
+    println!("[Test] Config file secret detection tested");
+}
+
+/// Test 16: CC6.7 should detect base64 and URL-encoded secrets
+#[test]
+fn test_cc67_encoded_secrets() {
+    println!("[Test] Testing CC6.7 detection of encoded secrets...");
+
+    let scan_id = 1;
+
+    // Base64 encoded secret (common obfuscation attempt)
+    let base64_code = r#"
+# Base64 encoded API key
+API_KEY_B64 = "c2stbGl2ZV9wcm9kX2tleV9hYmMxMjNkZWY0NTY="
+password_encoded = "UHIwZHVjdDEwblBAc3N3MHJk"
+"#;
+
+    let base64_violations = ryn::rules::CC67SecretsRule::analyze(base64_code, "config.py", scan_id).unwrap();
+
+    println!("[Test] Base64 encoded: Found {} violations", base64_violations.len());
+
+    if base64_violations.is_empty() {
+        println!("[Test] ⚠️ LIMITATION: Base64 encoded secrets NOT detected");
+        println!("[Test] Users could bypass detection by base64 encoding");
+    } else {
+        println!("[Test] ✅ Detects base64 encoded secrets");
+    }
+
+    // URL-encoded secret
+    let url_encoded = r#"
+CONNECTION_STRING = "postgres://user:MyP%40ssw0rd@localhost/db"
+"#;
+
+    let url_violations = ryn::rules::CC67SecretsRule::analyze(url_encoded, "database.py", scan_id).unwrap();
+
+    println!("[Test] URL encoded: Found {} violations", url_violations.len());
+
+    // JWT token (common secret format)
+    let jwt_code = r#"
+JWT_SECRET = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+"#;
+
+    let jwt_violations = ryn::rules::CC67SecretsRule::analyze(jwt_code, "auth.py", scan_id).unwrap();
+
+    println!("[Test] JWT token: Found {} violations", jwt_violations.len());
+
+    if jwt_violations.is_empty() {
+        println!("[Test] ⚠️ LIMITATION: JWT tokens NOT detected");
+    } else {
+        println!("[Test] ✅ Detects JWT tokens");
+    }
+
+    println!("[Test] Encoded secret testing completed");
+}

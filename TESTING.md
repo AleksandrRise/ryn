@@ -419,11 +419,6 @@ chmod 000 readonly_test.py
 
 **Expected (Bug):** New file NOT detected until next manual scan
 
-### LangGraph Not Integrated
-1. Check logs during scan
-
-**Expected (Bug):** No LangGraph mentions, direct rule engines used
-
 ---
 
 ## Diagnostics

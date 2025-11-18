@@ -5,10 +5,6 @@ pub mod commands;
 pub mod models;
 pub mod db;
 pub mod scanner;
-// Legacy module - kept for historical reference but no longer used
-// Replaced by direct ClaudeClient integration in fix_generator module
-#[allow(dead_code)]
-pub mod langgraph;
 pub mod rules;
 pub mod fix_generator;
 pub mod utils;

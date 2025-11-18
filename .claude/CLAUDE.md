@@ -90,7 +90,6 @@ lib/tauri/        # TypeScript command wrappers
 
 ## Known Issues
 - Frontend E2E tests mock Tauri IPC instead of calling backend
-- LangGraph module kept for historical reference but deprecated (not actively used)
 
 ## Key Instructions
 - Verify implementations before claiming features work
