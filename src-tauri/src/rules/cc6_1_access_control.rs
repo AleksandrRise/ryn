@@ -47,6 +47,9 @@ impl CC61AccessControlRule {
         // Pattern 5: FastAPI endpoints without Depends(check_permission)
         violations.extend(Self::detect_fastapi_missing_dependency(code, file_path, scan_id)?);
 
+        // Pattern 6: Flask routes without @login_required
+        violations.extend(Self::detect_flask_missing_auth(code, file_path, scan_id)?);
+
         Ok(violations)
     }
 
@@ -324,6 +327,106 @@ impl CC61AccessControlRule {
 
         Ok(violations)
     }
+
+    /// Detects Flask routes without @login_required or inline auth checks
+    fn detect_flask_missing_auth(
+        code: &str,
+        file_path: &str,
+        scan_id: i64,
+    ) -> Result<Vec<Violation>> {
+        let mut violations = Vec::new();
+
+        // Skip if not a Python file
+        if !file_path.ends_with(".py") {
+            return Ok(violations);
+        }
+
+        // Flask route decorator pattern: @app.route or @blueprint.route
+        let flask_route = Regex::new(r#"@(?:app|blueprint|bp)\s*\.\s*route\s*\(\s*['"]([^'"]*)['"]\s*"#)
+            .context("Failed to compile Flask route pattern")?;
+
+        // Auth decorator patterns
+        let auth_decorator = Regex::new(
+            r"@(login_required|permission_required|auth_required|requires_auth|require_permission|jwt_required)",
+        )
+        .context("Failed to compile auth decorator pattern")?;
+
+        // Public routes that don't need authentication
+        let public_routes = Regex::new(r#"['"]/(login|register|signup|logout|public|health|ping|static)"#)
+            .context("Failed to compile public routes pattern")?;
+
+        // Inline auth check patterns
+        let inline_auth = Regex::new(
+            r#"(request\.headers\.get\s*\(\s*['"](Authorization|auth|token)['"]|verify_jwt|verify_token|check_auth|is_authenticated|current_user)"#,
+        )
+        .context("Failed to compile inline auth pattern")?;
+
+        let lines: Vec<&str> = code.lines().collect();
+
+        for (idx, line) in lines.iter().enumerate() {
+            if let Some(caps) = flask_route.captures(line) {
+                let route_path = &caps[1];
+
+                // Skip public routes
+                if public_routes.is_match(line) {
+                    continue;
+                }
+
+                // Check previous lines (up to 5) for auth decorators
+                let mut has_auth_decorator = false;
+                let check_range = if idx > 5 { idx - 5 } else { 0 };
+
+                for prev_idx in (check_range..idx).rev() {
+                    if auth_decorator.is_match(lines[prev_idx]) {
+                        has_auth_decorator = true;
+                        break;
+                    }
+                    // Stop if we hit a non-decorator, non-empty line
+                    if !lines[prev_idx].trim().starts_with("@") && !lines[prev_idx].trim().is_empty()
+                    {
+                        break;
+                    }
+                }
+
+                if has_auth_decorator {
+                    continue;
+                }
+
+                // Check next 10 lines for inline auth checks
+                let end_idx = std::cmp::min(idx + 10, lines.len());
+                let next_lines = lines[idx..end_idx].join("\n");
+
+                let has_inline_auth = inline_auth.is_match(&next_lines);
+
+                if !has_inline_auth {
+                    // Determine severity based on HTTP method
+                    let severity = if line.contains("POST")
+                        || line.contains("PUT")
+                        || line.contains("DELETE")
+                    {
+                        Severity::Critical
+                    } else {
+                        Severity::High
+                    };
+
+                    violations.push(Violation::new(
+                        scan_id,
+                        "CC6.1".to_string(),
+                        severity,
+                        format!(
+                            "Flask route '{}' missing authentication decorator or check",
+                            route_path
+                        ),
+                        file_path.to_string(),
+                        (idx + 1) as i64,
+                        line.trim().to_string(),
+                    ));
+                }
+            }
+        }
+
+        Ok(violations)
+    }
 }
 
 #[cfg(test)]
@@ -556,5 +659,71 @@ mod tests {
             !violations.is_empty(),
             "Should flag archive without permission check"
         );
+    }
+
+    /// CRITICAL GAP TEST: Flask routes without @login_required
+    #[test]
+    fn test_detect_flask_route_without_login_required() {
+        let code = r#"
+@app.route('/xxe_uploader', methods=['GET', 'POST'])
+def hello():
+    f = request.files['file']
+    f.save(file_path)
+"#;
+        let violations = CC61AccessControlRule::analyze(code, "app.py", 1).unwrap();
+        assert!(
+            !violations.is_empty(),
+            "Should detect Flask route without authentication. Found {} violations. This is a KNOWN GAP in CC6.1.",
+            violations.len()
+        );
+    }
+
+    /// Test Flask route with inline auth check is allowed
+    #[test]
+    fn test_flask_route_with_inline_auth() {
+        let code = r#"
+@app.route('/fetch/customer', methods=['POST'])
+def fetch_customer():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'Error': 'Not Authenticated!'}), 403
+    if not verify_jwt(token):
+        return jsonify({'Error': 'Invalid Token'}), 403
+"#;
+        let violations = CC61AccessControlRule::analyze(code, "app.py", 1).unwrap();
+        // Should not flag - has inline auth check
+        let has_auth_violation = violations.iter().any(|v| v.description.contains("authentication"));
+        assert!(!has_auth_violation, "Should not flag Flask route with inline auth check");
+    }
+
+    /// Test Flask route with @login_required decorator
+    #[test]
+    fn test_flask_route_with_login_required() {
+        let code = r#"
+@login_required
+@app.route('/admin')
+def admin():
+    return render_template('admin.html')
+"#;
+        let violations = CC61AccessControlRule::analyze(code, "app.py", 1).unwrap();
+        let has_auth_violation = violations.iter().any(|v| v.description.contains("authentication"));
+        assert!(!has_auth_violation, "Should not flag Flask route with @login_required");
+    }
+
+    /// Test Flask public routes (login, register) are allowed
+    #[test]
+    fn test_flask_public_routes_allowed() {
+        let code = r#"
+@app.route('/login', methods=['POST'])
+def login():
+    return authenticate_user()
+
+@app.route('/register', methods=['POST'])
+def register():
+    return create_user()
+"#;
+        let violations = CC61AccessControlRule::analyze(code, "app.py", 1).unwrap();
+        // Public routes like login/register shouldn't be flagged
+        assert!(violations.is_empty(), "Should not flag public routes like /login or /register");
     }
 }
