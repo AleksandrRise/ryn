@@ -1,8 +1,8 @@
 //! Database migration tests
 //!
 //! Tests verify that database migrations work correctly across all scenarios:
-//! - Fresh database initialization (v0 → v1 → v2)
-//! - Incremental upgrades (v1 → v2)
+//! - Fresh database initialization (v0 → v1 → v2 → v3)
+//! - Incremental upgrades (v1 → v2 → v3)
 //! - Idempotent execution (running migrations multiple times)
 //! - Schema version tracking
 //! - Backward compatibility
@@ -13,14 +13,14 @@ use common::TestProject;
 use rusqlite::Connection;
 use tempfile::TempDir;
 
-/// Test fresh database gets migrated to v2
+/// Test fresh database gets migrated to v3
 #[test]
 fn test_fresh_db_migrates_to_v2() {
     let project = TestProject::new("fresh_db_v2").unwrap();
 
-    // Verify schema version is 2 (latest)
+    // Verify schema version is 3 (latest)
     let version = project.get_schema_version().unwrap();
-    assert_eq!(version, 2, "Fresh database should be at schema version 2");
+    assert_eq!(version, 3, "Fresh database should be at schema version 3");
 
     // Verify all v1 tables exist
     assert!(project.table_exists("projects").unwrap());
@@ -39,6 +39,10 @@ fn test_fresh_db_migrates_to_v2() {
     assert!(project.column_exists("violations", "confidence_score").unwrap());
     assert!(project.column_exists("violations", "llm_reasoning").unwrap());
     assert!(project.column_exists("violations", "regex_reasoning").unwrap());
+
+    // Verify v3 columns exist in violations table
+    assert!(project.column_exists("violations", "function_name").unwrap());
+    assert!(project.column_exists("violations", "class_name").unwrap());
 }
 
 /// Test that v1 database upgrades correctly to v2
@@ -116,7 +120,7 @@ fn test_v1_to_v2_upgrade() {
         apply_v2_migration(&conn);
 
         let new_version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).unwrap();
-        assert_eq!(new_version, 2, "Should be upgraded to v2");
+        assert_eq!(new_version, 3, "Should be upgraded to v3");
 
         // Verify scan_costs table exists
         let table_exists: bool = conn.query_row(
@@ -179,16 +183,16 @@ fn test_migrations_idempotent() {
     let table_count1 = project.list_tables().unwrap().len();
     let index_count1 = project.list_indexes().unwrap().len();
 
-    // Run migrations again (should be no-op since already at v2)
+    // Run migrations again (should be no-op since already at v3)
     // Note: TestProject runs migrations in constructor, so we manually verify idempotency
     let conn = project.connection();
 
-    // Attempting to re-apply v2 would normally error due to ALTER TABLE ADD COLUMN
+    // Attempting to re-apply migrations would normally error due to ALTER TABLE ADD COLUMN
     // being non-idempotent. This test verifies that PRAGMA user_version prevents
     // re-running migrations.
 
     let current_version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).unwrap();
-    assert_eq!(current_version, 2, "Should still be at version 2");
+    assert_eq!(current_version, 3, "Should still be at version 3");
 
     // Migration logic should skip v1 and v2 if already at v2
     // (This is what run_migrations() does - checks current_version)
@@ -526,6 +530,17 @@ fn apply_v2_migration(conn: &Connection) {
         ["onboarding_completed", "false"],
     ).unwrap();
 
+    // Apply v3 migration (tree-sitter context fields)
+    conn.execute(
+        "ALTER TABLE violations ADD COLUMN function_name TEXT",
+        [],
+    ).unwrap();
+
+    conn.execute(
+        "ALTER TABLE violations ADD COLUMN class_name TEXT",
+        [],
+    ).unwrap();
+
     // Update version
-    conn.execute("PRAGMA user_version = 2", []).unwrap();
+    conn.execute("PRAGMA user_version = 3", []).unwrap();
 }

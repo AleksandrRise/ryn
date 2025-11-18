@@ -344,6 +344,12 @@ fn run_test_migrations(conn: &Connection) -> Result<()> {
         conn.execute("PRAGMA user_version = 2", [])?;
     }
 
+    // Migration v2 -> v3: Tree-sitter context fields
+    if current_version < 3 {
+        migrate_test_to_v3(conn)?;
+        conn.execute("PRAGMA user_version = 3", [])?;
+    }
+
     // Seed default settings
     seed_test_settings(conn)?;
 
@@ -423,6 +429,23 @@ fn migrate_test_to_v2(conn: &Connection) -> Result<()> {
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_scan_costs_scan_id ON scan_costs(scan_id)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Migrate to v3 (tree-sitter context fields)
+fn migrate_test_to_v3(conn: &Connection) -> Result<()> {
+    // Add function_name column
+    conn.execute(
+        "ALTER TABLE violations ADD COLUMN function_name TEXT",
+        [],
+    )?;
+
+    // Add class_name column
+    conn.execute(
+        "ALTER TABLE violations ADD COLUMN class_name TEXT",
         [],
     )?;
 
@@ -526,9 +549,9 @@ mod tests {
     fn test_schema_version() {
         let project = TestProject::new("test_schema_version").unwrap();
 
-        // Schema should be at version 2 after migrations
+        // Schema should be at version 3 after migrations
         let version = project.get_schema_version().unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
     }
 
     #[test]

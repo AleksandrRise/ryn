@@ -12,7 +12,7 @@ fn test_common_module_works() {
 
     // Verify database is initialized
     let version = project.get_schema_version().unwrap();
-    assert_eq!(version, 2, "Schema should be at version 2");
+    assert_eq!(version, 3, "Schema should be at version 3");
 
     // Verify tables exist
     assert!(project.table_exists("projects").unwrap());
