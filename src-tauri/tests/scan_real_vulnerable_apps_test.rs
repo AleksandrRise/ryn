@@ -1145,3 +1145,152 @@ JWT_SECRET = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.d
 
     println!("[Test] Encoded secret testing completed");
 }
+
+// ============================================================================
+// PHASE 2.3: CC7.2 Edge Case Testing - Logging Detection in Complex Patterns
+// ============================================================================
+
+/// Test 17: CC7.2 logging in decorators - sensitive operation with decorator logging
+#[test]
+fn test_cc72_logging_in_decorators() {
+    println!("[Test] Testing CC7.2 detection of logging in decorators...");
+
+    let scan_id = 1;
+
+    // Logging happens in decorator, NOT inline with operation
+    let decorator_logging_code = r#"
+def audit_decorator(func):
+    def wrapper(*args, **kwargs):
+        logger.info(f'Calling {func.__name__}')
+        result = func(*args, **kwargs)
+        logger.info(f'Completed {func.__name__}')
+        return result
+    return wrapper
+
+@audit_decorator
+def delete_user(user_id):
+    user = User.objects.get(id=user_id)
+    user.delete()  # Sensitive operation
+    return True
+"#;
+
+    let violations = ryn::rules::CC72LoggingRule::analyze(decorator_logging_code, "views.py", scan_id).unwrap();
+
+    println!("[Test] Decorator logging: Found {} violations", violations.len());
+
+    // Check if CC7.2 detects logging in decorators (current implementation checks ±3 lines)
+    let has_missing_audit = violations.iter().any(|v| v.description.contains("without audit logging"));
+
+    if has_missing_audit {
+        println!("[Test] ⚠️ FALSE NEGATIVE: Logging in decorator NOT recognized");
+        println!("[Test] user.delete() at line with decorator logging should be safe");
+    } else {
+        println!("[Test] ✅ Recognizes decorator-based logging");
+    }
+
+    println!("[Test] Decorator logging test completed");
+}
+
+/// Test 18: CC7.2 logging in context managers
+#[test]
+fn test_cc72_logging_in_context_managers() {
+    println!("[Test] Testing CC7.2 detection of logging in context managers...");
+
+    let scan_id = 1;
+
+    // Logging in context manager
+    let context_manager_code = r#"
+class AuditContext:
+    def __enter__(self):
+        logger.info('Starting database operation')
+        return self
+
+    def __exit__(self, *args):
+        logger.info('Completed database operation')
+
+def update_user_status(user_id):
+    with AuditContext():
+        user = User.objects.get(id=user_id)
+        user.save()  # Sensitive operation
+"#;
+
+    let violations = ryn::rules::CC72LoggingRule::analyze(context_manager_code, "models.py", scan_id).unwrap();
+
+    println!("[Test] Context manager logging: Found {} violations", violations.len());
+
+    let has_missing_audit = violations.iter().any(|v| v.description.contains("without audit logging"));
+
+    if has_missing_audit {
+        println!("[Test] ⚠️ FALSE NEGATIVE: Logging in context manager NOT recognized");
+        println!("[Test] user.save() with context manager logging should be safe");
+    } else {
+        println!("[Test] ✅ Recognizes context manager logging");
+    }
+
+    println!("[Test] Context manager logging test completed");
+}
+
+/// Test 19: CC7.2 structured logging (JSON format)
+#[test]
+fn test_cc72_structured_logging_json() {
+    println!("[Test] Testing CC7.2 detection of structured/JSON logging...");
+
+    let scan_id = 1;
+
+    // Structured logging with JSON
+    let json_logging_code = r#"
+import json
+
+def delete_account(account_id):
+    account = Account.objects.get(id=account_id)
+
+    # Structured logging
+    log_data = {
+        'action': 'delete_account',
+        'account_id': account_id,
+        'timestamp': datetime.now().isoformat()
+    }
+    print(json.dumps(log_data))  # JSON structured log
+
+    account.delete()  # Sensitive operation
+"#;
+
+    let violations = ryn::rules::CC72LoggingRule::analyze(json_logging_code, "account.py", scan_id).unwrap();
+
+    println!("[Test] JSON structured logging: Found {} violations", violations.len());
+
+    let has_missing_audit = violations.iter().any(|v| v.description.contains("without audit logging"));
+
+    if has_missing_audit {
+        println!("[Test] ⚠️ LIMITATION: JSON structured logging NOT recognized as logging");
+        println!("[Test] print(json.dumps()) is logging but doesn't match 'logger' pattern");
+    } else {
+        println!("[Test] ✅ Recognizes JSON structured logging");
+    }
+
+    // Test logger with JSON
+    let logger_json_code = r#"
+import json
+
+def create_user(username):
+    user = User(username=username)
+    user.save()
+
+    logger.info(json.dumps({
+        'action': 'user_created',
+        'username': username
+    }))
+"#;
+
+    let logger_json_violations = ryn::rules::CC72LoggingRule::analyze(logger_json_code, "user.py", scan_id).unwrap();
+
+    println!("[Test] logger + JSON: Found {} violations", logger_json_violations.len());
+
+    if logger_json_violations.is_empty() {
+        println!("[Test] ✅ logger.info(json.dumps()) recognized as logging");
+    } else {
+        println!("[Test] ⚠️ logger.info(json.dumps()) not detected");
+    }
+
+    println!("[Test] Structured logging test completed");
+}
