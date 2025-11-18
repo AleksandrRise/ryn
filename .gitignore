@@ -46,3 +46,6 @@ public/ryn-logo-square.png
 
 # E2E test fixtures (contain intentional fake secrets for testing)
 e2e-tests/fixtures/
+
+# Integration test fixtures (cloned vulnerable repos - not committed)
+src-tauri/tests/fixtures/
