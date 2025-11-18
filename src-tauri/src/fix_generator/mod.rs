@@ -1,13 +1,12 @@
-//! Fix generation module with Claude AI integration
+//! Fix generation module with AI integration
 //!
-//! Provides production-ready Claude Haiku 4.5 client for generating SOC 2 compliance fixes
+//! Provides production-ready Grok Code Fast 1 client for generating SOC 2 compliance fixes
 //! and applying them to files on disk.
 
-pub mod claude_client;
+pub mod grok_client;
 pub mod fix_applicator;
 
-pub use claude_client::{
-    ClaudeClient, ClaudeRequest, ClaudeResponse, ContentBlock, Message, SystemBlock,
-    CacheControl, UsageMetrics,
+pub use grok_client::{
+    GrokClient, GrokRequest, GrokResponse, Message, UsageMetrics, AnalysisResult,
 };
 pub use fix_applicator::FixApplicator;

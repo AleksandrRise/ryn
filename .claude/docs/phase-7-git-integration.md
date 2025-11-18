@@ -139,8 +139,8 @@ for commit in commits {
 
 ## Integration Points
 
-### With Phase 6 (Claude Client)
-1. Claude generates fixed code
+### With Phase 6 (Grok Client)
+1. Grok generates fixed code
 2. FixApplicator applies to file with backup
 3. GitOperations commits the change
 

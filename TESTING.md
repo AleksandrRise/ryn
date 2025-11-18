@@ -4,7 +4,7 @@
 
 ```bash
 # Set API key
-echo "ANTHROPIC_API_KEY=sk-ant-api03-xxxxx" >> .env
+echo "XAI_API_KEY=sk-ant-api03-xxxxx" >> .env
 
 # Clean database
 rm -f ./data/ryn.db
@@ -269,7 +269,7 @@ def fetch_data():
 ## 6. Fix Generation
 
 ### Generate Fix
-**Prerequisites:** `ANTHROPIC_API_KEY` set
+**Prerequisites:** `XAI_API_KEY` set
 
 1. Open violation detail
 2. Click "Generate Fix"
@@ -308,7 +308,7 @@ echo "change" >> test.py
 
 ### Missing API Key
 ```bash
-unset ANTHROPIC_API_KEY
+unset XAI_API_KEY
 ```
 
 **Expected:** Error "API key not configured"

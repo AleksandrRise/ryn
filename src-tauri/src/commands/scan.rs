@@ -10,7 +10,7 @@ use crate::scanner::tree_sitter_utils::{CodeParser, find_context_at_line};
 use crate::scanner::{SKIP_DIRECTORIES, FileWatcher};
 use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12ResilienceRule};
 use crate::security::path_validation;
-use crate::fix_generator::claude_client::ClaudeClient;
+use crate::fix_generator::grok_client::GrokClient;
 use crate::utils::create_audit_event;
 use std::path::Path;
 use std::collections::HashMap;
@@ -563,8 +563,8 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
     }
 
     // Verify API key exists before spawning tasks
-    std::env::var("ANTHROPIC_API_KEY")
-        .map_err(|_| "ANTHROPIC_API_KEY environment variable not set. Set it to enable LLM scanning.".to_string())?;
+    std::env::var("XAI_API_KEY")
+        .map_err(|_| "XAI_API_KEY environment variable not set. Set it to enable LLM scanning.".to_string())?;
 
     // Query cost limit from settings (default to $1.00 if not set)
     let cost_limit_usd: f64 = {
@@ -599,7 +599,7 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
                 let _permit = sem_clone.acquire().await.unwrap();
 
                 // Create Claude client for this task (reads API key from env)
-                let client = match ClaudeClient::new() {
+                let client = match GrokClient::new() {
                     Ok(c) => c,
                     Err(e) => return Err(format!("Failed to create Claude client: {}", e)),
                 };

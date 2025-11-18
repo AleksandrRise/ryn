@@ -2,13 +2,13 @@
 
 **Sources:** Web search results, reqwest documentation, API security best practices
 **Retrieved:** 2025-11-10
-**Topics:** Claude API, OpenAI API, Rust HTTP clients, code vulnerability detection, security patterns
+**Topics:** Grok API, OpenAI API, Rust HTTP clients, code vulnerability detection, security patterns
 
 ---
 
 ## Overview
 
-This guide covers integrating Claude or OpenAI APIs into Rust applications for code analysis and vulnerability detection. The approach uses async HTTP clients (reqwest) with proper error handling, environment-based secret management, and structured request/response serialization.
+This guide covers integrating Grok or OpenAI APIs into Rust applications for code analysis and vulnerability detection. The approach uses async HTTP clients (reqwest) with proper error handling, environment-based secret management, and structured request/response serialization.
 
 ---
 
@@ -63,11 +63,11 @@ impl ApiClient {
 
 ---
 
-## Claude API Integration
+## Grok API Integration
 
-### Unofficial Claude Rust Client: `clust`
+### Unofficial Grok Rust Client: `clust`
 
-The `clust` crate provides a high-level Rust wrapper for Anthropic's Claude API:
+The `clust` crate provides a high-level Rust wrapper for X.AI's Grok API:
 
 #### Installation
 
@@ -84,7 +84,7 @@ use clust::Client;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load from ANTHROPIC_API_KEY environment variable
+    // Load from XAI_API_KEY environment variable
     let client = Client::from_env()?;
     
     let messages = vec![
@@ -95,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
     ];
     
     let response = client.create_a_message(
-        "claude-3-5-sonnet-20241022",
+        "grok-3-5-sonnet-20241022",
         10_000,
         messages,
     ).await?;
@@ -122,14 +122,14 @@ let client = ClientBuilder::new(ApiKey::new("your-api-key"))
 
 ### Direct reqwest Implementation
 
-For more control, implement Claude API calls directly with reqwest:
+For more control, implement Grok API calls directly with reqwest:
 
 ```rust
 use serde::{Deserialize, Serialize};
 use reqwest::Client;
 
 #[derive(Serialize)]
-struct ClaudeRequest {
+struct GrokRequest {
     model: String,
     max_tokens: u32,
     messages: Vec<Message>,
@@ -142,7 +142,7 @@ struct Message {
 }
 
 #[derive(Deserialize)]
-struct ClaudeResponse {
+struct GrokResponse {
     id: String,
     content: Vec<ContentBlock>,
     usage: Usage,
@@ -159,13 +159,13 @@ struct Usage {
     output_tokens: u32,
 }
 
-pub async fn analyze_code_with_claude(
+pub async fn analyze_code_with_grok(
     client: &Client,
     api_key: &str,
     code: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let request = ClaudeRequest {
-        model: "claude-3-5-sonnet-20241022".to_string(),
+    let request = GrokRequest {
+        model: "grok-3-5-sonnet-20241022".to_string(),
         max_tokens: 2048,
         messages: vec![Message {
             role: "user".to_string(),
@@ -186,9 +186,9 @@ pub async fn analyze_code_with_claude(
         .send()
         .await?;
 
-    let claude_response: ClaudeResponse = response.json().await?;
+    let grok_response: GrokResponse = response.json().await?;
     
-    Ok(claude_response
+    Ok(grok_response
         .content
         .first()
         .map(|c| c.text.clone())
@@ -300,14 +300,14 @@ Never hardcode API keys. Use environment variables:
 use std::env;
 
 fn get_api_key() -> Result<String, env::VarError> {
-    env::var("ANTHROPIC_API_KEY")
+    env::var("XAI_API_KEY")
 }
 
 // Or with better error handling:
 fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
     Ok(Config {
-        api_key: env::var("ANTHROPIC_API_KEY")
-            .map_err(|_| "ANTHROPIC_API_KEY not set")?,
+        api_key: env::var("XAI_API_KEY")
+            .map_err(|_| "XAI_API_KEY not set")?,
         base_url: env::var("API_BASE_URL")
             .unwrap_or_else(|_| "https://api.anthropic.com".to_string()),
     })
@@ -317,7 +317,7 @@ fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
 #### .env File (Development Only)
 
 ```
-ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxx
+XAI_API_KEY=sk-ant-xxxxxxxxxxxxx
 OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxx
 API_BASE_URL=https://api.anthropic.com
 ```
@@ -606,10 +606,10 @@ fn validate_code_input(code: &str) -> Result<(), Box<dyn Error>> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let api_key = std::env::var("ANTHROPIC_API_KEY")?;
+    let api_key = std::env::var("XAI_API_KEY")?;
     let analyzer = CodeAnalyzer::new(
         api_key,
-        "claude-3-5-sonnet-20241022".to_string(),
+        "grok-3-5-sonnet-20241022".to_string(),
     );
 
     let result = analyzer
@@ -713,12 +713,12 @@ pub async fn scan_code(
     code: String,
     language: String,
 ) -> Result<serde_json::Value, String> {
-    let api_key = std::env::var("ANTHROPIC_API_KEY")
+    let api_key = std::env::var("XAI_API_KEY")
         .map_err(|_| "API key not configured".to_string())?;
     
     let analyzer = CodeAnalyzer::new(
         api_key,
-        "claude-3-5-sonnet-20241022".to_string(),
+        "grok-3-5-sonnet-20241022".to_string(),
     );
 
     let request = CodeAnalysisRequest {
@@ -763,10 +763,10 @@ secrecy = "0.10"
 dotenv = "0.15"
 ```
 
-### Optional for Claude Integration
+### Optional for Grok Integration
 
 ```toml
-clust = "0.4"  # Unofficial Claude client
+clust = "0.4"  # Unofficial Grok client
 ```
 
 ---
@@ -812,7 +812,7 @@ mod tests {
 
 ## References
 
-- Claude API Docs: https://docs.anthropic.com
+- Grok API Docs: https://docs.anthropic.com
 - OpenAI API Docs: https://platform.openai.com/docs
 - Reqwest GitHub: https://github.com/seanmonstar/reqwest
 - Secrecy Crate: https://crates.io/crates/secrecy

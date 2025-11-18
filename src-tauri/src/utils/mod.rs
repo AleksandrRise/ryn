@@ -7,5 +7,5 @@ pub mod env;
 
 pub use audit::create_audit_event;
 pub use env::{
-    load_env, get_anthropic_key, validate_api_key, get_and_validate_api_key,
+    load_env, get_xai_key, validate_api_key, get_and_validate_api_key,
 };

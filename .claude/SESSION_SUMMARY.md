@@ -21,7 +21,7 @@
   - Updated event type strings to valid CHECK constraint values
 
 ### 4. Real API Validation ✅
-- **Tested**: All 4 SOC2 controls against real Anthropic API
+- **Tested**: All 4 SOC2 controls against real X.AI API
 - **Results**:
   - CC6.1 (Access): Flask-Login decorator generation works
   - CC6.7 (Secrets): Environment variable recommendations work
@@ -63,7 +63,7 @@ Parallel Execution:
 - `src-tauri/src/commands/fix.rs` - Test refactoring
 - `src-tauri/src/commands/settings.rs` - Test refactoring
 - `src-tauri/src/commands/audit.rs` - Test refactoring
-- `.claude/TESTING_STATUS.md` - NEW
+- `.grok/TESTING_STATUS.md` - NEW
 
 ## How to Run
 

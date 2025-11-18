@@ -2,16 +2,16 @@
 
 ## Project Overview
 
-**Ryn**: AI-powered SOC 2 compliance tool that scans application code for violations (missing audit logs, weak access controls, hardcoded secrets, error handling issues) and generates one-click fixes via Claude.
+**Ryn**: AI-powered SOC 2 compliance tool that scans application code for violations (missing audit logs, weak access controls, hardcoded secrets, error handling issues) and generates one-click fixes via Grok.
 
-**Tech Stack**: Tauri 2.0 (Rust backend) + Next.js 16.0.1 (React 19) + SQLite + Claude Haiku 4.5
+**Tech Stack**: Tauri 2.0 (Rust backend) + Next.js 16.0.1 (React 19) + SQLite + Grok Code Fast 1
 
 **Status**:
 - ✅ Complete backend (20 Tauri commands), hybrid scanning (regex + LLM), cost tracking, full UI, database with migrations
 - ✅ 660 Rust tests passing (457 library + 200 integration + 3 doctests, 0 ignored)
 - ✅ Tree-sitter enriches violations with code context
 - ✅ File watcher fully integrated with graceful shutdown mechanism (all tests passing)
-- ✅ Fix generation uses ClaudeClient with real Claude Haiku 4.5 API integration
+- ✅ Fix generation uses GrokClient with real Grok Code Fast 1 API integration
 - ✅ All doctests fixed and passing
 
 ## Development
@@ -34,7 +34,7 @@ cd src-tauri && cargo fmt && cargo clippy -- -D warnings
 ```
 
 **Requirements**: 
-- Set `ANTHROPIC_API_KEY` in `.env` for fix generation
+- Set `XAI_API_KEY` in `.env` for fix generation
 - Rust changes require restart of `pnpm tauri dev`
 
 ## Architecture
@@ -62,7 +62,7 @@ src-tauri/src/
 ├── commands/       # 20 Tauri IPC commands
 ├── rules/          # 4 SOC 2 rule engines (regex-based)
 ├── scanner/        # Framework detection, file selection
-├── fix_generator/  # Claude API integration
+├── fix_generator/  # Grok API integration
 ├── db/            # Database layer with migrations
 └── security/      # Path validation
 
@@ -96,4 +96,4 @@ lib/tauri/        # TypeScript command wrappers
 - Use Context7 for documentation
 - Commit frequently
 - For large context analysis, use `gemini -p` CLI
-  -Core Strategy: Use Gemini CLI (1M+ token context) for reading/analyzing large codebases, Claude Code for editing/implementing Syntax: gemini -p "@src/ @tests/ Analyze architecture" - use @ to include files/directories When to Use: Analyzing >100KB files, entire codebases, checking if features are implemented, understanding project-wide patterns Key Advantage: Gemini consumes ~1% context per query vs Claude's ~10%; instant codebase understanding without file-by-file analysis. Limitations: Gemini is lazy for detailed planning (300 lines vs Claude's 1500); adds excessive code comments; free tier rate limited. gemini might also say wrong stuff because of its knowledge cutoff date, which might result in outdated perspectives. gemini is also not as good at coding as you. 
+  -Core Strategy: Use Gemini CLI (1M+ token context) for reading/analyzing large codebases, Grok Code for editing/implementing Syntax: gemini -p "@src/ @tests/ Analyze architecture" - use @ to include files/directories When to Use: Analyzing >100KB files, entire codebases, checking if features are implemented, understanding project-wide patterns Key Advantage: Gemini consumes ~1% context per query vs Grok's ~10%; instant codebase understanding without file-by-file analysis. Limitations: Gemini is lazy for detailed planning (300 lines vs Grok's 1500); adds excessive code comments; free tier rate limited. gemini might also say wrong stuff because of its knowledge cutoff date, which might result in outdated perspectives. gemini is also not as good at coding as you. 

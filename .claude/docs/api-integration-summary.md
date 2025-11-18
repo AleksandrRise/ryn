@@ -8,7 +8,7 @@
 
 HTTP Client: **reqwest 0.12**
 Runtime: **tokio 1.x**
-API Choice: **Claude API** (via clust or direct reqwest)
+API Choice: **Grok API** (via clust or direct reqwest)
 Secret Management: **secrecy + dotenv**
 
 ---
@@ -22,7 +22,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 secrecy = "0.10"
 dotenv = "0.15"
-clust = "0.4"  # Optional: High-level Claude wrapper
+clust = "0.4"  # Optional: High-level Grok wrapper
 ```
 
 ---
@@ -36,7 +36,7 @@ clust = "0.4"  # Optional: High-level Claude wrapper
 - Best for: Custom error handling, advanced features
 
 ### 2. clust Crate (Best Developer Experience)
-- Unofficial but well-maintained Claude client
+- Unofficial but well-maintained Grok client
 - High-level abstractions for common tasks
 - Automatic serialization/deserialization
 - Best for: Quick integration, less boilerplate
@@ -53,7 +53,7 @@ clust = "0.4"  # Optional: High-level Claude wrapper
 
 1. **Never hardcode API keys**
    ```rust
-   let api_key = std::env::var("ANTHROPIC_API_KEY")?;
+   let api_key = std::env::var("XAI_API_KEY")?;
    ```
 
 2. **Use secrecy for in-memory protection**
@@ -100,7 +100,7 @@ struct ApiResponse {
 }
 ```
 
-### Claude-Specific Headers
+### Grok-Specific Headers
 ```rust
 .header("x-api-key", api_key)
 .header("anthropic-version", "2023-06-01")
@@ -144,10 +144,10 @@ pub async fn scan_code(
     code: String,
     language: String,
 ) -> Result<serde_json::Value, String> {
-    let api_key = std::env::var("ANTHROPIC_API_KEY")
+    let api_key = std::env::var("XAI_API_KEY")
         .map_err(|e| e.to_string())?;
     
-    let analyzer = CodeAnalyzer::new(api_key, "claude-3-5-sonnet-20241022".into());
+    let analyzer = CodeAnalyzer::new(api_key, "grok-3-5-sonnet-20241022".into());
     let result = analyzer.analyze(CodeAnalysisRequest { code, language, framework: None })
         .await
         .map_err(|e| e.to_string())?;
@@ -166,7 +166,7 @@ Expose via:
 ## Configuration Checklist
 
 - [ ] Add .env to .gitignore
-- [ ] Set ANTHROPIC_API_KEY in environment
+- [ ] Set XAI_API_KEY in environment
 - [ ] Configure request timeout (30s recommended)
 - [ ] Validate input before API call
 - [ ] Implement error handling
@@ -226,11 +226,11 @@ Return JSON response with structure:
 
 ## Documentation References
 
-Full implementation examples in: `/Users/alexanderershov/Desktop/Coding folder/Projects/ryn/.claude/docs/ai-code-analysis.md`
+Full implementation examples in: `/Users/alexanderershov/Desktop/Coding folder/Projects/ryn/.grok/docs/ai-code-analysis.md`
 
 Key sections:
 - Complete vulnerability scanner example (150+ lines)
-- Claude API integration patterns
+- Grok API integration patterns
 - OpenAI API integration patterns
 - Security best practices with code examples
 - Tauri integration example

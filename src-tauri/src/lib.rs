@@ -20,5 +20,5 @@ pub mod rate_limiter;
 // pub use db::{init_db, get_db_path};
 // pub use scanner::{Framework, FileWatcher, CodeParser};
 // pub use rules::{AccessControlRule, SecretsManagementRule, LoggingRule, ResilienceRule};
-// pub use fix_generator::ClaudeClient;
+// pub use fix_generator::GrokClient;
 // pub use git::GitOperations;

@@ -25,7 +25,7 @@ Comprehensive guide for AI API integration in Rust:
 
 **Sections:**
 - HTTP client comparison (reqwest vs alternatives)
-- Claude API integration (clust crate + direct reqwest)
+- Grok API integration (clust crate + direct reqwest)
 - OpenAI API integration (openai-api-rust + direct reqwest)
 - Security best practices (env vars, secrecy crate, HTTPS, validation)
 - Complete vulnerability scanner example (150+ lines)
@@ -36,7 +36,7 @@ Comprehensive guide for AI API integration in Rust:
 - Performance considerations
 - Testing patterns
 
-**Use when:** Implementing code analysis backend, integrating Claude/OpenAI APIs, handling secrets
+**Use when:** Implementing code analysis backend, integrating Grok/OpenAI APIs, handling secrets
 
 ---
 
@@ -89,7 +89,7 @@ secrecy = "0.10"
 dotenv = "0.15"
 
 # API Clients (optional)
-clust = "0.4"  # Claude API wrapper
+clust = "0.4"  # Grok API wrapper
 ```
 
 ---
@@ -127,8 +127,8 @@ pub async fn scan_code(code: String, language: String) -> Result<Value, String>
 
 ### Environment Variables
 Required for runtime:
-- `ANTHROPIC_API_KEY` - Claude API authentication
-- `API_BASE_URL` - Optional, defaults to Anthropic endpoint
+- `XAI_API_KEY` - Grok API authentication
+- `API_BASE_URL` - Optional, defaults to X.AI endpoint
 
 ### Frontend Communication
 Frontend calls via IPC:
@@ -149,7 +149,7 @@ await invoke('scan_code', { code, language })
 
 ## References
 
-- Claude API: https://docs.anthropic.com
+- Grok API: https://docs.anthropic.com
 - OpenAI API: https://platform.openai.com/docs
 - Reqwest: https://github.com/seanmonstar/reqwest
 - Tauri: https://tauri.app

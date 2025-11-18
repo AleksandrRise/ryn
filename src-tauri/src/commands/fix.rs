@@ -7,7 +7,7 @@ use crate::models::Fix;
 use crate::security::path_validation;
 use crate::rate_limiter::{RateLimiter, RateLimiterConfig};
 use crate::utils::create_audit_event;
-use crate::fix_generator::claude_client::ClaudeClient;
+use crate::fix_generator::grok_client::GrokClient;
 use std::path::Path;
 use std::sync::Arc;
 use once_cell::sync::Lazy;
@@ -81,12 +81,12 @@ pub async fn generate_fix(
         .map_err(|e| format!("API rate limit: {}", e))?;
 
     // Call Claude API to generate fix
-    let claude_client = ClaudeClient::new()
+    let grok_client = GrokClient::new()
         .map_err(|e| format!("Failed to create Claude client: {}", e))?;
 
     let framework_str = _project_framework.as_deref().unwrap_or("unknown");
 
-    let fixed_code = claude_client.generate_fix(
+    let fixed_code = grok_client.generate_fix(
         &_violation.control_id,
         &_violation.description,
         &_violation.code_snippet,

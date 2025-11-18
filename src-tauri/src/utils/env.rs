@@ -14,13 +14,13 @@ pub fn load_env() -> Result<()> {
     Ok(())
 }
 
-/// Get ANTHROPIC_API_KEY from environment
+/// Get XAI_API_KEY from environment
 ///
 /// # Errors
-/// Returns error if ANTHROPIC_API_KEY environment variable is not set
-pub fn get_anthropic_key() -> Result<String> {
-    env::var("ANTHROPIC_API_KEY")
-        .context("ANTHROPIC_API_KEY environment variable not set. Please set it in .env or your environment.")
+/// Returns error if XAI_API_KEY environment variable is not set
+pub fn get_xai_key() -> Result<String> {
+    env::var("XAI_API_KEY")
+        .context("XAI_API_KEY environment variable not set. Please set it in .env or your environment.")
 }
 
 /// Validate API key format
@@ -47,11 +47,11 @@ pub fn validate_api_key(key: &str) -> Result<()> {
     Ok(())
 }
 
-/// Get and validate ANTHROPIC_API_KEY
+/// Get and validate XAI_API_KEY
 ///
-/// Combines get_anthropic_key and validate_api_key into single operation
+/// Combines get_xai_key and validate_api_key into single operation
 pub fn get_and_validate_api_key() -> Result<String> {
-    let key = get_anthropic_key()?;
+    let key = get_xai_key()?;
     validate_api_key(&key)?;
     Ok(key)
 }
@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn test_validate_api_key_valid_length() {
-        let result = validate_api_key("sk_1234567890123456789");
+        let result = validate_api_key("xai-1234567890123456789");
         assert!(result.is_ok());
     }
 
