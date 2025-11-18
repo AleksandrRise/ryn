@@ -12,6 +12,7 @@
 
 use anyhow::{Context, Result};
 use crate::models::{Severity, Violation};
+use crate::utils::extract_context_from_string;
 use regex::Regex;
 
 /// CC6.7 Secrets Detection Rule Engine
@@ -87,14 +88,18 @@ impl CC67SecretsRule {
                     Severity::High
                 };
 
+                // Extract code block with 5 lines of context before and after
+                let line_number = (idx + 1) as i64;
+                let (code_snippet, _relative_line) = extract_context_from_string(code, line_number, 5);
+
                 violations.push(Violation::new(
                     scan_id,
                     "CC6.7".to_string(),
                     severity,
                     "Hardcoded payment API key (Stripe/Twilio/Square)".to_string(),
                     file_path.to_string(),
-                    (idx + 1) as i64,
-                    Self::redact_line(line),
+                    line_number,
+                    code_snippet, // Now contains multiple lines with context
                 ));
             }
         }
