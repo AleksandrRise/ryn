@@ -14,6 +14,7 @@ use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;
+use crate::models::{Control, Violation, Severity, DetectionMethod};
 
 /// Request body structure for Claude Messages API
 /// Matches Anthropic API specification exactly
@@ -109,6 +110,45 @@ pub struct UsageMetrics {
     pub cache_read_input_tokens: i32,
 }
 
+impl UsageMetrics {
+    /// Calculate cost in USD using Claude Haiku 4.5 November 2025 pricing
+    ///
+    /// Pricing (per million tokens):
+    /// - Input: $1.00
+    /// - Output: $5.00
+    /// - Cache write: $1.25
+    /// - Cache read: $0.10
+    pub fn calculate_cost(&self) -> f64 {
+        let input_cost = (self.input_tokens as f64) * 1.00 / 1_000_000.0;
+        let output_cost = (self.output_tokens as f64) * 5.00 / 1_000_000.0;
+        let cache_write_cost = (self.cache_creation_input_tokens as f64) * 1.25 / 1_000_000.0;
+        let cache_read_cost = (self.cache_read_input_tokens as f64) * 0.10 / 1_000_000.0;
+
+        input_cost + output_cost + cache_write_cost + cache_read_cost
+    }
+}
+
+/// Result of LLM analysis for violations
+#[derive(Debug, Clone)]
+pub struct AnalysisResult {
+    /// Detected violations
+    pub violations: Vec<Violation>,
+    /// Token usage metrics
+    pub usage: UsageMetrics,
+}
+
+/// Violation detection from LLM (JSON deserialization)
+#[derive(Debug, Clone, Deserialize)]
+struct ViolationDetection {
+    control_id: String,
+    severity: String,
+    description: String,
+    line_number: i64,
+    code_snippet: String,
+    confidence_score: i64,
+    reasoning: String,
+}
+
 /// Claude API Client
 /// Handles all communication with Anthropic's Claude Messages API
 pub struct ClaudeClient {
@@ -178,6 +218,8 @@ impl ClaudeClient {
     /// * `violation_description` - Description of the violation
     /// * `original_code` - Code snippet with the violation
     /// * `framework` - Framework type (e.g., "django", "express")
+    /// * `function_name` - Function name where violation was found (from tree-sitter)
+    /// * `class_name` - Class name where violation was found (from tree-sitter)
     ///
     /// # Returns
     /// Fixed code as a string
@@ -187,12 +229,16 @@ impl ClaudeClient {
         violation_description: &str,
         original_code: &str,
         framework: &str,
+        function_name: Option<&str>,
+        class_name: Option<&str>,
     ) -> Result<String> {
         let prompt = self.build_fix_prompt(
             violation_control_id,
             violation_description,
             original_code,
             framework,
+            function_name,
+            class_name,
         );
 
         let response = self.call_api(&prompt, None).await?;
@@ -213,6 +259,8 @@ impl ClaudeClient {
         violation_description: &str,
         original_code: &str,
         framework: &str,
+        function_name: Option<&str>,
+        class_name: Option<&str>,
         system_context: &str,
     ) -> Result<String> {
         let prompt = self.build_fix_prompt(
@@ -220,6 +268,8 @@ impl ClaudeClient {
             violation_description,
             original_code,
             framework,
+            function_name,
+            class_name,
         );
 
         let response = self.call_api(&prompt, Some(system_context.to_string())).await?;
@@ -234,60 +284,81 @@ impl ClaudeClient {
     /// Build fix prompt based on SOC 2 control
     ///
     /// Constructs specialized prompts for different control types to ensure
-    /// consistent, high-quality fixes
+    /// consistent, high-quality fixes. Includes tree-sitter context (function_name, class_name)
+    /// when available for better understanding of code structure.
     fn build_fix_prompt(
         &self,
         control_id: &str,
         description: &str,
         code: &str,
         framework: &str,
+        function_name: Option<&str>,
+        class_name: Option<&str>,
     ) -> String {
+        // Build context section if tree-sitter data is available
+        let mut context_section = String::new();
+        if function_name.is_some() || class_name.is_some() {
+            context_section.push_str("Context:\n");
+            if let Some(func) = function_name {
+                context_section.push_str(&format!("- Function: {}\n", func));
+            }
+            if let Some(cls) = class_name {
+                context_section.push_str(&format!("- Class: {}\n", cls));
+            }
+            context_section.push_str("\n");
+        }
+
         match control_id {
             "CC6.1" => {
                 format!(
                     "Fix the following access control violation in {} code:\n\n\
                      Violation: {}\n\n\
+                     {}\
                      Original code:\n```\n{}\n```\n\n\
                      Provide the fixed code only, no explanation.",
-                    framework, description, code
+                    framework, description, context_section, code
                 )
             }
             "CC6.7" => {
                 format!(
                     "Fix the following secrets/cryptography violation in {} code:\n\n\
                      Violation: {}\n\n\
+                     {}\
                      Original code:\n```\n{}\n```\n\n\
                      Move hardcoded secrets to environment variables. \
                      Provide the fixed code only, no explanation.",
-                    framework, description, code
+                    framework, description, context_section, code
                 )
             }
             "CC7.2" => {
                 format!(
                     "Fix the following logging violation in {} code:\n\n\
                      Violation: {}\n\n\
+                     {}\
                      Original code:\n```\n{}\n```\n\n\
                      Add proper audit logging without logging sensitive data. \
                      Provide the fixed code only, no explanation.",
-                    framework, description, code
+                    framework, description, context_section, code
                 )
             }
             "A1.2" => {
                 format!(
                     "Fix the following resilience violation in {} code:\n\n\
                      Violation: {}\n\n\
+                     {}\
                      Original code:\n```\n{}\n```\n\n\
                      Add error handling, timeouts, and retry logic. \
                      Provide the fixed code only, no explanation.",
-                    framework, description, code
+                    framework, description, context_section, code
                 )
             }
             _ => {
                 format!(
                     "Fix the following compliance violation:\n\n\
                      Violation: {}\n\n\
+                     {}\
                      Original code:\n```\n{}\n```",
-                    description, code
+                    description, context_section, code
                 )
             }
         }
@@ -375,6 +446,248 @@ impl ClaudeClient {
         Ok(claude_response)
     }
 
+    // ============================================================
+    // LLM-BASED VIOLATION ANALYSIS (Hybrid Scanning)
+    // ============================================================
+
+    /// Analyze code for SOC 2 violations using Claude Haiku
+    ///
+    /// # Arguments
+    /// * `scan_id` - ID of the scan this analysis belongs to
+    /// * `file_path` - Path to file being analyzed
+    /// * `code` - Full file contents
+    /// * `regex_findings` - Violations already found by regex (optional)
+    ///
+    /// # Returns
+    /// AnalysisResult with detected violations and token usage
+    ///
+    /// # Errors
+    /// - API rate limits (429)
+    /// - Server errors (500, 529)
+    /// - Network failures (with retry)
+    pub async fn analyze_for_violations(
+        &self,
+        scan_id: i64,
+        file_path: &str,
+        code: &str,
+        regex_findings: Vec<Violation>,
+    ) -> Result<AnalysisResult> {
+        let system_prompt = Self::build_soc2_system_prompt();
+        let user_prompt = Self::build_analysis_prompt(file_path, code, &regex_findings);
+
+        // Call API with retry logic for transient errors
+        let response = self.call_api_with_retry(&user_prompt, Some(system_prompt), 3).await?;
+
+        // Parse violations from response
+        let violations = Self::parse_violations_response(
+            &response.content.first().map(|b| b.text.as_str()).unwrap_or(""),
+            scan_id,
+            file_path,
+        )?;
+
+        Ok(AnalysisResult {
+            violations,
+            usage: response.usage,
+        })
+    }
+
+    /// Build SOC 2 controls system prompt with caching
+    ///
+    /// Creates a comprehensive system prompt with all SOC 2 control definitions.
+    /// This prompt is cacheable (>2048 tokens) and will be reused across files.
+    fn build_soc2_system_prompt() -> String {
+        let controls = Control::all_controls();
+
+        let mut prompt = String::from(
+            "You are a SOC 2 compliance expert analyzing application code for security violations.\n\n\
+            Your task is to identify violations of the following SOC 2 controls:\n\n"
+        );
+
+        for control in controls {
+            prompt.push_str(&format!(
+                "## {} - {}\n\
+                **Description**: {}\n\
+                **Requirement**: {}\n\
+                **Category**: {}\n\n",
+                control.id, control.name, control.description, control.requirement, control.category
+            ));
+        }
+
+        prompt.push_str(
+            "\n**Analysis Guidelines**:\n\
+            1. Focus on semantic violations that regex patterns might miss\n\
+            2. Consider context and intent, not just keywords\n\
+            3. Assign confidence scores (0-100) based on certainty\n\
+            4. Provide clear, actionable reasoning\n\
+            5. Avoid duplicate findings with existing regex detections\n\n\
+            **Response Format**:\n\
+            Respond with a JSON array of violations only, no explanation:\n\
+            ```json\n\
+            [\n\
+              {\n\
+                \"control_id\": \"CC6.1\",\n\
+                \"severity\": \"high\",\n\
+                \"description\": \"Brief description\",\n\
+                \"line_number\": 42,\n\
+                \"code_snippet\": \"relevant code\",\n\
+                \"confidence_score\": 85,\n\
+                \"reasoning\": \"Why this is a violation\"\n\
+              }\n\
+            ]\n\
+            ```\n\
+            If no violations found, respond with: `[]`"
+        );
+
+        prompt
+    }
+
+    /// Build analysis prompt with code and existing regex findings
+    ///
+    /// # Arguments
+    /// * `file_path` - Path to file being analyzed
+    /// * `code` - Full file contents
+    /// * `regex_findings` - Violations already detected by regex patterns
+    fn build_analysis_prompt(file_path: &str, code: &str, regex_findings: &[Violation]) -> String {
+        let mut prompt = format!(
+            "Analyze this file for SOC 2 compliance violations:\n\n\
+            **File**: {}\n\n\
+            **Code**:\n```\n{}\n```\n\n",
+            file_path, code
+        );
+
+        if !regex_findings.is_empty() {
+            prompt.push_str("**Regex Pattern Detections** (already found):\n");
+            for finding in regex_findings {
+                prompt.push_str(&format!(
+                    "- Line {}: {} ({})\n",
+                    finding.line_number, finding.description, finding.control_id
+                ));
+            }
+            prompt.push_str("\nFocus on finding violations that regex patterns missed.\n\n");
+        }
+
+        prompt.push_str(
+            "Respond with JSON array of violations (or [] if none found). \
+            Consider semantic issues, not just keyword matching."
+        );
+
+        prompt
+    }
+
+    /// Parse Claude's JSON response into Violation objects
+    ///
+    /// # Arguments
+    /// * `response_text` - Claude's response (should be JSON array)
+    /// * `scan_id` - Scan ID to associate violations with
+    /// * `file_path` - File path for violations
+    ///
+    /// # Returns
+    /// Vec of Violation objects
+    ///
+    /// # Errors
+    /// Returns error if JSON parsing fails or format is invalid
+    fn parse_violations_response(
+        response_text: &str,
+        scan_id: i64,
+        file_path: &str,
+    ) -> Result<Vec<Violation>> {
+        // Strip markdown code blocks if present
+        let json_text = response_text
+            .trim()
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+
+        // Handle empty response
+        if json_text.is_empty() || json_text == "[]" {
+            return Ok(Vec::new());
+        }
+
+        // Parse JSON array of detections
+        let detections: Vec<ViolationDetection> = serde_json::from_str(json_text)
+            .context("Failed to parse LLM response as JSON")?;
+
+        // Convert to Violation objects
+        let violations: Vec<Violation> = detections
+            .into_iter()
+            .map(|det| {
+                let severity = Severity::from_str(&det.severity)
+                    .unwrap_or(Severity::Medium);
+
+                Violation {
+                    id: 0,
+                    scan_id,
+                    control_id: det.control_id,
+                    severity: severity.as_str().to_string(),
+                    description: det.description,
+                    file_path: file_path.to_string(),
+                    line_number: det.line_number,
+                    code_snippet: det.code_snippet,
+                    status: "open".to_string(),
+                    detected_at: chrono::Utc::now().to_rfc3339(),
+                    detection_method: DetectionMethod::Llm.as_str().to_string(),
+                    confidence_score: Some(det.confidence_score),
+                    llm_reasoning: Some(det.reasoning),
+                    regex_reasoning: None,
+                    function_name: None,
+                    class_name: None,
+                }
+            })
+            .collect();
+
+        Ok(violations)
+    }
+
+    /// Call API with retry logic for transient errors
+    ///
+    /// Retries on:
+    /// - 429 (rate limit): Exponential backoff
+    /// - 500 (server error): Linear backoff
+    /// - 529 (overloaded): Exponential backoff
+    /// - Network errors: Linear backoff
+    ///
+    /// # Arguments
+    /// * `prompt` - User prompt
+    /// * `system` - System prompt (optional)
+    /// * `max_retries` - Maximum retry attempts (default: 3)
+    async fn call_api_with_retry(
+        &self,
+        prompt: &str,
+        system: Option<String>,
+        max_retries: u32,
+    ) -> Result<ClaudeResponse> {
+        let mut attempt = 0;
+
+        loop {
+            match self.call_api(prompt, system.clone()).await {
+                Ok(response) => return Ok(response),
+                Err(e) => {
+                    attempt += 1;
+
+                    // Check if error is retryable
+                    let error_msg = e.to_string();
+                    let is_retryable = error_msg.contains("429") || error_msg.contains("500") || error_msg.contains("529") || error_msg.contains("network") || error_msg.contains("timeout");
+
+                    if !is_retryable || attempt >= max_retries {
+                        return Err(e);
+                    }
+
+                    // Calculate backoff delay
+                    let delay_ms = if error_msg.contains("429") || error_msg.contains("529") {
+                        // Exponential backoff for rate limits
+                        1000 * (2_u64.pow(attempt))
+                    } else {
+                        // Linear backoff for server errors
+                        2000 * attempt as u64
+                    };
+
+                    tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+                }
+            }
+        }
+    }
+
     /// Get the model name (for validation/debugging)
     pub fn model() -> &'static str {
         "claude-haiku-4-5-20251001"
@@ -410,6 +723,8 @@ mod tests {
             "Missing @login_required decorator",
             "def view(request): pass",
             "django",
+            None,
+            None,
         );
 
         assert!(prompt.contains("access control"));
@@ -431,6 +746,8 @@ mod tests {
             "Hardcoded API key in source",
             "API_KEY = 'sk_live_12345'",
             "python",
+            None,
+            None,
         );
 
         assert!(prompt.contains("secrets/cryptography"));
@@ -451,6 +768,8 @@ mod tests {
             "Missing audit log for user creation",
             "user.save()",
             "django",
+            None,
+            None,
         );
 
         assert!(prompt.contains("logging violation"));
@@ -472,6 +791,8 @@ mod tests {
             "Unhandled network request with no timeout",
             "requests.get(url)",
             "python",
+            None,
+            None,
         );
 
         assert!(prompt.contains("resilience violation"));
@@ -493,6 +814,8 @@ mod tests {
             "Some violation",
             "code here",
             "nodejs",
+            None,
+            None,
         );
 
         assert!(prompt.contains("compliance violation"));

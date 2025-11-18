@@ -37,11 +37,15 @@ pub mod violation;
 pub mod fix;
 pub mod audit;
 pub mod settings;
+pub mod analytics;
+pub mod logger;
 
 // Re-export all commands
 pub use project::{select_project_folder, create_project, get_projects};
-pub use scan::{detect_framework, scan_project, get_scan_progress, get_scans};
+pub use scan::{detect_framework, scan_project, get_scan_progress, get_scans, watch_project, stop_watching};
 pub use violation::{get_violations, get_violation, dismiss_violation};
 pub use fix::{generate_fix, apply_fix};
 pub use audit::get_audit_events;
 pub use settings::{get_settings, update_settings, clear_database, export_data};
+pub use analytics::get_scan_costs;
+pub use logger::log_frontend_message;

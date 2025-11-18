@@ -1,8 +1,18 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Save, Download, Code } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Save, Download, Code, BarChart3, Sparkles, Eye } from "lucide-react"
+import { useProjectStore } from "@/lib/stores/project-store"
+import { useFileWatcher } from "@/lib/hooks/useFileWatcher"
 import {
   get_settings,
   update_settings,
@@ -27,6 +37,8 @@ interface SettingsState {
   desktopNotifications: boolean
   emailAlerts: boolean
   slackWebhook: string
+  llmScanMode: string
+  costLimitPerScan: string
 }
 
 // Default state values
@@ -42,6 +54,8 @@ const defaultState: SettingsState = {
   desktopNotifications: true,
   emailAlerts: false,
   slackWebhook: "",
+  llmScanMode: "smart",
+  costLimitPerScan: "5.00",
 }
 
 // Map frontend state keys to backend storage keys
@@ -57,6 +71,8 @@ const settingsKeyMap: Record<keyof SettingsState, string> = {
   desktopNotifications: "desktop_notifications",
   emailAlerts: "email_alerts",
   slackWebhook: "slack_webhook",
+  llmScanMode: "llm_scan_mode",
+  costLimitPerScan: "cost_limit_per_scan",
 }
 
 // Helper: Convert backend settings array to state object
@@ -88,13 +104,13 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void 
   return (
     <button
       onClick={onChange}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-        enabled ? "bg-white" : "bg-white/20"
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 hover:scale-105 active:scale-95 ${
+        enabled ? "bg-white shadow-md" : "bg-white/20 hover:bg-white/30"
       }`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
-          enabled ? "translate-x-6 bg-black" : "translate-x-1 bg-white/60"
+        className={`inline-block h-4 w-4 transform rounded-full transition-all duration-300 ${
+          enabled ? "translate-x-6 bg-black shadow-sm" : "translate-x-1 bg-white/60"
         }`}
       />
     </button>
@@ -102,6 +118,12 @@ function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void 
 }
 
 export function Settings() {
+  const { selectedProject } = useProjectStore()
+  const { isWatching, startWatching, stopWatching, isLoading: isWatcherLoading } = useFileWatcher(
+    selectedProject?.id,
+    { autoStart: false, showNotifications: true }
+  )
+
   const [state, setState] = useState<SettingsState>(defaultState)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -220,6 +242,13 @@ export function Settings() {
         <div>
           <h1 className="text-5xl font-bold leading-none tracking-tight mb-3">Settings</h1>
           <p className="text-lg text-white/60">Configure compliance scanning and integrations</p>
+          <Link
+            href="/analytics"
+            className="inline-flex items-center gap-2 mt-4 text-sm text-white/70 hover:text-white transition-colors"
+          >
+            <BarChart3 className="w-4 h-4" />
+            View Cost Analytics →
+          </Link>
         </div>
         <div className="flex gap-3">
           <Button onClick={handleExport} size="lg" variant="outline" className="gap-2" disabled={isSaving}>
@@ -258,19 +287,99 @@ export function Settings() {
             {!state.autoDetectFramework && (
               <div>
                 <label className="block mb-2 text-sm font-medium">Select framework</label>
-                <select
-                  value={state.framework}
-                  onChange={(e) => updateSetting("framework", e.target.value)}
+                <Select value={state.framework} onValueChange={(value) => updateSetting("framework", value)}>
+                  <SelectTrigger className="w-full bg-black/40 border-white/10 rounded-xl hover:bg-black/50 focus:border-white/30 transition-all duration-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-black/95 border-white/10 backdrop-blur-xl">
+                    <SelectItem value="Django" className="focus:bg-white/10 cursor-pointer">Django</SelectItem>
+                    <SelectItem value="Flask" className="focus:bg-white/10 cursor-pointer">Flask</SelectItem>
+                    <SelectItem value="Express" className="focus:bg-white/10 cursor-pointer">Express (Node.js)</SelectItem>
+                    <SelectItem value="Rails" className="focus:bg-white/10 cursor-pointer">Ruby on Rails</SelectItem>
+                    <SelectItem value="Spring Boot" className="focus:bg-white/10 cursor-pointer">Spring Boot</SelectItem>
+                    <SelectItem value="Go" className="focus:bg-white/10 cursor-pointer">Go (Gin/Echo)</SelectItem>
+                    <SelectItem value="Rust" className="focus:bg-white/10 cursor-pointer">Rust (Actix/Rocket)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* AI Scanning Configuration Card */}
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-white/5 rounded-lg">
+              <Sparkles className="w-5 h-5 text-white/60" />
+            </div>
+            <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">AI Scanning</h2>
+          </div>
+          <div className="space-y-5">
+            <div>
+              <label className="block mb-3 text-sm font-medium">Scanning Mode</label>
+              <div className="space-y-3">
+                <label className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+                  <input
+                    type="radio"
+                    name="scanMode"
+                    value="regex_only"
+                    checked={state.llmScanMode === "regex_only"}
+                    onChange={(e) => updateSetting("llmScanMode", e.target.value)}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Pattern Only</p>
+                    <p className="text-xs text-white/50">Free, instant regex-based detection only</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+                  <input
+                    type="radio"
+                    name="scanMode"
+                    value="smart"
+                    checked={state.llmScanMode === "smart"}
+                    onChange={(e) => updateSetting("llmScanMode", e.target.value)}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Smart (Recommended)</p>
+                    <p className="text-xs text-white/50">
+                      AI analyzes ~30-40% of files (security-critical code only)
+                    </p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+                  <input
+                    type="radio"
+                    name="scanMode"
+                    value="analyze_all"
+                    checked={state.llmScanMode === "analyze_all"}
+                    onChange={(e) => updateSetting("llmScanMode", e.target.value)}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Analyze All</p>
+                    <p className="text-xs text-white/50">AI analyzes every file (maximum accuracy, higher cost)</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {state.llmScanMode !== "regex_only" && (
+              <div>
+                <label className="block mb-2 text-sm font-medium">Cost Limit Per Scan (USD)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={state.costLimitPerScan}
+                  onChange={(e) => updateSetting("costLimitPerScan", e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-white/30 transition-colors"
-                >
-                  <option value="Django">Django</option>
-                  <option value="Flask">Flask</option>
-                  <option value="Express">Express (Node.js)</option>
-                  <option value="Rails">Ruby on Rails</option>
-                  <option value="Spring Boot">Spring Boot</option>
-                  <option value="Go">Go (Gin/Echo)</option>
-                  <option value="Rust">Rust (Actix/Rocket)</option>
-                </select>
+                  placeholder="5.00"
+                />
+                <p className="text-xs text-white/50 mt-2">
+                  Scanning will pause if estimated cost exceeds this limit
+                </p>
               </div>
             )}
           </div>
@@ -287,10 +396,10 @@ export function Settings() {
               </div>
               <button
                 onClick={() => updateSetting("autoApplyLow", !state.autoApplyLow)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
                   state.autoApplyLow
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
                 }`}
               >
                 {state.autoApplyLow ? "ON" : "OFF"}
@@ -304,10 +413,10 @@ export function Settings() {
               </div>
               <button
                 onClick={() => updateSetting("autoApplyMedium", !state.autoApplyMedium)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
                   state.autoApplyMedium
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
                 }`}
               >
                 {state.autoApplyMedium ? "ON" : "OFF"}
@@ -327,29 +436,57 @@ export function Settings() {
               </div>
               <button
                 onClick={() => updateSetting("continuousMonitoring", !state.continuousMonitoring)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
                   state.continuousMonitoring
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
                 }`}
               >
                 {state.continuousMonitoring ? "ON" : "OFF"}
               </button>
             </div>
 
+            {selectedProject && (
+              <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-white/60" />
+                    <p className="text-[14px] mb-1">Real-time file watching</p>
+                  </div>
+                  <p className="text-[12px] text-[#aaaaaa]">
+                    {isWatching
+                      ? `Monitoring ${selectedProject.name} for file changes`
+                      : "Watch project files for real-time changes"}
+                  </p>
+                </div>
+                <button
+                  onClick={isWatching ? stopWatching : startWatching}
+                  disabled={isWatcherLoading}
+                  className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 disabled:opacity-50 ${
+                    isWatching
+                      ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                      : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
+                  }`}
+                >
+                  {isWatcherLoading ? "..." : isWatching ? "ON" : "OFF"}
+                </button>
+              </div>
+            )}
+
             <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-[14px]">Scan frequency</label>
-              <select
-                value={state.scanFrequency}
-                onChange={(e) => updateSetting("scanFrequency", e.target.value)}
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] focus:outline-none focus:border-white"
-              >
-                <option value="on-commit">On every commit</option>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="manual">Manual only</option>
-              </select>
-              <p className="text-[12px] text-[#aaaaaa] mt-2">When to automatically run compliance scans</p>
+              <label className="block mb-2 text-sm font-medium">Scan frequency</label>
+              <Select value={state.scanFrequency} onValueChange={(value) => updateSetting("scanFrequency", value)}>
+                <SelectTrigger className="w-full bg-black/40 border-white/10 rounded-xl hover:bg-black/50 focus:border-white/30 transition-all duration-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-black/95 border-white/10 backdrop-blur-xl">
+                  <SelectItem value="on-commit" className="focus:bg-white/10 cursor-pointer">On every commit</SelectItem>
+                  <SelectItem value="daily" className="focus:bg-white/10 cursor-pointer">Daily</SelectItem>
+                  <SelectItem value="weekly" className="focus:bg-white/10 cursor-pointer">Weekly</SelectItem>
+                  <SelectItem value="manual" className="focus:bg-white/10 cursor-pointer">Manual only</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-white/50 mt-2">When to automatically run compliance scans</p>
             </div>
           </div>
         </section>
@@ -359,37 +496,38 @@ export function Settings() {
           <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Database</h2>
           <div className="space-y-6">
             <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-[14px]">Database type</label>
-              <select
-                value={state.databaseType}
-                onChange={(e) => updateSetting("databaseType", e.target.value)}
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] focus:outline-none focus:border-white"
-              >
-                <option value="PostgreSQL">PostgreSQL</option>
-                <option value="MongoDB">MongoDB</option>
-                <option value="MySQL">MySQL</option>
-                <option value="SQLite">SQLite</option>
-              </select>
+              <label className="block mb-2 text-sm font-medium">Database type</label>
+              <Select value={state.databaseType} onValueChange={(value) => updateSetting("databaseType", value)}>
+                <SelectTrigger className="w-full bg-black/40 border-white/10 rounded-xl hover:bg-black/50 focus:border-white/30 transition-all duration-200">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-black/95 border-white/10 backdrop-blur-xl">
+                  <SelectItem value="PostgreSQL" className="focus:bg-white/10 cursor-pointer">PostgreSQL</SelectItem>
+                  <SelectItem value="MongoDB" className="focus:bg-white/10 cursor-pointer">MongoDB</SelectItem>
+                  <SelectItem value="MySQL" className="focus:bg-white/10 cursor-pointer">MySQL</SelectItem>
+                  <SelectItem value="SQLite" className="focus:bg-white/10 cursor-pointer">SQLite</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-[14px]">Connection string</label>
+              <label className="block mb-2 text-sm font-medium">Connection string</label>
               <input
                 type="text"
                 value={state.connectionString}
                 onChange={(e) => updateSetting("connectionString", e.target.value)}
                 placeholder="postgresql://user:password@localhost:5432/dbname"
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] font-mono focus:outline-none focus:border-white"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-white/30 transition-all duration-200 hover:bg-black/50"
               />
-              <p className="text-[12px] text-[#aaaaaa] mt-2">Used for scanning database access patterns</p>
+              <p className="text-xs text-white/50 mt-2">Used for scanning database access patterns</p>
             </div>
 
             <div className="space-y-4">
-              <button onClick={handleClearDatabase} className="text-[13px] hover:underline">
+              <button onClick={handleClearDatabase} className="text-[13px] hover:underline transition-all duration-200 hover:text-white hover:translate-x-0.5">
                 Clear scan history
               </button>
               <span className="text-[#aaaaaa] mx-2">•</span>
-              <button onClick={handleExportAll} className="text-[13px] hover:underline">
+              <button onClick={handleExportAll} className="text-[13px] hover:underline transition-all duration-200 hover:text-white hover:translate-x-0.5">
                 Export all data
               </button>
             </div>
@@ -407,10 +545,10 @@ export function Settings() {
               </div>
               <button
                 onClick={() => updateSetting("desktopNotifications", !state.desktopNotifications)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
                   state.desktopNotifications
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
                 }`}
               >
                 {state.desktopNotifications ? "ON" : "OFF"}
@@ -424,10 +562,10 @@ export function Settings() {
               </div>
               <button
                 onClick={() => updateSetting("emailAlerts", !state.emailAlerts)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all border min-w-[60px] ${
+                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
                   state.emailAlerts
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3]"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333]"
+                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
+                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
                 }`}
               >
                 {state.emailAlerts ? "ON" : "OFF"}
@@ -435,15 +573,15 @@ export function Settings() {
             </div>
 
             <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-[14px]">Slack webhook URL</label>
+              <label className="block mb-2 text-sm font-medium">Slack webhook URL</label>
               <input
                 type="text"
                 value={state.slackWebhook}
                 onChange={(e) => updateSetting("slackWebhook", e.target.value)}
                 placeholder="https://hooks.slack.com/services/..."
-                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] px-4 py-2 text-[13px] font-mono focus:outline-none focus:border-white"
+                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-white/30 transition-all duration-200 hover:bg-black/50"
               />
-              <p className="text-[12px] text-[#aaaaaa] mt-2">Send compliance updates to Slack</p>
+              <p className="text-xs text-white/50 mt-2">Send compliance updates to Slack</p>
             </div>
           </div>
         </section>
@@ -457,7 +595,7 @@ export function Settings() {
               <p className="text-[12px] text-[#aaaaaa] mb-4">
                 Get real-time compliance feedback as you code
               </p>
-              <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-colors">
+              <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-white/20">
                 Download Extension →
               </button>
             </div>
@@ -467,7 +605,7 @@ export function Settings() {
               <p className="text-[12px] text-[#aaaaaa] mb-4">
                 Support for IntelliJ IDEA, PyCharm, WebStorm, and more
               </p>
-              <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-colors">
+              <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-white/20 opacity-60 cursor-not-allowed" disabled>
                 Coming Soon
               </button>
             </div>

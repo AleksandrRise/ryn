@@ -5,15 +5,18 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useProjectStore } from "@/lib/stores/project-store"
+import { useFileWatcher } from "@/lib/hooks/useFileWatcher"
 import {
   get_scans,
   get_violations,
   get_audit_events,
+  get_projects,
   type Violation,
   type ScanResult,
   type AuditEvent,
 } from "@/lib/tauri/commands"
 import { handleTauriError } from "@/lib/utils/error-handler"
+import type { FileChangedEvent } from "@/lib/types/events"
 
 export function Dashboard() {
   const router = useRouter()
@@ -29,6 +32,53 @@ export function Dashboard() {
   const [recentActivity, setRecentActivity] = useState<AuditEvent[]>([])
   const [totalScansCount, setTotalScansCount] = useState(0)
   const [fixesAppliedCount, setFixesAppliedCount] = useState(0)
+
+  // Callback for when files change - refresh dashboard data
+  const handleFileChanged = async (event: FileChangedEvent) => {
+    // Silently refresh dashboard data when files change
+    // Don't show loading state to avoid UI disruption
+    if (!selectedProject) return
+
+    try {
+      // Fetch latest scan for the project
+      const scans = await get_scans(selectedProject.id)
+      const latestScan = scans.length > 0 ? scans[0] : null
+      setLastScan(latestScan)
+
+      if (latestScan) {
+        // Fetch violations from latest scan
+        const allViolations = await get_violations(latestScan.id, {})
+
+        // Count violations by severity
+        const violationCounts = {
+          critical: allViolations.filter(v => v.severity === "critical").length,
+          high: allViolations.filter(v => v.severity === "high").length,
+          medium: allViolations.filter(v => v.severity === "medium").length,
+          low: allViolations.filter(v => v.severity === "low").length,
+        }
+        setViolations(violationCounts)
+      }
+
+      // Fetch recent audit events
+      const events = await get_audit_events({ limit: 4 })
+      setRecentActivity(events)
+
+      // Count fixes applied
+      const fixEvents = events.filter(e => e.event_type === "fix_applied")
+      setFixesAppliedCount(fixEvents.length)
+    } catch (error) {
+      // Silently fail on file change refresh - don't disturb user
+      console.error('[Dashboard] File change refresh error:', error)
+    }
+  }
+
+  // Set up file watcher for the selected project
+  // The hook will auto-start watching when selectedProject changes
+  useFileWatcher(selectedProject?.id, {
+    autoStart: !!selectedProject,
+    onFileChanged: handleFileChanged,
+    showNotifications: true,
+  })
 
   const totalViolations = violations.critical + violations.high + violations.medium + violations.low
 
@@ -56,12 +106,24 @@ export function Dashboard() {
   useEffect(() => {
     const loadDashboardData = async () => {
       if (!selectedProject) {
+        console.log('[Dashboard] No project selected, showing empty state')
+        setIsLoading(false)
+        return
+      }
+
+      // Validate project ID
+      if (!selectedProject.id || selectedProject.id <= 0) {
+        console.error('[Dashboard] Invalid project ID:', selectedProject)
+        const { clearProject } = useProjectStore.getState()
+        clearProject()
+        toast.error('Invalid project selected')
         setIsLoading(false)
         return
       }
 
       try {
         setIsLoading(true)
+        console.log('[Dashboard] Loading data for project:', selectedProject.id)
 
         // Fetch latest scan for the project
         const scans = await get_scans(selectedProject.id)
@@ -90,7 +152,42 @@ export function Dashboard() {
         // Count fixes applied from audit events
         const fixEvents = events.filter(e => e.event_type === "fix_applied")
         setFixesAppliedCount(fixEvents.length)
-      } catch (error) {
+      } catch (error: any) {
+        // Extract error message from various possible properties
+        let errorMsg = 'Failed to load dashboard data'
+        if (typeof error === 'string') {
+          errorMsg = error
+        } else if (error instanceof Error) {
+          errorMsg = error.message
+        } else if (error && typeof error === 'object') {
+          errorMsg = error.message || error.error || error.msg || String(error) || errorMsg
+        }
+
+        console.error('[Dashboard] Load error:', errorMsg)
+        console.error('[Dashboard] Error type:', typeof error)
+        console.error('[Dashboard] Error keys:', error ? Object.getOwnPropertyNames(error) : [])
+        console.error('[Dashboard] Project:', selectedProject?.id, selectedProject?.path)
+
+        // Check if error is due to project not existing in database
+        // This can happen when database is reset but localStorage still has project reference
+        try {
+          const projects = await get_projects()
+          const projectExists = projects.some((p) => p.id === selectedProject?.id)
+
+          if (!projectExists) {
+            console.warn('[Dashboard] Project not found in database, clearing reference')
+            // Project was deleted or database was reset - clear the reference gracefully
+            const { clearProject } = useProjectStore.getState()
+            clearProject()
+            toast.info('Project no longer exists')
+            setIsLoading(false)
+            return
+          }
+        } catch (checkError) {
+          // If get_projects fails, assume database issue and fall through to show error
+          console.error('[Dashboard] Failed to check if project exists:', checkError)
+        }
+
         handleTauriError(error, "Failed to load dashboard data")
       } finally {
         setIsLoading(false)
@@ -165,6 +262,25 @@ export function Dashboard() {
           <Button onClick={() => router.push("/scan")} className="gap-2">
             <i className="las la-folder text-base"></i>
             Select Project
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // Empty state when project has no scans yet
+  if (!lastScan && totalScansCount === 0) {
+    return (
+      <div className="px-8 py-8 max-w-[1800px] mx-auto flex items-center justify-center min-h-[60vh]">
+        <div className="text-center max-w-md">
+          <i className="las la-search text-6xl text-white/20 mb-4"></i>
+          <h2 className="text-2xl font-bold mb-2">No Scans Yet</h2>
+          <p className="text-white/60 mb-6">
+            Run your first scan on <span className="text-white font-medium">{selectedProject.name}</span> to start monitoring SOC 2 compliance
+          </p>
+          <Button onClick={handleRunScan} size="lg" className="gap-2">
+            <i className="las la-play text-base"></i>
+            Run First Scan
           </Button>
         </div>
       </div>
@@ -435,6 +551,31 @@ export function Dashboard() {
         </div>
 
       </div>
+
+      {/* Stale Scan Alert */}
+      {lastScan && (() => {
+        const scanTime = new Date(lastScan.created_at || lastScan.started_at).getTime()
+        const now = Date.now()
+        const diffMs = now - scanTime
+        const diffHours = Math.floor(diffMs / 3600000)
+        const isStale = diffHours >= 1
+
+        return isStale ? (
+          <Link
+            href="/scan"
+            className="mt-8 flex items-center justify-between p-6 bg-yellow-500/10 backdrop-blur-sm border border-yellow-500/30 rounded-2xl animate-fade-in-up delay-300 hover:bg-yellow-500/15 hover:border-yellow-500/50 transition-all duration-300 cursor-pointer group"
+          >
+            <div>
+              <p className="font-semibold mb-1 text-yellow-400 group-hover:text-yellow-300 transition-colors">Scan data is {diffHours} hour{diffHours > 1 ? "s" : ""} old</p>
+              <p className="text-sm text-yellow-400/70 group-hover:text-yellow-400/90 transition-colors">Run a fresh scan to get the latest compliance data</p>
+            </div>
+            <div className="flex items-center gap-2 text-sm font-medium text-yellow-400 group-hover:translate-x-1 transition-transform">
+              <span>Rescan Now</span>
+              <i className="las la-arrow-right text-base"></i>
+            </div>
+          </Link>
+        ) : null
+      })()}
 
       {/* Action Footer */}
       <Link

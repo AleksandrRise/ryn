@@ -189,7 +189,7 @@ pub fn update_scan_results(conn: &Connection, id: i64, files_scanned: i32, total
 
 pub fn insert_violation(conn: &Connection, violation: &Violation) -> Result<i64> {
     conn.execute(
-        "INSERT INTO violations (scan_id, control_id, severity, description, file_path, line_number, code_snippet, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO violations (scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detection_method, confidence_score, llm_reasoning, regex_reasoning, function_name, class_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         params![
             violation.scan_id,
             violation.control_id,
@@ -199,6 +199,12 @@ pub fn insert_violation(conn: &Connection, violation: &Violation) -> Result<i64>
             violation.line_number,
             violation.code_snippet,
             violation.status,
+            violation.detection_method,
+            violation.confidence_score,
+            violation.llm_reasoning,
+            violation.regex_reasoning,
+            violation.function_name,
+            violation.class_name,
         ],
     ).context("Failed to insert violation")?;
 
@@ -207,7 +213,7 @@ pub fn insert_violation(conn: &Connection, violation: &Violation) -> Result<i64>
 
 pub fn select_violations(conn: &Connection, scan_id: i64) -> Result<Vec<Violation>> {
     let mut stmt = conn
-        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at FROM violations WHERE scan_id = ? ORDER BY severity DESC, line_number ASC")
+        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning, function_name, class_name FROM violations WHERE scan_id = ? ORDER BY severity DESC, line_number ASC")
         .context("Failed to prepare select violations query")?;
 
     let violations = stmt
@@ -223,6 +229,12 @@ pub fn select_violations(conn: &Connection, scan_id: i64) -> Result<Vec<Violatio
                 code_snippet: row.get(7)?,
                 status: row.get(8)?,
                 detected_at: row.get(9)?,
+                detection_method: row.get(10)?,
+                confidence_score: row.get(11)?,
+                llm_reasoning: row.get(12)?,
+                regex_reasoning: row.get(13)?,
+                function_name: row.get(14)?,
+                class_name: row.get(15)?,
             })
         })
         .context("Failed to map violations from query")?
@@ -234,7 +246,7 @@ pub fn select_violations(conn: &Connection, scan_id: i64) -> Result<Vec<Violatio
 
 pub fn select_violation(conn: &Connection, id: i64) -> Result<Option<Violation>> {
     let mut stmt = conn
-        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at FROM violations WHERE id = ?")
+        .prepare("SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning, function_name, class_name FROM violations WHERE id = ?")
         .context("Failed to prepare select violation query")?;
 
     let violation = stmt
@@ -250,6 +262,12 @@ pub fn select_violation(conn: &Connection, id: i64) -> Result<Option<Violation>>
                 code_snippet: row.get(7)?,
                 status: row.get(8)?,
                 detected_at: row.get(9)?,
+                detection_method: row.get(10)?,
+                confidence_score: row.get(11)?,
+                llm_reasoning: row.get(12)?,
+                regex_reasoning: row.get(13)?,
+                function_name: row.get(14)?,
+                class_name: row.get(15)?,
             })
         })
         .optional()
@@ -558,7 +576,7 @@ pub fn select_all_scans(conn: &Connection) -> Result<Vec<Scan>> {
 
 pub fn select_all_violations(conn: &Connection) -> Result<Vec<Violation>> {
     let mut stmt = conn.prepare(
-        "SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at
+        "SELECT id, scan_id, control_id, severity, description, file_path, line_number, code_snippet, status, detected_at, detection_method, confidence_score, llm_reasoning, regex_reasoning, function_name, class_name
          FROM violations
          ORDER BY detected_at DESC"
     ).context("Failed to prepare select all violations statement")?;
@@ -575,6 +593,12 @@ pub fn select_all_violations(conn: &Connection) -> Result<Vec<Violation>> {
             code_snippet: row.get(7)?,
             status: row.get(8)?,
             detected_at: row.get(9)?,
+            detection_method: row.get(10)?,
+            confidence_score: row.get(11)?,
+            llm_reasoning: row.get(12)?,
+            regex_reasoning: row.get(13)?,
+            function_name: row.get(14)?,
+            class_name: row.get(15)?,
         })
     })
     .context("Failed to query all violations")?
@@ -667,6 +691,131 @@ pub fn get_severity_counts(conn: &Connection, scan_id: i64) -> Result<(i32, i32,
     }
 
     Ok((critical, high, medium, low))
+}
+
+// ===== SCAN COSTS CRUD =====
+
+pub fn insert_scan_cost(conn: &Connection, scan_cost: &ScanCost) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO scan_costs (scan_id, files_analyzed_with_llm, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_cost_usd, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        params![
+            scan_cost.scan_id,
+            scan_cost.files_analyzed_with_llm,
+            scan_cost.input_tokens,
+            scan_cost.output_tokens,
+            scan_cost.cache_read_tokens,
+            scan_cost.cache_write_tokens,
+            scan_cost.total_cost_usd,
+            scan_cost.created_at
+        ],
+    ).context("Failed to insert scan cost")?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn select_scan_cost(conn: &Connection, id: i64) -> Result<Option<ScanCost>> {
+    let mut stmt = conn
+        .prepare("SELECT id, scan_id, files_analyzed_with_llm, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_cost_usd, created_at FROM scan_costs WHERE id = ?")
+        .context("Failed to prepare select scan cost query")?;
+
+    let scan_cost = stmt
+        .query_row(params![id], |row| {
+            Ok(ScanCost {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                files_analyzed_with_llm: row.get(2)?,
+                input_tokens: row.get(3)?,
+                output_tokens: row.get(4)?,
+                cache_read_tokens: row.get(5)?,
+                cache_write_tokens: row.get(6)?,
+                total_cost_usd: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })
+        .optional()
+        .context("Failed to query scan cost")?;
+
+    Ok(scan_cost)
+}
+
+pub fn select_scan_cost_by_scan_id(conn: &Connection, scan_id: i64) -> Result<Option<ScanCost>> {
+    let mut stmt = conn
+        .prepare("SELECT id, scan_id, files_analyzed_with_llm, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_cost_usd, created_at FROM scan_costs WHERE scan_id = ?")
+        .context("Failed to prepare select scan cost by scan_id query")?;
+
+    let scan_cost = stmt
+        .query_row(params![scan_id], |row| {
+            Ok(ScanCost {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                files_analyzed_with_llm: row.get(2)?,
+                input_tokens: row.get(3)?,
+                output_tokens: row.get(4)?,
+                cache_read_tokens: row.get(5)?,
+                cache_write_tokens: row.get(6)?,
+                total_cost_usd: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })
+        .optional()
+        .context("Failed to query scan cost by scan_id")?;
+
+    Ok(scan_cost)
+}
+
+/// Get all scan costs since a given timestamp (RFC3339 format)
+/// Used for analytics dashboard to show costs over time
+pub fn select_scan_costs_since(conn: &Connection, since: &str) -> Result<Vec<ScanCost>> {
+    let mut stmt = conn
+        .prepare("SELECT id, scan_id, files_analyzed_with_llm, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_cost_usd, created_at FROM scan_costs WHERE created_at >= ? ORDER BY created_at DESC")
+        .context("Failed to prepare select scan costs since query")?;
+
+    let scan_costs = stmt
+        .query_map(params![since], |row| {
+            Ok(ScanCost {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                files_analyzed_with_llm: row.get(2)?,
+                input_tokens: row.get(3)?,
+                output_tokens: row.get(4)?,
+                cache_read_tokens: row.get(5)?,
+                cache_write_tokens: row.get(6)?,
+                total_cost_usd: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })
+        .context("Failed to map scan costs from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect scan costs")?;
+
+    Ok(scan_costs)
+}
+
+pub fn select_all_scan_costs(conn: &Connection) -> Result<Vec<ScanCost>> {
+    let mut stmt = conn
+        .prepare("SELECT id, scan_id, files_analyzed_with_llm, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_cost_usd, created_at FROM scan_costs ORDER BY created_at DESC")
+        .context("Failed to prepare select all scan costs query")?;
+
+    let scan_costs = stmt
+        .query_map([], |row| {
+            Ok(ScanCost {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                files_analyzed_with_llm: row.get(2)?,
+                input_tokens: row.get(3)?,
+                output_tokens: row.get(4)?,
+                cache_read_tokens: row.get(5)?,
+                cache_write_tokens: row.get(6)?,
+                total_cost_usd: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })
+        .context("Failed to map scan costs from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect scan costs")?;
+
+    Ok(scan_costs)
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { get_violation, generate_fix, apply_fix, dismiss_violation, type ViolationDetail } from "@/lib/tauri/commands"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
+import { DetectionBadge } from "@/components/scan/detection-badge"
 
 interface ViolationDetailProps {
   violationId: number
@@ -227,7 +228,7 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
         <div>
           {/* Violation header */}
           <div className="mb-12 pb-8 border-[#1a1a1a]">
-            <div className="flex items-baseline gap-4 mb-3">
+            <div className="flex items-center gap-3 mb-3">
               <span
                 className={`text-[11px] uppercase tracking-wider font-medium ${
                   violation.severity === "critical"
@@ -242,6 +243,7 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
                 {violation.severity}
               </span>
               <span className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">{violation.control_id}</span>
+              <DetectionBadge method={violation.detection_method} />
               <span className={`text-[11px] uppercase tracking-wider px-2 py-1 ${getConfidenceBadge(trustLevel)}`}>
                 {trustLevel} trust
               </span>
@@ -282,6 +284,53 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
               />
             )}
           </div>
+
+          {/* Detection Reasoning Cards - For Hybrid/LLM/Regex violations */}
+          {(violation.llm_reasoning || violation.regex_reasoning) && (
+            <div className="mb-8 grid gap-4 grid-cols-1 md:grid-cols-2">
+              {/* AI Analysis Card */}
+              {violation.llm_reasoning && (
+                <div className="border border-purple-500/20 bg-purple-500/5 p-6 rounded-lg">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-2 h-2 rounded-full bg-purple-500" />
+                    <h3 className="text-[11px] uppercase tracking-wider text-purple-400 font-medium">
+                      AI Analysis
+                    </h3>
+                  </div>
+                  <p className="text-[13px] leading-relaxed text-[#e5e5e5]">{violation.llm_reasoning}</p>
+                  {violation.confidence_score !== undefined && violation.confidence_score !== null && (
+                    <div className="mt-4 pt-4 border-t border-purple-500/20">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">Confidence</span>
+                        <span className="text-[13px] font-medium text-purple-400">
+                          {Math.round(violation.confidence_score * 100)}%
+                        </span>
+                      </div>
+                      <div className="h-2 bg-black/50 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-500"
+                          style={{ width: `${violation.confidence_score * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Pattern Match Card */}
+              {violation.regex_reasoning && (
+                <div className="border border-blue-500/20 bg-blue-500/5 p-6 rounded-lg">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <h3 className="text-[11px] uppercase tracking-wider text-blue-400 font-medium">
+                      Pattern Match
+                    </h3>
+                  </div>
+                  <p className="text-[13px] leading-relaxed text-[#e5e5e5]">{violation.regex_reasoning}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Fix explanation */}
           {showDiff && fix && (
@@ -341,6 +390,34 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
             <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Violation Details</h3>
             <p className="text-[13px] leading-relaxed text-[#aaaaaa]">{violation.description}</p>
           </div>
+
+          {/* Detection Confidence Score */}
+          {violation.confidence_score !== undefined && violation.confidence_score !== null && (
+            <div className="mb-8 p-4 border border-purple-500/20 bg-purple-500/5 rounded-lg">
+              <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">AI Confidence</h3>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[13px] text-[#aaaaaa]">Detection Certainty</span>
+                <span className="text-[18px] font-bold text-purple-400">
+                  {Math.round(violation.confidence_score * 100)}%
+                </span>
+              </div>
+              <div className="h-2 bg-black/50 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-500"
+                  style={{ width: `${violation.confidence_score * 100}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-[#777] mt-2">
+                {violation.confidence_score >= 0.9
+                  ? "Very high confidence"
+                  : violation.confidence_score >= 0.7
+                    ? "High confidence"
+                    : violation.confidence_score >= 0.5
+                      ? "Moderate confidence"
+                      : "Low confidence - review recommended"}
+              </p>
+            </div>
+          )}
 
           <div className="mb-8">
             <h3 className="text-[11px] uppercase tracking-wider text-[#aaaaaa] mb-3">Trust Level</h3>

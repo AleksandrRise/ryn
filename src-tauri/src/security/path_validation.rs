@@ -90,18 +90,21 @@ pub fn validate_project_path(path: &Path) -> Result<()> {
 
     // List of forbidden system directories
     let forbidden = [
-        "/",           // Root
-        "/etc",        // System configuration
-        "/usr",        // System binaries
-        "/bin",        // Essential binaries
-        "/sbin",       // System binaries
-        "/var",        // Variable data
-        "/sys",        // System information
-        "/proc",       // Process information
-        "/boot",       // Boot files
-        "/dev",        // Device files
-        "/root",       // Root user home
-        "/tmp",        // Temporary (could be large)
+        "/",                // Root
+        "/etc",             // System configuration
+        "/private/etc",     // macOS: /etc symlinks to /private/etc
+        "/usr",             // System binaries
+        "/bin",             // Essential binaries
+        "/sbin",            // System binaries
+        "/var",             // Variable data
+        "/private/var",     // macOS: /var symlinks to /private/var
+        "/sys",             // System information
+        "/proc",            // Process information
+        "/boot",            // Boot files
+        "/dev",             // Device files
+        "/root",            // Root user home
+        "/tmp",             // Temporary (could be large)
+        "/private/tmp",     // macOS: /tmp symlinks to /private/tmp
     ];
 
     let path_str = canonical.to_string_lossy();
@@ -162,7 +165,9 @@ mod tests {
         assert!(result.is_ok());
 
         let validated = result.unwrap();
-        assert!(validated.starts_with(base.path()));
+        // Function returns canonical path, so compare against canonical base
+        let canonical_base = base.path().canonicalize().unwrap();
+        assert!(validated.starts_with(&canonical_base));
         assert!(validated.ends_with("test.txt"));
     }
 
@@ -177,7 +182,9 @@ mod tests {
         assert!(result.is_ok());
 
         let validated = result.unwrap();
-        assert!(validated.starts_with(base.path()));
+        // Function returns canonical path, so compare against canonical base
+        let canonical_base = base.path().canonicalize().unwrap();
+        assert!(validated.starts_with(&canonical_base));
         assert!(validated.ends_with("file.txt"));
     }
 

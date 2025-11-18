@@ -1,29 +1,18 @@
 /**
- * Rust-TypeScript Bridge for LangGraph Agent
+ * Direct Claude AI Agent for Fix Generation
  *
- * This module provides the Rust side of the agent invocation.
- * It communicates with the TypeScript LangGraph agent running in Tauri
- * via the invoke_handler mechanism.
+ * This module provides direct integration with Claude via langchain-rust,
+ * eliminating the need for cross-language TypeScript bridge.
  */
 
 use serde::{Deserialize, Serialize};
 use crate::models::{Violation, Fix};
 use anyhow::Result;
-
-/**
- * Request payload sent to the TypeScript agent
- */
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentRequest {
-    pub file_path: String,
-    pub code: String,
-    pub framework: String,
-    pub violations: Vec<AgentViolation>,
-}
+use langchain_rust::llm::claude::Claude;
+use langchain_rust::language_models::llm::LLM;
 
 /**
  * Violation representation for agent communication
- * Slightly different from the database model
  */
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentViolation {
@@ -48,7 +37,7 @@ pub struct AgentFix {
 }
 
 /**
- * Response payload from the TypeScript agent
+ * Response payload from the agent
  */
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentResponse {
@@ -70,24 +59,6 @@ pub fn violation_to_agent(violation: &Violation) -> AgentViolation {
         file_path: violation.file_path.clone(),
         line_number: violation.line_number,
         code_snippet: violation.code_snippet.clone(),
-    }
-}
-
-/**
- * Convert agent Violation back to database Violation
- */
-pub fn agent_to_violation(scan_id: i64, agent_violation: &AgentViolation) -> Violation {
-    Violation {
-        id: 0, // Will be set by database
-        scan_id,
-        control_id: agent_violation.control_id.clone(),
-        severity: agent_violation.severity.clone(),
-        description: agent_violation.description.clone(),
-        file_path: agent_violation.file_path.clone(),
-        line_number: agent_violation.line_number,
-        code_snippet: agent_violation.code_snippet.clone(),
-        status: "open".to_string(),
-        detected_at: chrono::Utc::now().to_rfc3339(),
     }
 }
 
@@ -130,20 +101,16 @@ impl Default for AgentRunnerConfig {
     fn default() -> Self {
         Self {
             max_tokens: 4096,
-            model_name: "claude-haiku-4.5".to_string(),
+            model_name: "claude-3-5-sonnet-20240620".to_string(),
             temperature: 0.3,
         }
     }
 }
 
 /**
- * Agent runner: orchestrates invocation of TypeScript agent
- *
- * In Phase 3, this is a mock implementation.
- * Phase 6+ will implement real Tauri invoke calls.
+ * Agent runner: direct Claude API integration
  */
 pub struct AgentRunner {
-    #[allow(dead_code)]
     config: AgentRunnerConfig,
 }
 
@@ -153,11 +120,16 @@ impl AgentRunner {
     }
 
     /**
-     * Run the agent on code
+     * Run the agent to generate fixes using Claude API directly
      *
-     * This method would invoke the TypeScript agent via Tauri IPC.
-     * Phase 3: Returns mock response for testing
-     * Phase 8+: Implements real Tauri invoke call
+     * # Arguments
+     * * `file_path` - Path to the file being analyzed
+     * * `code` - Source code to analyze
+     * * `framework` - Framework/language (django, flask, express, etc.)
+     * * `violations` - Database violations to include in the request
+     *
+     * # Returns
+     * AgentResponse with generated fixes or an error
      */
     pub async fn run(
         &self,
@@ -181,76 +153,148 @@ impl AgentRunner {
             .map(violation_to_agent)
             .collect();
 
-        // Create request
-        let request = AgentRequest {
-            file_path: file_path.to_string(),
-            code: code.to_string(),
-            framework: framework.to_string(),
-            violations: agent_violations,
-        };
-
-        // In Phase 3, return mock response
-        // In Phase 8, this would be:
-        // let response: AgentResponse = invoke("run_agent", &request).await?;
-        let response = self.mock_run(&request)?;
-
-        Ok(response)
-    }
-
-    /**
-     * Mock implementation for Phase 3 testing
-     */
-    fn mock_run(&self, request: &AgentRequest) -> Result<AgentResponse> {
-        let violations = request.violations.clone();
-        let mut fixes = Vec::new();
-
-        // Generate mock fixes for each violation
-        for violation in &violations {
-            let fixed_code = match violation.control_id.as_str() {
-                "CC6.1" => {
-                    if request.framework == "django" {
-                        format!("@login_required\n{}", violation.code_snippet)
-                    } else {
-                        format!("authenticate, {}", violation.code_snippet)
-                    }
-                }
-                "CC6.7" => format!("os.getenv('SECRET')", ),
-                "CC7.2" => {
-                    if request.framework == "django" {
-                        format!("logger.info('audit log')\n{}", violation.code_snippet)
-                    } else {
-                        format!("logger.info('audit log');\n{}", violation.code_snippet)
-                    }
-                }
-                "A1.2" => {
-                    if request.framework == "django" {
-                        format!("try:\n    {}\nexcept Exception as e:\n    logger.error(e)", violation.code_snippet)
-                    } else {
-                        format!("try {{\n    {}\n}} catch (e) {{\n    logger.error(e);\n}}", violation.code_snippet)
-                    }
-                }
-                _ => violation.code_snippet.clone(),
-            };
-
-            fixes.push(AgentFix {
-                violation_id: Some(violation.control_id.clone()),
-                original_code: violation.code_snippet.clone(),
-                fixed_code,
-                explanation: format!(
-                    "Fixed {} violation: {}",
-                    violation.control_id, violation.description
-                ),
-                trust_level: "review".to_string(),
+        if agent_violations.is_empty() {
+            return Ok(AgentResponse {
+                success: true,
+                violations: vec![],
+                fixes: vec![],
+                current_step: "complete".to_string(),
+                error: None,
             });
         }
 
+        // Get API key from environment
+        let api_key = std::env::var("ANTHROPIC_API_KEY")
+            .map_err(|_| anyhow::anyhow!("ANTHROPIC_API_KEY environment variable not set"))?;
+
+        // Create Claude client
+        let claude = Claude::new()
+            .with_model(&self.config.model_name)
+            .with_api_key(&api_key);
+
+        // Build prompt for fix generation
+        let prompt = self.build_fix_generation_prompt(
+            file_path,
+            code,
+            framework,
+            &agent_violations,
+        );
+
+        println!("[AgentRunner] Calling Claude API with model: {}", self.config.model_name);
+
+        // Call Claude API
+        let response = claude.invoke(&prompt).await
+            .map_err(|e| anyhow::anyhow!("Claude API error: {}", e))?;
+
+        println!("[AgentRunner] Received response from Claude");
+
+        // Parse the response to extract fixes
+        let fixes = self.parse_fix_response(&response, &agent_violations)?;
+
         Ok(AgentResponse {
             success: true,
-            violations,
+            violations: agent_violations,
             fixes,
-            current_step: "validated".to_string(),
+            current_step: "complete".to_string(),
             error: None,
         })
+    }
+
+    /**
+     * Build a prompt for Claude to generate fixes for SOC 2 violations
+     */
+    fn build_fix_generation_prompt(
+        &self,
+        file_path: &str,
+        code: &str,
+        framework: &str,
+        violations: &[AgentViolation],
+    ) -> String {
+        let violations_list = violations
+            .iter()
+            .enumerate()
+            .map(|(i, v)| {
+                format!(
+                    "{}. **{}** (Line {}): {} - Severity: {}\n   Code: `{}`",
+                    i + 1,
+                    v.control_id,
+                    v.line_number,
+                    v.description,
+                    v.severity,
+                    v.code_snippet
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        format!(
+            r#"You are a security compliance expert helping fix SOC 2 violations in {framework} code.
+
+**File**: {file_path}
+
+**Full Code**:
+```
+{code}
+```
+
+**Violations Found**:
+{violations_list}
+
+**Task**: For EACH violation, generate a fix in the following JSON format:
+
+```json
+[
+  {{
+    "original_code": "exact code to replace",
+    "fixed_code": "corrected code",
+    "explanation": "brief explanation of the fix",
+    "trust_level": "review"
+  }}
+]
+```
+
+**Requirements**:
+- Provide fixes in the EXACT order of the violations listed above
+- Include ONLY the minimal code that needs to change (not the entire file)
+- Ensure fixes are production-ready and follow {framework} best practices
+- Each fix should address the specific SOC 2 control requirement
+- Return ONLY the JSON array, no additional text
+
+Generate the fixes now:"#,
+            framework = framework,
+            file_path = file_path,
+            code = code,
+            violations_list = violations_list
+        )
+    }
+
+    /**
+     * Parse Claude's response to extract fixes
+     */
+    fn parse_fix_response(
+        &self,
+        response: &str,
+        violations: &[AgentViolation],
+    ) -> Result<Vec<AgentFix>> {
+        // Try to extract JSON from the response
+        let json_start = response.find('[').unwrap_or(0);
+        let json_end = response.rfind(']').map(|i| i + 1).unwrap_or(response.len());
+        let json_str = &response[json_start..json_end];
+
+        // Parse JSON
+        let fixes: Vec<AgentFix> = serde_json::from_str(json_str)
+            .map_err(|e| anyhow::anyhow!("Failed to parse Claude response as JSON: {}", e))?;
+
+        // Validate we got the right number of fixes
+        if fixes.len() != violations.len() {
+            return Err(anyhow::anyhow!(
+                "Expected {} fixes but got {}",
+                violations.len(),
+                fixes.len()
+            ));
+        }
+
+        Ok(fixes)
     }
 }
 
@@ -258,205 +302,118 @@ impl AgentRunner {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_agent_runner_creation() {
-        let config = AgentRunnerConfig::default();
-        let runner = AgentRunner::new(config);
-        assert_eq!(runner.config.model_name, "claude-haiku-4.5");
+    #[tokio::test]
+    async fn test_agent_runner_validates_empty_code() {
+        let runner = AgentRunner::new(AgentRunnerConfig::default());
+        let result = runner.run("test.py", "", "django", vec![]).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Code cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn test_agent_runner_validates_empty_file_path() {
+        let runner = AgentRunner::new(AgentRunnerConfig::default());
+        let result = runner.run("", "code", "django", vec![]).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("File path cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn test_agent_runner_handles_no_violations() {
+        let runner = AgentRunner::new(AgentRunnerConfig::default());
+        let result = runner.run("test.py", "code", "django", vec![]).await;
+        assert!(result.is_ok());
+        let response = result.unwrap();
+        assert!(response.success);
+        assert_eq!(response.fixes.len(), 0);
     }
 
     #[test]
-    fn test_violation_conversion() {
-        let violation = Violation {
-            id: 1,
-            scan_id: 1,
+    fn test_build_fix_generation_prompt() {
+        let runner = AgentRunner::new(AgentRunnerConfig::default());
+        let violations = vec![AgentViolation {
             control_id: "CC6.1".to_string(),
             severity: "high".to_string(),
-            description: "Missing auth".to_string(),
-            file_path: "test.py".to_string(),
-            line_number: 42,
-            code_snippet: "def view(request):".to_string(),
-            status: "open".to_string(),
-            detected_at: "2025-01-01T00:00:00Z".to_string(),
-        };
-
-        let agent_violation = violation_to_agent(&violation);
-        assert_eq!(agent_violation.control_id, "CC6.1");
-        assert_eq!(agent_violation.line_number, 42);
-    }
-
-    #[test]
-    fn test_agent_to_violation_conversion() {
-        let agent_violation = AgentViolation {
-            control_id: "CC6.7".to_string(),
-            severity: "critical".to_string(),
-            description: "Hardcoded secret".to_string(),
+            description: "Missing authentication".to_string(),
             file_path: "test.py".to_string(),
             line_number: 10,
-            code_snippet: "password = 'secret'".to_string(),
-        };
+            code_snippet: "def get_user():".to_string(),
+        }];
 
-        let violation = agent_to_violation(1, &agent_violation);
-        assert_eq!(violation.scan_id, 1);
-        assert_eq!(violation.control_id, "CC6.7");
-        assert_eq!(violation.severity, "critical");
+        let prompt = runner.build_fix_generation_prompt(
+            "test.py",
+            "def get_user():\n    pass",
+            "django",
+            &violations,
+        );
+
+        assert!(prompt.contains("SOC 2 violations"));
+        assert!(prompt.contains("CC6.1"));
+        assert!(prompt.contains("Missing authentication"));
+        assert!(prompt.contains("test.py"));
     }
 
     #[test]
-    fn test_agent_to_fix_conversion() {
-        let agent_fix = AgentFix {
-            violation_id: Some("v1".to_string()),
-            original_code: "password = 'secret'".to_string(),
-            fixed_code: "password = os.getenv('SECRET')".to_string(),
-            explanation: "Moved secret to env var".to_string(),
-            trust_level: "review".to_string(),
-        };
-
-        let fix = agent_to_fix(1, &agent_fix);
-        assert_eq!(fix.violation_id, 1);
-        assert_eq!(fix.trust_level, "review");
-        assert!(fix.applied_at.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_agent_runner_empty_code() {
-        let config = AgentRunnerConfig::default();
-        let runner = AgentRunner::new(config);
-
-        let result = runner
-            .run("test.py", "", "django", vec![])
-            .await;
-
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("empty"));
-    }
-
-    #[tokio::test]
-    async fn test_agent_runner_empty_path() {
-        let config = AgentRunnerConfig::default();
-        let runner = AgentRunner::new(config);
-
-        let result = runner
-            .run("", "code", "django", vec![])
-            .await;
-
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("path"));
-    }
-
-    #[tokio::test]
-    async fn test_agent_runner_django_auth_fix() {
-        let config = AgentRunnerConfig::default();
-        let runner = AgentRunner::new(config);
-
-        let violation = Violation {
-            id: 1,
-            scan_id: 1,
+    fn test_parse_fix_response_valid_json() {
+        let runner = AgentRunner::new(AgentRunnerConfig::default());
+        let violations = vec![AgentViolation {
             control_id: "CC6.1".to_string(),
             severity: "high".to_string(),
-            description: "Missing login_required".to_string(),
-            file_path: "views.py".to_string(),
-            line_number: 5,
-            code_snippet: "def my_view(request):".to_string(),
-            status: "open".to_string(),
-            detected_at: "2025-01-01T00:00:00Z".to_string(),
-        };
+            description: "Missing authentication".to_string(),
+            file_path: "test.py".to_string(),
+            line_number: 10,
+            code_snippet: "def get_user():".to_string(),
+        }];
 
-        let result = runner
-            .run("views.py", "def my_view(request):\n    pass", "django", vec![violation])
-            .await;
+        let response = r#"[
+            {
+                "original_code": "def get_user():",
+                "fixed_code": "@login_required\ndef get_user():",
+                "explanation": "Added login_required decorator",
+                "trust_level": "review"
+            }
+        ]"#;
 
+        let result = runner.parse_fix_response(response, &violations);
         assert!(result.is_ok());
-        let response = result.unwrap();
-        assert!(response.success);
-        assert!(!response.fixes.is_empty());
-        assert!(response.fixes[0].fixed_code.contains("@login_required"));
+        let fixes = result.unwrap();
+        assert_eq!(fixes.len(), 1);
+        assert_eq!(fixes[0].original_code, "def get_user():");
     }
 
-    #[tokio::test]
-    async fn test_agent_runner_express_auth_fix() {
-        let config = AgentRunnerConfig::default();
-        let runner = AgentRunner::new(config);
-
-        let violation = Violation {
-            id: 1,
-            scan_id: 1,
-            control_id: "CC6.1".to_string(),
-            severity: "high".to_string(),
-            description: "Missing auth middleware".to_string(),
-            file_path: "routes.js".to_string(),
-            line_number: 5,
-            code_snippet: "router.get('/api/users'".to_string(),
-            status: "open".to_string(),
-            detected_at: "2025-01-01T00:00:00Z".to_string(),
-        };
-
-        let result = runner
-            .run("routes.js", "router.get('/api/users'", "express", vec![violation])
-            .await;
-
-        assert!(result.is_ok());
-        let response = result.unwrap();
-        assert!(response.success);
-        assert!(!response.fixes.is_empty());
-        assert!(response.fixes[0].fixed_code.contains("authenticate"));
-    }
-
-    #[tokio::test]
-    async fn test_agent_runner_multiple_violations() {
-        let config = AgentRunnerConfig::default();
-        let runner = AgentRunner::new(config);
-
+    #[test]
+    fn test_parse_fix_response_wrong_count() {
+        let runner = AgentRunner::new(AgentRunnerConfig::default());
         let violations = vec![
-            Violation {
-                id: 1,
-                scan_id: 1,
+            AgentViolation {
                 control_id: "CC6.1".to_string(),
                 severity: "high".to_string(),
-                description: "Missing auth".to_string(),
-                file_path: "views.py".to_string(),
-                line_number: 5,
-                code_snippet: "def view1(request):".to_string(),
-                status: "open".to_string(),
-                detected_at: "2025-01-01T00:00:00Z".to_string(),
+                description: "Missing authentication".to_string(),
+                file_path: "test.py".to_string(),
+                line_number: 10,
+                code_snippet: "def get_user():".to_string(),
             },
-            Violation {
-                id: 2,
-                scan_id: 1,
+            AgentViolation {
                 control_id: "CC6.7".to_string(),
                 severity: "critical".to_string(),
                 description: "Hardcoded secret".to_string(),
-                file_path: "views.py".to_string(),
-                line_number: 10,
-                code_snippet: "api_key = 'secret'".to_string(),
-                status: "open".to_string(),
-                detected_at: "2025-01-01T00:00:00Z".to_string(),
+                file_path: "test.py".to_string(),
+                line_number: 5,
+                code_snippet: "PASSWORD = 'secret'".to_string(),
             },
         ];
 
-        let result = runner
-            .run("views.py", "code", "django", violations)
-            .await;
+        let response = r#"[
+            {
+                "original_code": "def get_user():",
+                "fixed_code": "@login_required\ndef get_user():",
+                "explanation": "Added login_required decorator",
+                "trust_level": "review"
+            }
+        ]"#;
 
-        assert!(result.is_ok());
-        let response = result.unwrap();
-        assert_eq!(response.violations.len(), 2);
-        assert_eq!(response.fixes.len(), 2);
-    }
-
-    #[tokio::test]
-    async fn test_agent_runner_response_structure() {
-        let config = AgentRunnerConfig::default();
-        let runner = AgentRunner::new(config);
-
-        let result = runner
-            .run("test.py", "code", "django", vec![])
-            .await;
-
-        assert!(result.is_ok());
-        let response = result.unwrap();
-        assert!(response.success);
-        assert_eq!(response.current_step, "validated");
-        assert!(response.error.is_none());
+        let result = runner.parse_fix_response(response, &violations);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Expected 2 fixes but got 1"));
     }
 }

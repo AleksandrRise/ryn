@@ -12,7 +12,7 @@ Phase 4 implements the real-time code scanning engine that:
 1. **Detects frameworks** in projects (Django, Flask, Express, Next.js, React)
 2. **Watches files** for changes in real-time
 3. **Parses code** into AST using tree-sitter
-4. **Provides input** to Phase 3 LangGraph agent
+4. **Provides input** to the fix generation system
 
 ## Detailed Specifications
 

@@ -56,6 +56,9 @@ impl CC67SecretsRule {
         // Pattern 8: API keys (generic)
         violations.extend(Self::detect_generic_api_keys(code, file_path, scan_id)?);
 
+        // Pattern 9: Flask/Django config dictionary secrets
+        violations.extend(Self::detect_config_dict_secrets(code, file_path, scan_id)?);
+
         Ok(violations)
     }
 
@@ -195,7 +198,10 @@ impl CC67SecretsRule {
         )
         .context("Failed to compile password pattern")?;
 
-        let is_example = Regex::new(r"(example|test|demo|fake|temp|xxx|password123|12345|admin)")
+        // More precise example pattern - only skip obvious documentation examples
+        // Removed "admin" to allow detection of real passwords like "admin123"
+        // Removed "placeholder" to detect hardcoded placeholder values like '[placeholder_password]'
+        let is_example = Regex::new(r"(example|test|demo|fake|temp|xxx|password123|12345|changeme|your_|my_)")
             .context("Failed to compile example pattern")?;
 
         let is_comment =
@@ -214,9 +220,19 @@ impl CC67SecretsRule {
                     continue;
                 }
 
-                // Skip if it contains env variable reference
-                if line.contains("os.getenv") || line.contains("process.env") || line.contains("ENV[")
-                    || line.contains("$") && (line.contains("PASS") || line.contains("KEY"))
+                // Strip comments before checking for env variables
+                // This prevents false negatives from lines like: TOKEN = "hardcoded"  # FIXME: use os.getenv()
+                let code_part = if let Some(comment_pos) = line.find('#') {
+                    &line[..comment_pos]
+                } else if let Some(comment_pos) = line.find("//") {
+                    &line[..comment_pos]
+                } else {
+                    line
+                };
+
+                // Skip if the CODE (not comments) contains env variable reference
+                if code_part.contains("os.getenv") || code_part.contains("process.env") || code_part.contains("ENV[")
+                    || code_part.contains("$") && (code_part.contains("PASS") || code_part.contains("KEY"))
                 {
                     continue;
                 }
@@ -419,6 +435,71 @@ impl CC67SecretsRule {
                     "CC6.7".to_string(),
                     Severity::High,
                     "Hardcoded API key detected".to_string(),
+                    file_path.to_string(),
+                    (idx + 1) as i64,
+                    Self::redact_line(line),
+                ));
+            }
+        }
+
+        Ok(violations)
+    }
+
+    /// Detects Flask/Django config dictionary secrets
+    ///
+    /// Detects patterns like:
+    /// - app.config['SECRET_KEY'] = 'value'
+    /// - config['API_KEY'] = 'value'
+    /// - settings['PASSWORD'] = 'value'
+    fn detect_config_dict_secrets(code: &str, file_path: &str, scan_id: i64) -> Result<Vec<Violation>> {
+        let mut violations = Vec::new();
+
+        // Pattern: config['KEYWORD'] = 'value' or config["KEYWORD"] = "value"
+        // Matches Flask/Django style config dictionaries
+        let config_pattern = Regex::new(
+            r#"(?i)(config|settings|app\.config)\[['"](\w*(?:SECRET|PASSWORD|API_KEY|TOKEN|KEY)\w*)['"]\]\s*=\s*['"]([^'"]{6,})['"]"#
+        )
+        .context("Failed to compile config dict pattern")?;
+
+        let placeholder_pattern = Regex::new(
+            r"(your_?|xxx|test|demo|example|fake|placeholder|change_?this|put_?your|<|>|\{\{|\}\})"
+        )
+        .context("Failed to compile placeholder pattern")?;
+
+        for (idx, line) in code.lines().enumerate() {
+            // Skip comments
+            if line.trim().starts_with("#") || line.trim().starts_with("//") {
+                continue;
+            }
+
+            if let Some(caps) = config_pattern.captures(line) {
+                let value = &caps[3];
+
+                // Skip if it's obviously a placeholder
+                if placeholder_pattern.is_match(value) {
+                    continue;
+                }
+
+                // Strip comments before checking for env variables
+                let code_part = if let Some(comment_pos) = line.find('#') {
+                    &line[..comment_pos]
+                } else if let Some(comment_pos) = line.find("//") {
+                    &line[..comment_pos]
+                } else {
+                    line
+                };
+
+                // Skip if the CODE (not comments) references environment variables
+                if code_part.contains("os.getenv") || code_part.contains("process.env") || code_part.contains("ENV[")
+                {
+                    continue;
+                }
+
+                violations.push(Violation::new(
+                    scan_id,
+                    "CC6.7".to_string(),
+                    Severity::Critical,
+                    format!("Hardcoded secret in config dictionary: {}", &caps[2]),
                     file_path.to_string(),
                     (idx + 1) as i64,
                     Self::redact_line(line),
@@ -715,4 +796,72 @@ mod tests {
             "Should detect Square API key"
         );
     }
+
+    /// CRITICAL EDGE CASE: Hardcoded secret with os.getenv() mentioned in comment
+    /// This test verifies we don't skip detection when env var is only in comment
+    #[test]
+    fn test_hardcoded_secret_with_env_var_in_comment() {
+        let code = r#"SUPER_SECRET_TOKEN = "5u93R53Cr3tT0k3n"  # FIXME: os.getenv("SUPER_SECRET_TOKEN")"#;
+        let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
+        assert!(
+            !violations.is_empty(),
+            "Should detect hardcoded secret even when os.getenv() is mentioned in comment. Found {} violations.",
+            violations.len()
+        );
+        assert_eq!(violations[0].severity, "critical");
+        assert!(violations[0].description.to_lowercase().contains("secret") ||
+                violations[0].description.to_lowercase().contains("password"));
+    }
 }
+
+    #[test]
+    fn test_detect_db_password_exact() {
+        let code = r#"
+DB_PASSWORD = "production_secret_key_xyz"
+"#;
+        let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
+        assert!(!violations.is_empty(), "Should detect DB_PASSWORD secret. Found {} violations", violations.len());
+    }
+
+    /// CRITICAL GAP TEST: Flask config dictionary assignments with hardcoded secrets
+    #[test]
+    fn test_detect_flask_config_secret() {
+        let code = r#"
+app.config['SECRET_KEY_HMAC'] = 'secret'
+app.config['SECRET_KEY_HMAC_2'] = 'am0r3C0mpl3xK3y'
+"#;
+        let violations = CC67SecretsRule::analyze(code, "app.py", 1).unwrap();
+        assert!(
+            violations.len() >= 2,
+            "Should detect Flask config secrets. Found {} violations, expected 2. This is a KNOWN GAP in CC6.7.",
+            violations.len()
+        );
+    }
+
+    /// CRITICAL GAP TEST: Generic passwords like 'admin123' should NOT be skipped
+    #[test]
+    fn test_detect_admin_password() {
+        let code = r#"
+user.password = 'admin123'
+"#;
+        let violations = CC67SecretsRule::analyze(code, "app.py", 1).unwrap();
+        assert!(
+            !violations.is_empty(),
+            "Should detect 'admin123' password. Found {} violations. Currently SKIPPED due to overly broad 'admin' exclusion.",
+            violations.len()
+        );
+    }
+
+    /// Test that we correctly identify real Django config secrets
+    #[test]
+    fn test_detect_django_secret_key() {
+        let code = r#"
+SECRET_KEY = 'django-insecure-actual-secret-key-here'
+"#;
+        let violations = CC67SecretsRule::analyze(code, "settings.py", 1).unwrap();
+        assert!(
+            !violations.is_empty(),
+            "Should detect Django SECRET_KEY. Found {} violations",
+            violations.len()
+        );
+    }

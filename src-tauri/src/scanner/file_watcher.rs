@@ -2,6 +2,7 @@
 //!
 //! Monitors project files for changes in real-time using the notify crate.
 
+use super::SKIP_DIRECTORIES;
 use anyhow::{anyhow, Result};
 use notify::{RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
@@ -22,7 +23,8 @@ pub enum FileEvent {
 /// Handle to manage the file watcher lifecycle
 pub struct WatcherHandle {
     rx: async_channel::Receiver<FileEvent>,
-    #[allow(dead_code)]
+    shutdown_tx: async_channel::Sender<()>,
+    #[allow(dead_code)] // Kept alive to prevent thread from being dropped prematurely
     watcher_handle: JoinHandle<()>,
 }
 
@@ -30,6 +32,18 @@ impl WatcherHandle {
     /// Receive the next file event
     pub async fn recv(&self) -> Option<FileEvent> {
         self.rx.recv().await.ok()
+    }
+
+    /// Signal the watcher to shut down gracefully
+    pub fn shutdown(&self) {
+        let _ = self.shutdown_tx.send_blocking(());
+    }
+}
+
+impl Drop for WatcherHandle {
+    fn drop(&mut self) {
+        // Signal shutdown
+        let _ = self.shutdown_tx.send_blocking(());
     }
 }
 
@@ -75,6 +89,7 @@ impl FileWatcher {
         let extensions = self.extensions.clone();
 
         let (tx, rx) = async_channel::unbounded::<FileEvent>();
+        let (shutdown_tx, shutdown_rx) = async_channel::unbounded::<()>();
 
         // Spawn blocking task for file watching
         let watcher_handle = tokio::task::spawn_blocking(move || {
@@ -88,15 +103,18 @@ impl FileWatcher {
             let result = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
                 match res {
                     Ok(event) => {
+                        println!("[FileWatcher] Received notify event: kind={:?}, paths={:?}", event.kind, event.paths);
                         use notify::EventKind;
                         match event.kind {
                             EventKind::Modify(_) => {
                                 for path in &event.paths {
-                                    if Self::should_watch_path(
+                                    let should_watch = Self::should_watch_path(
                                         path,
                                         &ignore_patterns_clone,
                                         &extensions_clone,
-                                    ) {
+                                    );
+                                    println!("[FileWatcher] Modify event for {:?}, should_watch={}", path, should_watch);
+                                    if should_watch {
                                         let _ =
                                             tx_clone.send_blocking(FileEvent::FileModified {
                                                 path: path.clone(),
@@ -106,11 +124,13 @@ impl FileWatcher {
                             }
                             EventKind::Create(_) => {
                                 for path in &event.paths {
-                                    if Self::should_watch_path(
+                                    let should_watch = Self::should_watch_path(
                                         path,
                                         &ignore_patterns_clone,
                                         &extensions_clone,
-                                    ) {
+                                    );
+                                    println!("[FileWatcher] Create event for {:?}, should_watch={}", path, should_watch);
+                                    if should_watch {
                                         let _ = tx_clone.send_blocking(FileEvent::FileCreated {
                                             path: path.clone(),
                                         });
@@ -119,43 +139,57 @@ impl FileWatcher {
                             }
                             EventKind::Remove(_) => {
                                 for path in &event.paths {
-                                    if Self::should_watch_path(
+                                    let should_watch = Self::should_watch_path(
                                         path,
                                         &ignore_patterns_clone,
                                         &extensions_clone,
-                                    ) {
+                                    );
+                                    println!("[FileWatcher] Remove event for {:?}, should_watch={}", path, should_watch);
+                                    if should_watch {
                                         let _ = tx_clone.send_blocking(FileEvent::FileDeleted {
                                             path: path.clone(),
                                         });
                                     }
                                 }
                             }
-                            _ => {}
+                            _ => {
+                                println!("[FileWatcher] Ignoring event kind: {:?}", event.kind);
+                            }
                         }
                     }
-                    Err(e) => eprintln!("Watch error: {}", e),
+                    Err(e) => println!("[FileWatcher] Watch error: {}", e),
                 }
             });
 
             match result {
                 Ok(mut watcher) => {
+                    println!("[FileWatcher] Successfully created watcher, watching {:?}", path_buf);
                     if let Err(e) = watcher.watch(&path_buf, RecursiveMode::Recursive) {
-                        eprintln!("Failed to watch directory: {}", e);
+                        println!("[FileWatcher] FAILED to watch directory: {}", e);
                         return;
                     }
+                    println!("[FileWatcher] Now monitoring {:?} for changes", path_buf);
 
-                    // Keep watcher alive
+                    // Keep watcher alive until shutdown signal
                     loop {
-                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        if shutdown_rx.try_recv().is_ok() {
+                            println!("[FileWatcher] Received shutdown signal");
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
                     }
                 }
                 Err(e) => {
-                    eprintln!("Failed to create watcher: {}", e);
+                    println!("[FileWatcher] FAILED to create watcher: {}", e);
                 }
             }
         });
 
-        Ok(WatcherHandle { rx, watcher_handle })
+        Ok(WatcherHandle {
+            rx,
+            shutdown_tx,
+            watcher_handle,
+        })
     }
 
     fn should_watch_path(
@@ -186,14 +220,7 @@ impl FileWatcher {
 impl Default for FileWatcher {
     fn default() -> Self {
         Self {
-            ignore_patterns: vec![
-                ".git".to_string(),
-                "__pycache__".to_string(),
-                "node_modules".to_string(),
-                ".pytest_cache".to_string(),
-                ".venv".to_string(),
-                "target".to_string(),
-            ],
+            ignore_patterns: SKIP_DIRECTORIES.iter().map(|s| s.to_string()).collect(),
             extensions: vec![
                 "py".to_string(),
                 "js".to_string(),
@@ -216,7 +243,7 @@ mod tests {
     #[test]
     fn test_file_watcher_default() {
         let watcher = FileWatcher::default();
-        assert_eq!(watcher.ignore_patterns.len(), 6);
+        assert_eq!(watcher.ignore_patterns.len(), SKIP_DIRECTORIES.len());
         assert_eq!(watcher.extensions.len(), 5);
         assert!(watcher.ignore_patterns.contains(&".git".to_string()));
         assert!(watcher.extensions.contains(&"py".to_string()));

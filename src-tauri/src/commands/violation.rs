@@ -4,6 +4,7 @@
 
 use crate::db::{self, queries};
 use crate::models::{Violation, Control};
+use crate::utils::create_audit_event;
 use serde::{Deserialize, Serialize};
 
 /// Violation filter options
@@ -26,12 +27,24 @@ pub async fn get_violations(
     scan_id: i64,
     filters: Option<ViolationFilters>,
 ) -> Result<Vec<Violation>, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    println!("[ryn] get_violations called: scan_id={}, filters={:?}", scan_id, filters);
+
+    // Validate scan ID
+    if scan_id <= 0 {
+        let err_msg = format!("Invalid scan ID: must be greater than 0, got {}", scan_id);
+        println!("[ryn] get_violations validation failed: {}", err_msg);
+        return Err(err_msg);
+    }
+
+    let conn = db::get_connection();
 
     // Get all violations for scan
     let mut violations = queries::select_violations(&conn, scan_id)
-        .map_err(|e| format!("Failed to fetch violations: {}", e))?;
+        .map_err(|e| {
+            let err_msg = format!("Failed to fetch violations: {}", e);
+            println!("[ryn] get_violations query failed: {}", err_msg);
+            err_msg
+        })?;
 
     // Apply filters if provided
     if let Some(f) = filters {
@@ -77,37 +90,59 @@ pub async fn get_violations(
         }
     });
 
+    println!("[ryn] get_violations success: found {} violations for scan_id={}", violations.len(), scan_id);
     Ok(violations)
 }
 
 /// Get a single violation with full details
 ///
 /// # Arguments
-/// * `id` - Violation ID
+/// * `violation_id` - Violation ID
 ///
 /// Returns: Violation detail object with related control and fix information
 #[tauri::command]
-pub async fn get_violation(id: i64) -> Result<ViolationDetail, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+pub async fn get_violation(violation_id: i64) -> Result<ViolationDetail, String> {
+    println!("[ryn] get_violation called: violation_id={}", violation_id);
+
+    // Validate violation ID
+    if violation_id <= 0 {
+        let err_msg = format!("Invalid violation ID: must be greater than 0, got {}", violation_id);
+        println!("[ryn] get_violation validation failed: {}", err_msg);
+        return Err(err_msg);
+    }
+
+    let conn = db::get_connection();
 
     // Get violation
-    let violation = queries::select_violation(&conn, id)
-        .map_err(|e| format!("Failed to fetch violation: {}", e))?
-        .ok_or_else(|| format!("Violation not found: {}", id))?;
+    let violation = queries::select_violation(&conn, violation_id)
+        .map_err(|e| {
+            let err_msg = format!("Failed to fetch violation: {}", e);
+            println!("[ryn] get_violation query failed: {}", err_msg);
+            err_msg
+        })?
+        .ok_or_else(|| {
+            let err_msg = format!("Violation not found: {}", violation_id);
+            println!("[ryn] get_violation not found: {}", err_msg);
+            err_msg
+        })?;
 
     // Get related control
     let control = queries::select_control(&conn, &violation.control_id)
         .map_err(|e| format!("Failed to fetch control: {}", e))?;
 
     // Get related fix if exists
-    let fix = queries::select_fix_for_violation(&conn, id)
+    let fix = queries::select_fix_for_violation(&conn, violation_id)
         .map_err(|e| format!("Failed to fetch fix: {}", e))?;
 
     // Get related scan
     let scan = queries::select_scan(&conn, violation.scan_id)
-        .map_err(|e| format!("Failed to fetch scan: {}", e))?;
+        .map_err(|e| {
+            let err_msg = format!("Failed to fetch scan: {}", e);
+            println!("[ryn] get_violation scan query failed: {}", err_msg);
+            err_msg
+        })?;
 
+    println!("[ryn] get_violation success: violation_id={}", violation_id);
     Ok(ViolationDetail {
         violation,
         control,
@@ -121,22 +156,42 @@ pub async fn get_violation(id: i64) -> Result<ViolationDetail, String> {
 /// Marks a violation as dismissed in the database and logs an audit event
 ///
 /// # Arguments
-/// * `id` - Violation ID
+/// * `violation_id` - Violation ID
 ///
 /// Returns: Success or error
 #[tauri::command]
-pub async fn dismiss_violation(id: i64) -> Result<(), String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+pub async fn dismiss_violation(violation_id: i64) -> Result<(), String> {
+    println!("[ryn] dismiss_violation called: violation_id={}", violation_id);
+
+    // Validate violation ID
+    if violation_id <= 0 {
+        let err_msg = format!("Invalid violation ID: must be greater than 0, got {}", violation_id);
+        println!("[ryn] dismiss_violation validation failed: {}", err_msg);
+        return Err(err_msg);
+    }
+
+    let conn = db::get_connection();
 
     // Get violation to extract scan_id
-    let violation = queries::select_violation(&conn, id)
-        .map_err(|e| format!("Failed to fetch violation: {}", e))?
-        .ok_or_else(|| format!("Violation not found: {}", id))?;
+    let violation = queries::select_violation(&conn, violation_id)
+        .map_err(|e| {
+            let err_msg = format!("Failed to fetch violation: {}", e);
+            println!("[ryn] dismiss_violation query failed: {}", err_msg);
+            err_msg
+        })?
+        .ok_or_else(|| {
+            let err_msg = format!("Violation not found: {}", violation_id);
+            println!("[ryn] dismiss_violation not found: {}", err_msg);
+            err_msg
+        })?;
 
     // Update status to dismissed
-    queries::update_violation_status(&conn, id, "dismissed")
-        .map_err(|e| format!("Failed to dismiss violation: {}", e))?;
+    queries::update_violation_status(&conn, violation_id, "dismissed")
+        .map_err(|e| {
+            let err_msg = format!("Failed to dismiss violation: {}", e);
+            println!("[ryn] dismiss_violation update failed: {}", err_msg);
+            err_msg
+        })?;
 
     // Get scan and project info for audit
     let scan = queries::select_scan(&conn, violation.scan_id)
@@ -148,7 +203,7 @@ pub async fn dismiss_violation(id: i64) -> Result<(), String> {
             &conn,
             "violation_dismissed",
             Some(s.project_id),
-            Some(id),
+            Some(violation_id),
             None,
             &format!("Dismissed violation: {}", violation.description),
         ) {
@@ -156,6 +211,7 @@ pub async fn dismiss_violation(id: i64) -> Result<(), String> {
         }
     }
 
+    println!("[ryn] dismiss_violation success: violation_id={}", violation_id);
     Ok(())
 }
 
@@ -168,43 +224,12 @@ pub struct ViolationDetail {
     pub scan: Option<crate::models::Scan>,
 }
 
-/// Helper function to create audit events
-fn create_audit_event(
-    _conn: &rusqlite::Connection,
-    event_type: &str,
-    project_id: Option<i64>,
-    violation_id: Option<i64>,
-    fix_id: Option<i64>,
-    description: &str,
-) -> anyhow::Result<crate::models::AuditEvent> {
-    use crate::models::AuditEvent;
-
-    Ok(AuditEvent {
-        id: 0,
-        event_type: event_type.to_string(),
-        project_id,
-        violation_id,
-        fix_id,
-        description: description.to_string(),
-        metadata: None,
-        created_at: chrono::Utc::now().to_rfc3339(),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use crate::db::test_helpers::TestDbGuard;
     use super::*;
-    use tempfile::TempDir;
-
-    fn setup_test_env() -> TempDir {
-        let temp_dir = tempfile::TempDir::new().unwrap();
-        std::env::set_var("RYN_DATA_DIR", temp_dir.path());
-        temp_dir
-    }
 
     fn create_test_violation(scan_id: i64) -> i64 {
-        let conn = db::init_db().unwrap();
         let violation = Violation {
             id: 0,
             scan_id,
@@ -216,21 +241,30 @@ mod tests {
             code_snippet: "def get_user(request):".to_string(),
             status: "open".to_string(),
             detected_at: chrono::Utc::now().to_rfc3339(),
+            detection_method: "regex".to_string(),
+            confidence_score: None,
+            llm_reasoning: None,
+            regex_reasoning: None,
+            function_name: None,
+            class_name: None,
         };
 
+        let conn = db::get_connection();
         queries::insert_violation(&conn, &violation).unwrap()
     }
 
     fn create_test_scan(project_id: i64) -> i64 {
-        let conn = db::init_db().unwrap();
+        let conn = db::get_connection();
         queries::insert_scan(&conn, project_id).unwrap()
     }
 
     fn create_test_project() -> i64 {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let path = temp_dir.path().to_string_lossy().to_string();
-        let conn = db::init_db().unwrap();
-        let project_id = queries::insert_project(&conn, "test-project", &path, None).unwrap();
+        let project_id = {
+            let conn = db::get_connection();
+            queries::insert_project(&conn, "test-project", &path, None).unwrap()
+        }; // Drop MutexGuard here
         std::mem::forget(temp_dir);
         project_id
     }
@@ -272,22 +306,30 @@ mod tests {
         let scan_id = create_test_scan(project_id);
 
         // Create violations with different severities
-        let conn = db::init_db().unwrap();
+        {
+            let conn = db::get_connection();
 
-        for severity in ["critical", "high", "medium"] {
-            let violation = Violation {
-                id: 0,
-                scan_id,
-                control_id: "CC6.1".to_string(),
-                severity: severity.to_string(),
-                description: format!("Violation with {} severity", severity),
-                file_path: "test.py".to_string(),
-                line_number: 1,
-                code_snippet: "code".to_string(),
-                status: "open".to_string(),
-                detected_at: chrono::Utc::now().to_rfc3339(),
-            };
-            let _ = queries::insert_violation(&conn, &violation);
+            for severity in ["critical", "high", "medium"] {
+                let violation = Violation {
+                    id: 0,
+                    scan_id,
+                    control_id: "CC6.1".to_string(),
+                    severity: severity.to_string(),
+                    description: format!("Violation with {} severity", severity),
+                    file_path: "test.py".to_string(),
+                    line_number: 1,
+                    code_snippet: "code".to_string(),
+                    status: "open".to_string(),
+                    detected_at: chrono::Utc::now().to_rfc3339(),
+                    detection_method: "regex".to_string(),
+                    confidence_score: None,
+                    llm_reasoning: None,
+                    regex_reasoning: None,
+                function_name: None,
+                class_name: None,
+                };
+                let _ = queries::insert_violation(&conn, &violation);
+            }
         }
 
         let filters = ViolationFilters {
@@ -312,22 +354,30 @@ mod tests {
         let scan_id = create_test_scan(project_id);
 
         // Create violations with different severities in random order
-        let conn = db::init_db().unwrap();
+        {
+            let conn = db::get_connection();
 
-        for (i, severity) in ["low", "critical", "high", "medium"].iter().enumerate() {
-            let violation = Violation {
-                id: 0,
-                scan_id,
-                control_id: "CC6.1".to_string(),
-                severity: severity.to_string(),
-                description: format!("Violation {}", i),
-                file_path: "test.py".to_string(),
-                line_number: (i as i64) + 1,
-                code_snippet: "code".to_string(),
-                status: "open".to_string(),
-                detected_at: chrono::Utc::now().to_rfc3339(),
-            };
-            let _ = queries::insert_violation(&conn, &violation);
+            for (i, severity) in ["low", "critical", "high", "medium"].iter().enumerate() {
+                let violation = Violation {
+                    id: 0,
+                    scan_id,
+                    control_id: "CC6.1".to_string(),
+                    severity: severity.to_string(),
+                    description: format!("Violation {}", i),
+                    file_path: "test.py".to_string(),
+                    line_number: (i as i64) + 1,
+                    code_snippet: "code".to_string(),
+                    status: "open".to_string(),
+                    detected_at: chrono::Utc::now().to_rfc3339(),
+                    detection_method: "regex".to_string(),
+                    confidence_score: None,
+                    llm_reasoning: None,
+                    regex_reasoning: None,
+                function_name: None,
+                class_name: None,
+                };
+                let _ = queries::insert_violation(&conn, &violation);
+            }
         }
 
         let result = get_violations(scan_id, None).await;
@@ -392,11 +442,13 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify status changed
-        let conn = db::init_db().unwrap();
-        let violation = queries::select_violation(&conn, violation_id)
-            .unwrap()
-            .unwrap();
-        assert_eq!(violation.status, "dismissed");
+        {
+            let conn = db::get_connection();
+            let violation = queries::select_violation(&conn, violation_id)
+                .unwrap()
+                .unwrap();
+            assert_eq!(violation.status, "dismissed");
+        }
     }
 
     #[tokio::test]
@@ -418,12 +470,14 @@ mod tests {
         let _ = dismiss_violation(violation_id).await;
 
         // Verify audit event created
-        let conn = db::init_db().unwrap();
-        let mut stmt = conn
-            .prepare("SELECT COUNT(*) FROM audit_events WHERE violation_id = ?")
-            .unwrap();
-        let count: i64 = stmt.query_row([violation_id], |row| row.get(0)).unwrap();
-        assert_eq!(count, 1);
+        {
+            let conn = db::get_connection();
+            let mut stmt = conn
+                .prepare("SELECT COUNT(*) FROM audit_events WHERE violation_id = ?")
+                .unwrap();
+            let count: i64 = stmt.query_row([violation_id], |row| row.get(0)).unwrap();
+            assert_eq!(count, 1);
+        }
     }
 
     #[tokio::test]
@@ -433,23 +487,31 @@ mod tests {
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
-        let conn = db::init_db().unwrap();
+        {
+            let conn = db::get_connection();
 
-        // Create violations with different controls
-        for control_id in ["CC6.1", "CC6.7", "CC7.2"] {
-            let violation = Violation {
-                id: 0,
-                scan_id,
-                control_id: control_id.to_string(),
-                severity: "high".to_string(),
-                description: "Test".to_string(),
-                file_path: "test.py".to_string(),
-                line_number: 1,
-                code_snippet: "code".to_string(),
-                status: "open".to_string(),
-                detected_at: chrono::Utc::now().to_rfc3339(),
-            };
-            let _ = queries::insert_violation(&conn, &violation);
+            // Create violations with different controls
+            for control_id in ["CC6.1", "CC6.7", "CC7.2"] {
+                let violation = Violation {
+                    id: 0,
+                    scan_id,
+                    control_id: control_id.to_string(),
+                    severity: "high".to_string(),
+                    description: "Test".to_string(),
+                    file_path: "test.py".to_string(),
+                    line_number: 1,
+                    code_snippet: "code".to_string(),
+                    status: "open".to_string(),
+                    detected_at: chrono::Utc::now().to_rfc3339(),
+                    detection_method: "regex".to_string(),
+                    confidence_score: None,
+                    llm_reasoning: None,
+                    regex_reasoning: None,
+                function_name: None,
+                class_name: None,
+                };
+                let _ = queries::insert_violation(&conn, &violation);
+            }
         }
 
         let filters = ViolationFilters {
@@ -473,23 +535,31 @@ mod tests {
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
-        let conn = db::init_db().unwrap();
+        {
+            let conn = db::get_connection();
 
-        // Create violations with different statuses
-        for (i, status) in ["open", "fixed", "dismissed"].iter().enumerate() {
-            let violation = Violation {
-                id: 0,
-                scan_id,
-                control_id: "CC6.1".to_string(),
-                severity: "high".to_string(),
-                description: format!("Test {}", i),
-                file_path: "test.py".to_string(),
-                line_number: i as i64,
-                code_snippet: "code".to_string(),
-                status: status.to_string(),
-                detected_at: chrono::Utc::now().to_rfc3339(),
-            };
-            let _ = queries::insert_violation(&conn, &violation);
+            // Create violations with different statuses
+            for (i, status) in ["open", "fixed", "dismissed"].iter().enumerate() {
+                let violation = Violation {
+                    id: 0,
+                    scan_id,
+                    control_id: "CC6.1".to_string(),
+                    severity: "high".to_string(),
+                    description: format!("Test {}", i),
+                    file_path: "test.py".to_string(),
+                    line_number: i as i64,
+                    code_snippet: "code".to_string(),
+                    status: status.to_string(),
+                    detected_at: chrono::Utc::now().to_rfc3339(),
+                    detection_method: "regex".to_string(),
+                    confidence_score: None,
+                    llm_reasoning: None,
+                    regex_reasoning: None,
+                function_name: None,
+                class_name: None,
+                };
+                let _ = queries::insert_violation(&conn, &violation);
+            }
         }
 
         let filters = ViolationFilters {
@@ -513,22 +583,30 @@ mod tests {
         let project_id = create_test_project();
         let scan_id = create_test_scan(project_id);
 
-        let conn = db::init_db().unwrap();
+        {
+            let conn = db::get_connection();
 
-        // Create test violations
-        let violation = Violation {
-            id: 0,
-            scan_id,
-            control_id: "CC6.1".to_string(),
-            severity: "critical".to_string(),
-            description: "Test".to_string(),
-            file_path: "test.py".to_string(),
-            line_number: 1,
-            code_snippet: "code".to_string(),
-            status: "open".to_string(),
-            detected_at: chrono::Utc::now().to_rfc3339(),
-        };
-        let _ = queries::insert_violation(&conn, &violation);
+            // Create test violations
+            let violation = Violation {
+                id: 0,
+                scan_id,
+                control_id: "CC6.1".to_string(),
+                severity: "critical".to_string(),
+                description: "Test".to_string(),
+                file_path: "test.py".to_string(),
+                line_number: 1,
+                code_snippet: "code".to_string(),
+                status: "open".to_string(),
+                detected_at: chrono::Utc::now().to_rfc3339(),
+                detection_method: "regex".to_string(),
+                confidence_score: None,
+                llm_reasoning: None,
+                regex_reasoning: None,
+                function_name: None,
+                class_name: None,
+            };
+            let _ = queries::insert_violation(&conn, &violation);
+        }
 
         let filters = ViolationFilters {
             severity: Some(vec!["critical".to_string()]),

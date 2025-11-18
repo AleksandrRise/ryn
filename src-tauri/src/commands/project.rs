@@ -4,6 +4,7 @@
 
 use crate::db::{self, queries};
 use crate::models::Project;
+use crate::utils::create_audit_event;
 use std::path::Path;
 
 /// Open a file dialog to select a project folder
@@ -13,6 +14,8 @@ use std::path::Path;
 /// Returns: Path to selected directory or error if cancelled
 #[tauri::command]
 pub async fn select_project_folder() -> Result<String, String> {
+    println!("[ryn] select_project_folder called");
+
     // Use tauri-plugin-dialog for native file picker
     // In production, this would use the Tauri dialog plugin
     // For now, return a placeholder that would be replaced with actual dialog call
@@ -25,7 +28,9 @@ pub async fn select_project_folder() -> Result<String, String> {
 
     // Placeholder implementation - returns success with a path
     // This would be called from frontend with the dialog result
-    Ok("/path/to/project".to_string())
+    let path = "/path/to/project".to_string();
+    println!("[ryn] select_project_folder success: path={}", path);
+    Ok(path)
 }
 
 /// Create a new project in the database
@@ -45,9 +50,33 @@ pub async fn create_project(
     name: Option<String>,
     framework: Option<String>,
 ) -> Result<Project, String> {
+    println!("[ryn] create_project called: path={}, name={:?}, framework={:?}",
+             path, name, framework);
+
     // Validate path exists
     if !Path::new(&path).exists() {
-        return Err(format!("Project path does not exist: {}", path));
+        let err_msg = format!("Project path does not exist: {}", path);
+        println!("[ryn] create_project validation failed: {}", err_msg);
+        return Err(err_msg);
+    }
+
+    // Get database connection
+    let conn = db::get_connection();
+
+    // Check if project already exists with this path
+    if let Some(existing_project) = queries::select_project_by_path(&conn, &path)
+        .map_err(|e| format!("Failed to check for existing project: {}", e))? {
+        // Project already exists - update framework if provided and return it
+        if let Some(fw) = framework.as_deref() {
+            let _ = queries::update_project(&conn, existing_project.id, &existing_project.name, Some(fw));
+
+            // Fetch updated project
+            return queries::select_project(&conn, existing_project.id)
+                .map_err(|e| format!("Failed to fetch updated project: {}", e))?
+                .ok_or_else(|| "Project was updated but could not be retrieved".to_string());
+        }
+
+        return Ok(existing_project);
     }
 
     // Get database connection
@@ -96,6 +125,7 @@ pub async fn create_project(
         let _ = queries::insert_audit_event(&conn, &event);
     }
 
+    println!("[ryn] create_project success: project_id={}, name={}", project.id, project.name);
     Ok(project)
 }
 
@@ -104,37 +134,21 @@ pub async fn create_project(
 /// Returns: List of all projects sorted by creation date (newest first)
 #[tauri::command]
 pub async fn get_projects() -> Result<Vec<Project>, String> {
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    println!("[ryn] get_projects called");
+
+    let conn = db::get_connection();
 
     let projects = queries::select_projects(&conn)
-        .map_err(|e| format!("Failed to fetch projects: {}", e))?;
+        .map_err(|e| {
+            let err_msg = format!("Failed to fetch projects: {}", e);
+            println!("[ryn] get_projects error: {}", err_msg);
+            err_msg
+        })?;
 
+    println!("[ryn] get_projects success: found {} projects", projects.len());
     Ok(projects)
 }
 
-/// Helper function to create audit events
-fn create_audit_event(
-    _conn: &rusqlite::Connection,
-    event_type: &str,
-    project_id: Option<i64>,
-    violation_id: Option<i64>,
-    fix_id: Option<i64>,
-    description: &str,
-) -> anyhow::Result<crate::models::AuditEvent> {
-    use crate::models::AuditEvent;
-
-    Ok(AuditEvent {
-        id: 0,
-        event_type: event_type.to_string(),
-        project_id,
-        violation_id,
-        fix_id,
-        description: description.to_string(),
-        metadata: None,
-        created_at: chrono::Utc::now().to_rfc3339(),
-    })
-}
 
 #[cfg(test)]
 mod tests {
@@ -262,15 +276,16 @@ mod tests {
     async fn test_get_projects_ordered_by_creation() {
         let _guard = TestDbGuard::new();
 
-        let dirs: Vec<tempfile::TempDir> = (0..3)
-            .map(|i| {
-                let dir = tempfile::TempDir::new().unwrap();
-                let path = dir.path().to_string_lossy().to_string();
-                let _ = create_project(path, Some(format!("project-{}", i)), None);
-                std::thread::sleep(std::time::Duration::from_millis(10));
-                dir
-            })
-            .collect();
+        let mut dirs = Vec::new();
+        for i in 0..3 {
+            let dir = tempfile::TempDir::new().unwrap();
+            let path = dir.path().to_string_lossy().to_string();
+            let result = create_project(path, Some(format!("project-{}", i)), None).await;
+            assert!(result.is_ok());
+            // Use tokio sleep for async context and 1 second delay for distinct timestamps
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            dirs.push(dir);
+        }
 
         let result = get_projects().await;
         assert!(result.is_ok());

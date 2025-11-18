@@ -17,6 +17,9 @@
       "Bash(git push:*)",
       "Bash(gh pr create:*)"
     ],
-    "deny": []
+    "deny": [],
+    "additionalDirectories": [
+      "/Users/seane/test-repos/vulnerable-flask"
+    ]
   }
 }

@@ -1,11 +1,11 @@
 /**
- * LangGraph Agent Orchestration Bridge
+ * Direct Claude AI Agent for SOC 2 Fix Generation
  *
- * This module provides the Rust-side implementation of the LangGraph agent system.
- * It communicates with the TypeScript LangGraph state machine running in Tauri.
+ * This module provides direct integration with Claude via langchain-rust,
+ * eliminating the need for cross-language TypeScript bridge.
  */
 
 pub mod agent_runner;
 
-pub use agent_runner::{AgentRunner, AgentRunnerConfig, AgentRequest, AgentResponse, AgentViolation, AgentFix};
-pub use agent_runner::{violation_to_agent, agent_to_violation, agent_to_fix};
+pub use agent_runner::{AgentRunner, AgentRunnerConfig, AgentResponse, AgentViolation, AgentFix};
+pub use agent_runner::{violation_to_agent, agent_to_fix};

@@ -1,6 +1,8 @@
 use rusqlite::Connection;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use anyhow::{Result, Context};
+use once_cell::sync::Lazy;
 
 pub mod migrations;
 pub mod queries;
@@ -11,13 +13,22 @@ pub mod test_helpers;
 pub use migrations::{run_migrations, seed_controls};
 pub use queries::*;
 
+/// Singleton database connection
+/// Initialized once on first access, then reused for all subsequent calls
+static DB_CONNECTION: Lazy<Mutex<Connection>> = Lazy::new(|| {
+    let conn = create_connection()
+        .expect("Failed to initialize database connection");
+    Mutex::new(conn)
+});
+
 /// Get the database file path
 pub fn get_db_path() -> Result<PathBuf> {
     let data_dir = match std::env::var("RYN_DATA_DIR") {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => {
-            // Default to current directory for simplicity
-            PathBuf::from("./data")
+            // Default to parent directory (../data) when running from src-tauri via Tauri CLI
+            // This ensures the database is at the project root, not inside src-tauri
+            PathBuf::from("../data")
         }
     };
 
@@ -27,7 +38,40 @@ pub fn get_db_path() -> Result<PathBuf> {
     Ok(data_dir.join("ryn.db"))
 }
 
+/// Create a new database connection with proper configuration
+/// Called once by the singleton initialization
+fn create_connection() -> Result<Connection> {
+    let db_path = get_db_path()?;
+    let conn = Connection::open(&db_path)
+        .context(format!("Failed to open database at {:?}", db_path))?;
+
+    // Enable foreign key support
+    conn.execute("PRAGMA foreign_keys = ON", [])
+        .context("Failed to enable foreign keys")?;
+
+    // Set busy timeout to 5 seconds
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .context("Failed to set busy timeout")?;
+
+    // Run migrations
+    run_migrations(&conn)?;
+
+    // Seed controls
+    seed_controls(&conn)?;
+
+    Ok(conn)
+}
+
+/// Get a reference to the singleton database connection
+/// This replaces init_db() and should be used in all commands
+pub fn get_connection() -> std::sync::MutexGuard<'static, Connection> {
+    DB_CONNECTION.lock().unwrap()
+}
+
 /// Initialize the database connection and run migrations
+/// NOTE: This creates a NEW connection each time. For most use cases, prefer get_connection()
+/// which returns the singleton connection. This function is primarily used in main.rs for
+/// early initialization with explicit error handling.
 pub fn init_db() -> Result<Connection> {
     let db_path = get_db_path()?;
     let conn = Connection::open(&db_path)

@@ -42,6 +42,10 @@ export interface Violation {
   file_path: string
   status: string
   created_at: string
+  detection_method: "regex" | "llm" | "hybrid"
+  confidence_score?: number
+  llm_reasoning?: string
+  regex_reasoning?: string
 }
 
 export interface Fix {
@@ -87,6 +91,18 @@ export interface Settings {
   value: string
   created_at: string
   updated_at: string
+}
+
+export interface ScanCost {
+  id: number
+  scan_id: number
+  files_analyzed_with_llm: number
+  input_tokens: number
+  output_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  total_cost_usd: number
+  created_at: string
 }
 
 // ============================================================================
@@ -160,6 +176,21 @@ export async function get_scans(
   return await invoke<ScanResult[]>("get_scans", { projectId })
 }
 
+/**
+ * Start watching a project for real-time file changes
+ * Emits "file-changed" events whenever files are modified, created, or deleted
+ */
+export async function watch_project(projectId: number): Promise<string> {
+  return await invoke<string>("watch_project", { projectId })
+}
+
+/**
+ * Stop watching a project for file changes
+ */
+export async function stop_watching(projectId: number): Promise<string> {
+  return await invoke<string>("stop_watching", { projectId })
+}
+
 // ============================================================================
 // VIOLATION COMMANDS
 // ============================================================================
@@ -190,7 +221,7 @@ export async function get_violation(
   violationId: number
 ): Promise<ViolationDetail> {
   return await invoke<ViolationDetail>("get_violation", {
-    id: violationId,
+    violationId,
   })
 }
 
@@ -200,7 +231,7 @@ export async function get_violation(
 export async function dismiss_violation(
   violationId: number
 ): Promise<void> {
-  await invoke<void>("dismiss_violation", { id: violationId })
+  await invoke<void>("dismiss_violation", { violationId })
 }
 
 // ============================================================================
@@ -279,4 +310,48 @@ export async function clear_database(): Promise<void> {
  */
 export async function export_data(): Promise<string> {
   return await invoke<string>("export_data")
+}
+
+/**
+ * Complete onboarding by saving user's scanning preferences
+ * @param scanMode - Scanning mode: "regex_only", "smart", or "analyze_all"
+ * @param costLimit - Cost limit per scan in dollars (e.g., 5.00)
+ */
+export async function complete_onboarding(
+  scanMode: "regex_only" | "smart" | "analyze_all",
+  costLimit: number
+): Promise<void> {
+  await invoke<void>("complete_onboarding", {
+    scanMode: scanMode,
+    costLimit: costLimit,
+  })
+}
+
+// ============================================================================
+// ANALYTICS COMMANDS
+// ============================================================================
+
+export type TimeRange = "24h" | "7d" | "30d" | "all"
+
+/**
+ * Get scan costs for a given time range
+ * @param timeRange - Time period: "24h", "7d", "30d", or "all"
+ */
+export async function get_scan_costs(timeRange: TimeRange): Promise<ScanCost[]> {
+  return await invoke<ScanCost[]>("get_scan_costs", { timeRange })
+}
+
+/**
+ * Respond to cost limit prompt during scanning
+ * @param scanId - The ID of the scan
+ * @param shouldContinue - True to continue scanning, false to stop
+ */
+export async function respond_to_cost_limit(
+  scanId: number,
+  shouldContinue: boolean
+): Promise<void> {
+  await invoke<void>("respond_to_cost_limit", {
+    scanId,
+    shouldContinue,
+  })
 }
