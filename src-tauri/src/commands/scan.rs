@@ -464,6 +464,7 @@ pub async fn watch_project<R: tauri::Runtime>(
 
     // Spawn task to receive events and emit to frontend
     tokio::spawn(async move {
+        println!("[ryn] watch_project: event loop started for project_id={}", project_id);
         loop {
             match handle_clone.recv().await {
                 Some(event) => {
@@ -487,17 +488,25 @@ pub async fn watch_project<R: tauri::Runtime>(
                         }
                     };
 
+                    println!("[ryn] watch_project: received event for project_id={}, path={}, type={}",
+                             project_id, file_path, event_type);
+
                     let payload = FileChangedEvent {
                         project_id,
-                        file_path,
-                        event_type,
+                        file_path: file_path.clone(),
+                        event_type: event_type.clone(),
                     };
 
                     // Emit event to all frontend listeners
-                    let _ = app.emit("file-changed", &payload);
+                    if let Err(e) = app.emit("file-changed", &payload) {
+                        println!("[ryn] watch_project: failed to emit event: {:?}", e);
+                    } else {
+                        println!("[ryn] watch_project: successfully emitted file-changed event");
+                    }
                 }
                 None => {
                     // Watcher closed - exit loop
+                    println!("[ryn] watch_project: watcher closed for project_id={}", project_id);
                     break;
                 }
             }

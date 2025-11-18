@@ -155,7 +155,7 @@ export async function detect_framework(path: string): Promise<string> {
 export async function scan_project(
   projectId: number
 ): Promise<ScanResult> {
-  return await invoke<ScanResult>("scan_project", { project_id: projectId })
+  return await invoke<ScanResult>("scan_project", { projectId })
 }
 
 /**
@@ -164,7 +164,7 @@ export async function scan_project(
 export async function get_scan_progress(
   scanId: number
 ): Promise<ScanResult> {
-  return await invoke<ScanResult>("get_scan_progress", { scan_id: scanId })
+  return await invoke<ScanResult>("get_scan_progress", { scanId })
 }
 
 /**
@@ -173,7 +173,7 @@ export async function get_scan_progress(
 export async function get_scans(
   projectId: number
 ): Promise<ScanResult[]> {
-  return await invoke<ScanResult[]>("get_scans", { project_id: projectId })
+  return await invoke<ScanResult[]>("get_scans", { projectId })
 }
 
 /**
@@ -181,14 +181,14 @@ export async function get_scans(
  * Emits "file-changed" events whenever files are modified, created, or deleted
  */
 export async function watch_project(projectId: number): Promise<string> {
-  return await invoke<string>("watch_project", { project_id: projectId })
+  return await invoke<string>("watch_project", { projectId })
 }
 
 /**
  * Stop watching a project for file changes
  */
 export async function stop_watching(projectId: number): Promise<string> {
-  return await invoke<string>("stop_watching", { project_id: projectId })
+  return await invoke<string>("stop_watching", { projectId })
 }
 
 // ============================================================================
@@ -209,7 +209,7 @@ export async function get_violations(
   filters?: ViolationFilters
 ): Promise<Violation[]> {
   return await invoke<Violation[]>("get_violations", {
-    scan_id: scanId,
+    scanId,
     filters,
   })
 }
@@ -221,7 +221,7 @@ export async function get_violation(
   violationId: number
 ): Promise<ViolationDetail> {
   return await invoke<ViolationDetail>("get_violation", {
-    violation_id: violationId,
+    violationId,
   })
 }
 
@@ -231,7 +231,7 @@ export async function get_violation(
 export async function dismiss_violation(
   violationId: number
 ): Promise<void> {
-  await invoke<void>("dismiss_violation", { violation_id: violationId })
+  await invoke<void>("dismiss_violation", { violationId })
 }
 
 // ============================================================================
@@ -244,14 +244,14 @@ export async function dismiss_violation(
 export async function generate_fix(
   violationId: number
 ): Promise<Fix> {
-  return await invoke<Fix>("generate_fix", { violation_id: violationId })
+  return await invoke<Fix>("generate_fix", { violationId })
 }
 
 /**
  * Apply a fix to the actual file and create a git commit
  */
 export async function apply_fix(fixId: number): Promise<void> {
-  await invoke<void>("apply_fix", { fix_id: fixId })
+  await invoke<void>("apply_fix", { fixId })
 }
 
 // ============================================================================
@@ -338,7 +338,7 @@ export type TimeRange = "24h" | "7d" | "30d" | "all"
  * @param timeRange - Time period: "24h", "7d", "30d", or "all"
  */
 export async function get_scan_costs(timeRange: TimeRange): Promise<ScanCost[]> {
-  return await invoke<ScanCost[]>("get_scan_costs", { time_range: timeRange })
+  return await invoke<ScanCost[]>("get_scan_costs", { timeRange })
 }
 
 /**
@@ -351,7 +351,7 @@ export async function respond_to_cost_limit(
   shouldContinue: boolean
 ): Promise<void> {
   await invoke<void>("respond_to_cost_limit", {
-    scan_id: scanId,
-    should_continue: shouldContinue,
+    scanId,
+    shouldContinue,
   })
 }

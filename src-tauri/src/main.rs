@@ -12,20 +12,20 @@
 
 // Import command modules
 use ryn::commands::{
-    project, scan, violation, fix, audit, settings, analytics
+    project, scan, violation, fix, audit, settings, analytics, logger
 };
 
 fn main() {
     // Initialize database - REQUIRED for app to function properly
     // If database initialization fails, the app cannot operate correctly
     if let Err(e) = ryn::db::init_db() {
-        eprintln!("[ryn] FATAL ERROR: Failed to initialize database");
-        eprintln!("[ryn] Error details: {}", e);
-        eprintln!("[ryn] The application cannot run without a working database.");
-        eprintln!("[ryn] Please check:");
-        eprintln!("[ryn]   - File system permissions in the data directory");
-        eprintln!("[ryn]   - Available disk space");
-        eprintln!("[ryn]   - SQLite installation");
+        println!("[ryn] FATAL ERROR: Failed to initialize database");
+        println!("[ryn] Error details: {}", e);
+        println!("[ryn] The application cannot run without a working database.");
+        println!("[ryn] Please check:");
+        println!("[ryn]   - File system permissions in the data directory");
+        println!("[ryn]   - Available disk space");
+        println!("[ryn]   - SQLite installation");
         std::process::exit(1);
     }
 
@@ -67,15 +67,17 @@ fn main() {
             settings::complete_onboarding,
             // Analytics Commands (1)
             analytics::get_scan_costs,
+            // Logger Commands (1)
+            logger::log_frontend_message,
         ])
         .run(tauri::generate_context!())
     {
-        eprintln!("[ryn] FATAL ERROR: Application failed to start");
-        eprintln!("[ryn] Error details: {}", e);
-        eprintln!("[ryn] This may be due to:");
-        eprintln!("[ryn]   - Port conflicts (if another instance is running)");
-        eprintln!("[ryn]   - Missing system dependencies");
-        eprintln!("[ryn]   - Incompatible OS version");
+        println!("[ryn] FATAL ERROR: Application failed to start");
+        println!("[ryn] Error details: {}", e);
+        println!("[ryn] This may be due to:");
+        println!("[ryn]   - Port conflicts (if another instance is running)");
+        println!("[ryn]   - Missing system dependencies");
+        println!("[ryn]   - Incompatible OS version");
         std::process::exit(1);
     }
 }

@@ -14,6 +14,8 @@ use std::path::Path;
 /// Returns: Path to selected directory or error if cancelled
 #[tauri::command]
 pub async fn select_project_folder() -> Result<String, String> {
+    println!("[ryn] select_project_folder called");
+
     // Use tauri-plugin-dialog for native file picker
     // In production, this would use the Tauri dialog plugin
     // For now, return a placeholder that would be replaced with actual dialog call
@@ -26,7 +28,9 @@ pub async fn select_project_folder() -> Result<String, String> {
 
     // Placeholder implementation - returns success with a path
     // This would be called from frontend with the dialog result
-    Ok("/path/to/project".to_string())
+    let path = "/path/to/project".to_string();
+    println!("[ryn] select_project_folder success: path={}", path);
+    Ok(path)
 }
 
 /// Create a new project in the database
@@ -46,9 +50,14 @@ pub async fn create_project(
     name: Option<String>,
     framework: Option<String>,
 ) -> Result<Project, String> {
+    println!("[ryn] create_project called: path={}, name={:?}, framework={:?}",
+             path, name, framework);
+
     // Validate path exists
     if !Path::new(&path).exists() {
-        return Err(format!("Project path does not exist: {}", path));
+        let err_msg = format!("Project path does not exist: {}", path);
+        println!("[ryn] create_project validation failed: {}", err_msg);
+        return Err(err_msg);
     }
 
     // Get database connection
@@ -95,6 +104,7 @@ pub async fn create_project(
         let _ = queries::insert_audit_event(&conn, &event);
     }
 
+    println!("[ryn] create_project success: project_id={}, name={}", project.id, project.name);
     Ok(project)
 }
 
@@ -103,11 +113,18 @@ pub async fn create_project(
 /// Returns: List of all projects sorted by creation date (newest first)
 #[tauri::command]
 pub async fn get_projects() -> Result<Vec<Project>, String> {
+    println!("[ryn] get_projects called");
+
     let conn = db::get_connection();
 
     let projects = queries::select_projects(&conn)
-        .map_err(|e| format!("Failed to fetch projects: {}", e))?;
+        .map_err(|e| {
+            let err_msg = format!("Failed to fetch projects: {}", e);
+            println!("[ryn] get_projects error: {}", err_msg);
+            err_msg
+        })?;
 
+    println!("[ryn] get_projects success: found {} projects", projects.len());
     Ok(projects)
 }
 

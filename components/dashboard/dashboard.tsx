@@ -268,6 +268,25 @@ export function Dashboard() {
     )
   }
 
+  // Empty state when project has no scans yet
+  if (!lastScan && totalScansCount === 0) {
+    return (
+      <div className="px-8 py-8 max-w-[1800px] mx-auto flex items-center justify-center min-h-[60vh]">
+        <div className="text-center max-w-md">
+          <i className="las la-search text-6xl text-white/20 mb-4"></i>
+          <h2 className="text-2xl font-bold mb-2">No Scans Yet</h2>
+          <p className="text-white/60 mb-6">
+            Run your first scan on <span className="text-white font-medium">{selectedProject.name}</span> to start monitoring SOC 2 compliance
+          </p>
+          <Button onClick={handleRunScan} size="lg" className="gap-2">
+            <i className="las la-play text-base"></i>
+            Run First Scan
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="px-8 py-8 max-w-[1800px] mx-auto">
       {/* Hero Section - Compliance Score */}

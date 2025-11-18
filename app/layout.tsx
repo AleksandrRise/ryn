@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { WaterBackground } from "@/components/ui/water-background"
-import { McpInit } from "@/components/mcp-init"
+import { ConsoleLogger } from "@/components/console-logger"
 import { Toaster } from "sonner"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 
@@ -29,7 +29,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <ErrorBoundary>
-          <McpInit />
+          <ConsoleLogger />
           <WaterBackground />
           <div className="fixed inset-0 bg-black/65 z-[5]" />
           <div className="relative z-10">{children}</div>

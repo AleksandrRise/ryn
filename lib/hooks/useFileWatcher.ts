@@ -130,6 +130,17 @@ export function useFileWatcher(
         errorMsg = err.message || err.error || err.msg || String(err) || errorMsg
       }
 
+      // If the error is "already being watched", treat it as success
+      // This can happen in React Strict Mode when the component mounts twice
+      if (errorMsg.includes('already being watched')) {
+        console.log('[useFileWatcher] Project already being watched, treating as success')
+        setIsWatching(true)
+        setIsLoading(false)
+        // Don't show error notification since this is expected behavior
+        return
+      }
+
+      // Only log actual errors
       console.error('[useFileWatcher] watch_project failed:', errorMsg)
       console.error('[useFileWatcher] project_id:', projectId)
       console.error('[useFileWatcher] error type:', typeof err)

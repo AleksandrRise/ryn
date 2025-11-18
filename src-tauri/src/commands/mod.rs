@@ -38,6 +38,7 @@ pub mod fix;
 pub mod audit;
 pub mod settings;
 pub mod analytics;
+pub mod logger;
 // Legacy module - kept for historical reference but no longer used
 // Replaced by direct ClaudeClient integration in fix_generator module
 #[allow(dead_code)]
@@ -51,5 +52,6 @@ pub use fix::{generate_fix, apply_fix};
 pub use audit::get_audit_events;
 pub use settings::{get_settings, update_settings, clear_database, export_data};
 pub use analytics::get_scan_costs;
+pub use logger::log_frontend_message;
 // Legacy command removed - no longer needed with direct ClaudeClient integration
 // pub use langgraph::run_agent_response;
