@@ -1024,6 +1024,48 @@ mod tests {
     use crate::db::test_helpers::TestDbGuard;
     use std::fs;
 
+    /// Helper: Create a regex-detected violation
+    fn new_regex_violation(
+        scan_id: i64,
+        control_id: String,
+        severity: Severity,
+        description: String,
+        file_path: String,
+        line_number: i64,
+        code_snippet: String,
+        regex_reasoning: String,
+    ) -> Violation {
+        let mut violation = Violation::new(
+            scan_id, control_id, severity, description,
+            file_path, line_number, code_snippet,
+        );
+        violation.set_detection_method(DetectionMethod::Regex);
+        violation.regex_reasoning = Some(regex_reasoning);
+        violation
+    }
+
+    /// Helper: Create an LLM-detected violation
+    fn new_llm_violation(
+        scan_id: i64,
+        control_id: String,
+        severity: Severity,
+        description: String,
+        file_path: String,
+        line_number: i64,
+        code_snippet: String,
+        confidence: i64,
+        llm_reasoning: String,
+    ) -> Violation {
+        let mut violation = Violation::new(
+            scan_id, control_id, severity, description,
+            file_path, line_number, code_snippet,
+        );
+        violation.set_detection_method(DetectionMethod::Llm);
+        violation.confidence_score = Some(confidence);
+        violation.llm_reasoning = Some(llm_reasoning);
+        violation
+    }
+
     fn create_test_project_with_guard(_guard: &TestDbGuard) -> (tempfile::TempDir, i64) {
         // Create temp dir with 'ryntest' prefix instead of default '.tmp' to avoid being filtered by should_skip_path
         let project_dir = tempfile::Builder::new()
@@ -1652,5 +1694,246 @@ def update_user(user_id, data):
 
         // Clean up
         watcher_state.stop_watching(project_id).unwrap();
+    }
+
+    /// Test merge_violations: identical line numbers should create hybrid
+    #[test]
+    fn test_merge_violations_identical_lines() {
+        let regex_violations = vec![
+            new_regex_violation(
+                1, "CC6.1".to_string(), Severity::High,
+                "Missing @login_required".to_string(),
+                "app.py".to_string(), 42, "def admin(): pass".to_string(),
+                "Pattern match: missing authentication decorator".to_string(),
+            ),
+        ];
+
+        let llm_violations = vec![
+            new_llm_violation(
+                1, "CC6.1".to_string(), Severity::High,
+                "Admin endpoint lacks authentication".to_string(),
+                "app.py".to_string(), 42, "def admin(): pass".to_string(),
+                85, "Claude detected: endpoint allows unauthorized access".to_string(),
+            ),
+        ];
+
+        let merged = merge_violations(regex_violations, llm_violations);
+
+        // Should produce 1 hybrid violation
+        assert_eq!(merged.len(), 1, "Should merge into 1 hybrid violation");
+        assert_eq!(merged[0].detection_method, "hybrid");
+        assert!(merged[0].regex_reasoning.is_some());
+        assert!(merged[0].llm_reasoning.is_some());
+        assert_eq!(merged[0].confidence_score, Some(85));
+    }
+
+    /// Test merge_violations: violations within ±3 lines should merge
+    #[test]
+    fn test_merge_violations_within_tolerance() {
+        let regex_viol = new_regex_violation(
+            1, "CC6.7".to_string(), Severity::Critical,
+            "Hardcoded secret".to_string(),
+            "config.py".to_string(), 42, "password = 'secret'".to_string(),
+            "Pattern: hardcoded password".to_string(),
+        );
+
+        // Test cases: distance from line 42
+        let test_cases = vec![
+            (39, true),  // 3 lines before (at tolerance)
+            (38, false), // 4 lines before (exceeds tolerance)
+            (45, true),  // 3 lines after (at tolerance)
+            (46, false), // 4 lines after (exceeds tolerance)
+        ];
+
+        for (llm_line, should_merge) in test_cases {
+            let llm_viol = new_llm_violation(
+                1, "CC6.7".to_string(), Severity::Critical,
+                "Credentials in code".to_string(),
+                "config.py".to_string(), llm_line, "password = 'secret'".to_string(),
+                90, "Claude found hardcoded credentials".to_string(),
+            );
+
+            let merged = merge_violations(vec![regex_viol.clone()], vec![llm_viol]);
+
+            if should_merge {
+                assert_eq!(merged.len(), 1, "Lines {} and 42 should merge (within tolerance)", llm_line);
+                assert_eq!(merged[0].detection_method, "hybrid");
+            } else {
+                assert_eq!(merged.len(), 2, "Lines {} and 42 should NOT merge (exceeds tolerance)", llm_line);
+                assert_eq!(merged.iter().filter(|v| v.detection_method == "regex").count(), 1);
+                assert_eq!(merged.iter().filter(|v| v.detection_method == "llm").count(), 1);
+            }
+        }
+    }
+
+    /// Test merge_violations: different files should not merge
+    #[test]
+    fn test_merge_violations_different_files() {
+        let regex_violations = vec![
+            new_regex_violation(
+                1, "CC6.1".to_string(), Severity::High,
+                "Missing auth".to_string(),
+                "views.py".to_string(), 42, "def view(): pass".to_string(),
+                "Regex: missing decorator".to_string(),
+            ),
+        ];
+
+        let llm_violations = vec![
+            new_llm_violation(
+                1, "CC6.1".to_string(), Severity::High,
+                "Missing auth".to_string(),
+                "api.py".to_string(), 42, "def view(): pass".to_string(), // Different file
+                85, "LLM: missing auth".to_string(),
+            ),
+        ];
+
+        let merged = merge_violations(regex_violations, llm_violations);
+
+        // Should remain separate (2 violations)
+        assert_eq!(merged.len(), 2, "Different files should not merge");
+        assert_eq!(merged.iter().filter(|v| v.detection_method == "regex").count(), 1);
+        assert_eq!(merged.iter().filter(|v| v.detection_method == "llm").count(), 1);
+    }
+
+    /// Test merge_violations: different control IDs should not merge
+    #[test]
+    fn test_merge_violations_different_controls() {
+        let regex_violations = vec![
+            new_regex_violation(
+                1, "CC6.1".to_string(), // Access control
+                Severity::High,
+                "Missing auth".to_string(),
+                "app.py".to_string(), 42, "def view(): pass".to_string(),
+                "Regex: missing auth".to_string(),
+            ),
+        ];
+
+        let llm_violations = vec![
+            new_llm_violation(
+                1, "CC7.2".to_string(), // Logging - different control
+                Severity::Medium,
+                "Missing audit log".to_string(),
+                "app.py".to_string(), 42, "def view(): pass".to_string(),
+                75, "LLM: missing logging".to_string(),
+            ),
+        ];
+
+        let merged = merge_violations(regex_violations, llm_violations);
+
+        // Should remain separate
+        assert_eq!(merged.len(), 2, "Different controls should not merge");
+    }
+
+    /// Test merge_violations: hybrid uses higher severity
+    #[test]
+    fn test_merge_violations_severity_selection() {
+        // Test cases: (regex_severity, llm_severity, expected_severity)
+        let test_cases = vec![
+            (Severity::Critical, Severity::High, Severity::Critical),
+            (Severity::High, Severity::Critical, Severity::Critical),
+            (Severity::Medium, Severity::Low, Severity::Medium),
+            (Severity::High, Severity::High, Severity::High),
+        ];
+
+        for (regex_sev, llm_sev, expected_sev) in test_cases {
+            let regex_viol = new_regex_violation(
+                1, "CC6.7".to_string(), regex_sev.clone(),
+                "Issue".to_string(),
+                "test.py".to_string(), 10, "code".to_string(),
+                "Regex found".to_string(),
+            );
+
+            let llm_viol = new_llm_violation(
+                1, "CC6.7".to_string(), llm_sev.clone(),
+                "Issue".to_string(),
+                "test.py".to_string(), 10, "code".to_string(),
+                80, "LLM found".to_string(),
+            );
+
+            let merged = merge_violations(vec![regex_viol], vec![llm_viol]);
+
+            assert_eq!(merged.len(), 1);
+            let actual_severity = merged[0].get_severity().unwrap();
+            assert_eq!(actual_severity, expected_sev,
+                "Hybrid of {:?} and {:?} should be {:?}, got {:?}",
+                regex_sev, llm_sev, expected_sev, actual_severity
+            );
+        }
+    }
+
+    /// Test merge_violations: multiple regex, multiple LLM
+    #[test]
+    fn test_merge_violations_multiple_violations() {
+        let regex_violations = vec![
+            new_regex_violation(
+                1, "CC6.7".to_string(), Severity::Critical,
+                "Secret 1".to_string(),
+                "config.py".to_string(), 10, "api_key = 'sk-123'".to_string(),
+                "Regex 1".to_string(),
+            ),
+            new_regex_violation(
+                1, "CC6.7".to_string(), Severity::Critical,
+                "Secret 2".to_string(),
+                "config.py".to_string(), 20, "password = 'admin'".to_string(),
+                "Regex 2".to_string(),
+            ),
+        ];
+
+        let llm_violations = vec![
+            new_llm_violation(
+                1, "CC6.7".to_string(), Severity::Critical,
+                "LLM Secret 1".to_string(),
+                "config.py".to_string(), 11, "api_key = 'sk-123'".to_string(), // Matches first regex (±3)
+                90, "LLM 1".to_string(),
+            ),
+            new_llm_violation(
+                1, "CC6.1".to_string(), Severity::High,
+                "LLM Auth issue".to_string(),
+                "config.py".to_string(), 30, "def view(): pass".to_string(), // No regex match
+                85, "LLM 2".to_string(),
+            ),
+        ];
+
+        let merged = merge_violations(regex_violations, llm_violations);
+
+        // Expected: 1 hybrid (regex 1 + llm 1), 1 regex-only (regex 2), 1 llm-only (llm 2) = 3 total
+        assert_eq!(merged.len(), 3, "Should have 3 violations: 1 hybrid, 1 regex-only, 1 llm-only");
+        assert_eq!(merged.iter().filter(|v| v.detection_method == "hybrid").count(), 1);
+        assert_eq!(merged.iter().filter(|v| v.detection_method == "regex").count(), 1);
+        assert_eq!(merged.iter().filter(|v| v.detection_method == "llm").count(), 1);
+    }
+
+    /// Test merge_violations: empty inputs
+    #[test]
+    fn test_merge_violations_empty_inputs() {
+        // Both empty
+        let merged = merge_violations(vec![], vec![]);
+        assert_eq!(merged.len(), 0);
+
+        // Only regex
+        let regex_only = vec![
+            new_regex_violation(
+                1, "CC6.7".to_string(), Severity::Critical,
+                "Secret".to_string(),
+                "test.py".to_string(), 10, "code".to_string(),
+                "Regex".to_string(),
+            ),
+        ];
+        let merged = merge_violations(regex_only, vec![]);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].detection_method, "regex");
+
+        // Only LLM
+        let llm_only = vec![
+            new_llm_violation(
+                1, "CC6.7".to_string(), Severity::Critical,
+                "Secret".to_string(),
+                "test.py".to_string(), 10, "code".to_string(),
+                90, "LLM".to_string(),
+            ),
+        ];
+        let merged = merge_violations(vec![], llm_only);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].detection_method, "llm");
     }
 }
