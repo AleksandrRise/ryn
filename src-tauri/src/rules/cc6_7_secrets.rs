@@ -220,9 +220,19 @@ impl CC67SecretsRule {
                     continue;
                 }
 
-                // Skip if it contains env variable reference
-                if line.contains("os.getenv") || line.contains("process.env") || line.contains("ENV[")
-                    || line.contains("$") && (line.contains("PASS") || line.contains("KEY"))
+                // Strip comments before checking for env variables
+                // This prevents false negatives from lines like: TOKEN = "hardcoded"  # FIXME: use os.getenv()
+                let code_part = if let Some(comment_pos) = line.find('#') {
+                    &line[..comment_pos]
+                } else if let Some(comment_pos) = line.find("//") {
+                    &line[..comment_pos]
+                } else {
+                    line
+                };
+
+                // Skip if the CODE (not comments) contains env variable reference
+                if code_part.contains("os.getenv") || code_part.contains("process.env") || code_part.contains("ENV[")
+                    || code_part.contains("$") && (code_part.contains("PASS") || code_part.contains("KEY"))
                 {
                     continue;
                 }
@@ -470,8 +480,17 @@ impl CC67SecretsRule {
                     continue;
                 }
 
-                // Skip if it references environment variables
-                if line.contains("os.getenv") || line.contains("process.env") || line.contains("ENV[")
+                // Strip comments before checking for env variables
+                let code_part = if let Some(comment_pos) = line.find('#') {
+                    &line[..comment_pos]
+                } else if let Some(comment_pos) = line.find("//") {
+                    &line[..comment_pos]
+                } else {
+                    line
+                };
+
+                // Skip if the CODE (not comments) references environment variables
+                if code_part.contains("os.getenv") || code_part.contains("process.env") || code_part.contains("ENV[")
                 {
                     continue;
                 }
@@ -776,6 +795,22 @@ mod tests {
             !violations.is_empty(),
             "Should detect Square API key"
         );
+    }
+
+    /// CRITICAL EDGE CASE: Hardcoded secret with os.getenv() mentioned in comment
+    /// This test verifies we don't skip detection when env var is only in comment
+    #[test]
+    fn test_hardcoded_secret_with_env_var_in_comment() {
+        let code = r#"SUPER_SECRET_TOKEN = "5u93R53Cr3tT0k3n"  # FIXME: os.getenv("SUPER_SECRET_TOKEN")"#;
+        let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
+        assert!(
+            !violations.is_empty(),
+            "Should detect hardcoded secret even when os.getenv() is mentioned in comment. Found {} violations.",
+            violations.len()
+        );
+        assert_eq!(violations[0].severity, "critical");
+        assert!(violations[0].description.to_lowercase().contains("secret") ||
+                violations[0].description.to_lowercase().contains("password"));
     }
 }
 

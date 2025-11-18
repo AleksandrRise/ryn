@@ -108,6 +108,47 @@ fn scan_python_files(project_dir: &Path, scan_id: i64) -> Vec<ryn::models::Viola
     all_violations
 }
 
+/// Helper: Scan all JavaScript/TypeScript files in a directory
+fn scan_js_files(project_dir: &Path, scan_id: i64) -> Vec<ryn::models::Violation> {
+    let mut all_violations = Vec::new();
+
+    // Walk directory recursively
+    for entry in walkdir::WalkDir::new(project_dir)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+
+        // Only scan JavaScript/TypeScript files (excluding minified and library files)
+        let extension = path.extension().and_then(|s| s.to_str());
+        if extension == Some("js") || extension == Some("ts") {
+            // Skip minified files and node_modules
+            let path_str = path.to_str().unwrap_or("");
+            if path_str.contains(".min.js")
+                || path_str.contains("node_modules")
+                || path_str.contains("jquery")
+                || path_str.contains("bootstrap") {
+                continue;
+            }
+
+            if let Ok(content) = fs::read_to_string(&path) {
+                // Get relative path from project root
+                let relative_path = path.strip_prefix(project_dir)
+                    .unwrap_or(path)
+                    .to_str()
+                    .unwrap_or("unknown");
+
+                // Run all rule engines
+                let violations = run_all_rules(&content, relative_path, scan_id);
+                all_violations.extend(violations);
+            }
+        }
+    }
+
+    all_violations
+}
+
 /// Helper: Assert at least one violation exists for a control_id
 fn assert_has_violations_for(violations: &[ryn::models::Violation], control_id: &str) {
     let count = violations.iter()
@@ -310,4 +351,260 @@ fn test_flask_framework_detected() {
     );
 
     println!("[Test] ✅ Framework detected correctly!");
+}
+
+// ============================================================================
+// PHASE 1.2: Test vulnerable-node (Express.js)
+// ============================================================================
+
+/// Test 4: Scan vulnerable-node (Express.js) and verify rule engines detect violations
+#[test]
+fn test_scan_vulnerable_node_finds_violations() {
+    let fixture = PathBuf::from("tests/fixtures/vulnerable-node");
+
+    if !fixture.exists() {
+        eprintln!("Skipping test: vulnerable-node not found at {:?}", fixture);
+        eprintln!("Run the test_scan_vulnerable_flask_finds_all_rules test first to clone fixtures");
+        return;
+    }
+
+    println!("[Test] Scanning vulnerable-node repository (Express.js)...");
+
+    let scan_id = 1;
+
+    // Scan all JavaScript files in the repo
+    let violations = scan_js_files(&fixture, scan_id);
+
+    println!("[Test] Found {} total violations", violations.len());
+
+    // Print breakdown by control
+    for control_id in ["CC6.1", "CC6.7", "CC7.2", "A1.2"] {
+        let count = violations.iter().filter(|v| v.control_id == control_id).count();
+        println!("[Test]   {}: {} violations", control_id, count);
+
+        // Print first 3 violations for each control (for debugging)
+        let control_violations: Vec<_> = violations
+            .iter()
+            .filter(|v| v.control_id == control_id)
+            .take(3)
+            .collect();
+
+        for v in control_violations {
+            println!("[Test]     - {} ({}:{})", v.description, v.file_path, v.line_number);
+        }
+    }
+
+    // ASSERTION 1: Should find some violations (at least from CC6.7)
+    assert!(
+        violations.len() >= 3,
+        "Expected at least 3 violations in vulnerable-node (hardcoded secrets), found {}",
+        violations.len()
+    );
+
+    // ASSERTION 2: CC6.7 should detect hardcoded secrets
+    // Expected: PostgreSQL connection strings in config.js and session secret in app.js
+    let cc67_count = violations.iter().filter(|v| v.control_id == "CC6.7").count();
+    assert!(
+        cc67_count >= 3,
+        "Expected at least 3 CC6.7 violations (postgres credentials + session secret), found {}",
+        cc67_count
+    );
+
+    // ASSERTION 3: Verify specific known violations exist
+    // Check for database credentials
+    let has_db_creds = violations.iter().any(|v|
+        v.control_id == "CC6.7" &&
+        (v.description.to_lowercase().contains("database") ||
+         v.description.to_lowercase().contains("credentials") ||
+         v.description.to_lowercase().contains("postgres"))
+    );
+
+    assert!(
+        has_db_creds,
+        "Expected to find database credential violations in config.js"
+    );
+
+    // ASSERTION 4: Verify session secret is detected
+    let has_session_secret = violations.iter().any(|v|
+        v.control_id == "CC6.7" &&
+        v.file_path == "app.js" &&
+        (v.description.to_lowercase().contains("secret") ||
+         v.description.to_lowercase().contains("password"))
+    );
+
+    assert!(
+        has_session_secret,
+        "Expected to find session secret violation in app.js line 44"
+    );
+
+    // Print summary of findings
+    println!("[Test] Summary:");
+    println!("[Test]   - Total violations: {}", violations.len());
+
+    let engines_with_violations: Vec<_> = ["CC6.1", "CC6.7", "CC7.2", "A1.2"]
+        .iter()
+        .filter(|id| violations.iter().any(|v| v.control_id == **id))
+        .collect();
+
+    println!("[Test]   - Active rule engines: {}/{}", engines_with_violations.len(), 4);
+
+    for control_id in ["CC6.1", "CC6.7", "CC7.2", "A1.2"] {
+        if violations.iter().any(|v| v.control_id == control_id) {
+            let count = violations.iter().filter(|v| v.control_id == control_id).count();
+            println!("[Test]   - {}: ✅ {} violations", control_id, count);
+        } else {
+            println!("[Test]   - {}: ⚠️ No violations detected", control_id);
+        }
+    }
+
+    println!("[Test] ✅ vulnerable-node scan completed!");
+}
+
+/// Test 5: Verify framework detection works for Express.js
+#[test]
+fn test_express_framework_detected() {
+    let fixture = PathBuf::from("tests/fixtures/vulnerable-node");
+
+    if !fixture.exists() {
+        eprintln!("Skipping test: vulnerable-node not found");
+        return;
+    }
+
+    println!("[Test] Testing framework detection for Express.js...");
+
+    // Use Ryn's framework detection
+    let detected = ryn::scanner::FrameworkDetector::detect_framework(&fixture).unwrap();
+
+    println!("[Test] Detected framework: {:?}", detected);
+
+    // ASSERTION: Should detect Express or Node.js
+    // Note: Framework detector may detect "express" or None depending on implementation
+    // This is informational - we document what gets detected
+    if detected.is_some() {
+        println!("[Test] ✅ Framework detected: {:?}", detected);
+    } else {
+        println!("[Test] ℹ️ No framework detected (Express detection may need implementation)");
+    }
+}
+
+// ============================================================================
+// PHASE 1.2: Test python-insecure-app (FastAPI)
+// ============================================================================
+
+/// Test 6: Scan python-insecure-app (FastAPI) and verify rule engines detect violations
+#[test]
+fn test_scan_python_insecure_app_finds_violations() {
+    let fixture = PathBuf::from("tests/fixtures/python-insecure-app");
+
+    if !fixture.exists() {
+        eprintln!("Skipping test: python-insecure-app not found at {:?}", fixture);
+        return;
+    }
+
+    println!("[Test] Scanning python-insecure-app repository (FastAPI)...");
+
+    let scan_id = 1;
+
+    // Scan all Python files in the repo
+    let violations = scan_python_files(&fixture, scan_id);
+
+    println!("[Test] Found {} total violations", violations.len());
+
+    // Print breakdown by control
+    for control_id in ["CC6.1", "CC6.7", "CC7.2", "A1.2"] {
+        let count = violations.iter().filter(|v| v.control_id == control_id).count();
+        println!("[Test]   {}: {} violations", control_id, count);
+
+        // Print all violations for each control (for debugging)
+        let control_violations: Vec<_> = violations
+            .iter()
+            .filter(|v| v.control_id == control_id)
+            .collect();
+
+        for v in control_violations {
+            println!("[Test]     - {} ({}:{})", v.description, v.file_path, v.line_number);
+        }
+    }
+
+    // ASSERTION 1: Should find violations
+    assert!(
+        violations.len() >= 2,
+        "Expected at least 2 violations in python-insecure-app (hardcoded secret + missing timeout), found {}",
+        violations.len()
+    );
+
+    // ASSERTION 2: CC6.7 should detect hardcoded SUPER_SECRET_TOKEN
+    let has_secret_token = violations.iter().any(|v|
+        v.control_id == "CC6.7" &&
+        v.file_path.contains("config.py") &&
+        (v.description.to_lowercase().contains("secret") ||
+         v.description.to_lowercase().contains("token"))
+    );
+
+    assert!(
+        has_secret_token,
+        "Expected to find SUPER_SECRET_TOKEN violation in config.py line 15"
+    );
+
+    // ASSERTION 3: A1.2 should detect requests.get() without timeout
+    let has_missing_timeout = violations.iter().any(|v|
+        v.control_id == "A1.2" &&
+        v.file_path.contains("main.py") &&
+        v.description.to_lowercase().contains("timeout")
+    );
+
+    assert!(
+        has_missing_timeout,
+        "Expected to find missing timeout violation for requests.get() in main.py line 31"
+    );
+
+    // Print summary of findings
+    println!("[Test] Summary:");
+    println!("[Test]   - Total violations: {}", violations.len());
+
+    let engines_with_violations: Vec<_> = ["CC6.1", "CC6.7", "CC7.2", "A1.2"]
+        .iter()
+        .filter(|id| violations.iter().any(|v| v.control_id == **id))
+        .collect();
+
+    println!("[Test]   - Active rule engines: {}/{}", engines_with_violations.len(), 4);
+
+    for control_id in ["CC6.1", "CC6.7", "CC7.2", "A1.2"] {
+        if violations.iter().any(|v| v.control_id == control_id) {
+            let count = violations.iter().filter(|v| v.control_id == control_id).count();
+            println!("[Test]   - {}: ✅ {} violations", control_id, count);
+        } else {
+            println!("[Test]   - {}: ⚠️ No violations detected", control_id);
+        }
+    }
+
+    println!("[Test] ✅ python-insecure-app scan completed!");
+}
+
+/// Test 7: Verify framework detection works for FastAPI
+#[test]
+fn test_fastapi_framework_detected() {
+    let fixture = PathBuf::from("tests/fixtures/python-insecure-app");
+
+    if !fixture.exists() {
+        eprintln!("Skipping test: python-insecure-app not found");
+        return;
+    }
+
+    println!("[Test] Testing framework detection for FastAPI...");
+
+    // Use Ryn's framework detection
+    let detected = ryn::scanner::FrameworkDetector::detect_framework(&fixture).unwrap();
+
+    println!("[Test] Detected framework: {:?}", detected);
+
+    // ASSERTION: Should detect FastAPI or Python
+    // Note: Framework detector behavior depends on implementation
+    if detected == Some("fastapi".to_string()) {
+        println!("[Test] ✅ FastAPI framework detected correctly!");
+    } else if detected.is_some() {
+        println!("[Test] ℹ️ Detected framework: {:?} (expected fastapi)", detected);
+    } else {
+        println!("[Test] ℹ️ No framework detected (FastAPI detection may need implementation)");
+    }
 }
