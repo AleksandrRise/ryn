@@ -43,7 +43,7 @@ struct CostLimitEvent {
     files_remaining: i32,
 }
 
-/// Channels for handling scan-time cost limit prompts
+/// Channels for handling scan-time cost limit prompts and cancellations
 ///
 /// When a scan hits a cost limit, it sends a prompt to the frontend via Tauri events
 /// and waits for a user decision via a oneshot channel. The frontend responds
@@ -62,6 +62,14 @@ pub struct ScanResponseChannels {
     ///
     /// Wrapped in Arc to allow cloning for async tasks
     cost_limit_responses: Arc<Mutex<HashMap<i64, oneshot::Sender<bool>>>>,
+
+    /// Map of scan_id -> cancel flag
+    ///
+    /// When user clicks cancel button:
+    /// 1. Frontend calls cancel_scan(scan_id)
+    /// 2. This sets the flag to true
+    /// 3. Scan loop checks this flag periodically and stops if true
+    cancel_requests: Arc<Mutex<HashMap<i64, bool>>>,
 }
 
 impl ScanResponseChannels {
@@ -94,6 +102,35 @@ impl ScanResponseChannels {
         } else {
             Err(format!("No pending cost limit prompt for scan {}", scan_id))
         }
+    }
+
+    /// Request cancellation of a running scan
+    ///
+    /// # Arguments
+    /// * `scan_id` - ID of the scan to cancel
+    pub fn request_cancel(&self, scan_id: i64) {
+        let mut cancels = self.cancel_requests.lock().unwrap();
+        cancels.insert(scan_id, true);
+    }
+
+    /// Check if a scan has been requested to cancel
+    ///
+    /// # Arguments
+    /// * `scan_id` - ID of the scan to check
+    ///
+    /// Returns: true if cancel was requested, false otherwise
+    pub fn is_cancelled(&self, scan_id: i64) -> bool {
+        let cancels = self.cancel_requests.lock().unwrap();
+        cancels.get(&scan_id).copied().unwrap_or(false)
+    }
+
+    /// Clear cancel flag for a scan (called when scan completes or stops)
+    ///
+    /// # Arguments
+    /// * `scan_id` - ID of the scan to clear
+    pub fn clear_cancel(&self, scan_id: i64) {
+        let mut cancels = self.cancel_requests.lock().unwrap();
+        cancels.remove(&scan_id);
     }
 }
 
@@ -229,6 +266,16 @@ async fn scan_project_internal<R: tauri::Runtime>(
         .filter(|e| !should_skip_path(e.path()))
         .count() as i32;
 
+    // Emit initial progress event so UI shows correct total file count from the start
+    let initial_progress = ScanProgressEvent {
+        scan_id,
+        files_scanned: 0,
+        total_files,
+        violations_found: 0,
+        current_file: "Initializing scan...".to_string(),
+    };
+    let _ = app.emit("scan-progress", initial_progress);
+
     // Collect files for LLM analysis (smart/analyze_all modes)
     // Each entry: (relative_path, content)
     let mut files_for_llm_analysis: Vec<(String, String)> = Vec::new();
@@ -254,6 +301,13 @@ async fn scan_project_internal<R: tauri::Runtime>(
         match std::fs::read_to_string(file_path) {
             Ok(content) => {
                 files_scanned += 1;
+
+                // Check for cancellation request
+                if channels.is_cancelled(scan_id) {
+                    println!("[ryn] Scan cancelled by user at {} files", files_scanned);
+                    channels.clear_cancel(scan_id);
+                    return Err("Scan cancelled by user".to_string());
+                }
 
                 // Emit progress event every 10 files for real-time UI updates
                 if files_scanned % 10 == 0 || files_scanned == total_files {
@@ -660,8 +714,8 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
         }
 
         // After each batch (every 10 files), check if we've exceeded cost limit
-        let files_analyzed = (batch_idx + 1) * 10.min(total_files);
-        let files_remaining = total_files - files_analyzed;
+        let files_analyzed = ((batch_idx + 1) * 10).min(total_files);
+        let files_remaining = total_files.saturating_sub(files_analyzed);
 
         if total_cost > cost_limit_usd && files_remaining > 0 {
             // Create oneshot channel for user response
@@ -898,6 +952,26 @@ pub async fn respond_to_cost_limit(
     continue_scan: bool,
 ) -> Result<(), String> {
     channels.respond_to_cost_limit(scan_id, continue_scan)
+}
+
+/// Cancel a running scan
+///
+/// Sets a cancellation flag that the scan loop checks periodically.
+/// The scan will stop as soon as it detects the cancellation request.
+///
+/// # Arguments
+/// * `channels` - Managed state containing response channels
+/// * `scan_id` - ID of the scan to cancel
+///
+/// Returns: Always returns Ok (cancellation is best-effort)
+#[tauri::command]
+pub async fn cancel_scan(
+    channels: tauri::State<'_, ScanResponseChannels>,
+    scan_id: i64,
+) -> Result<(), String> {
+    println!("[ryn] Cancelling scan_id={}", scan_id);
+    channels.request_cancel(scan_id);
+    Ok(())
 }
 
 /// Run all 4 rule engines on code
