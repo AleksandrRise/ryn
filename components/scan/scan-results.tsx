@@ -1,18 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import type { Severity } from "@/lib/types/violation"
 import { listen } from "@tauri-apps/api/event"
 import { Button } from "@/components/ui/button"
-import { Play, Check, FileSearch, AlertCircle, Shield } from "lucide-react"
+import { Play, Check, FileSearch, AlertCircle, Shield, X } from "lucide-react"
 import { useProjectStore } from "@/lib/stores/project-store"
 import {
   scan_project,
   get_scan_progress,
   get_violations,
   get_scans,
+  get_projects,
   respond_to_cost_limit,
+  cancel_scan,
   type Violation,
   type ScanResult
 } from "@/lib/tauri/commands"
@@ -50,13 +52,86 @@ export function ScanResults() {
     filesAnalyzed: 0,
     totalFiles: 0,
   })
+  const lastProgressRef = useRef<{ filesScanned: number; timestamp: number }>({
+    filesScanned: 0,
+    timestamp: Date.now(),
+  })
 
-  // Load last scan on mount
+  // Restore active scan on mount (persist across page navigation)
   useEffect(() => {
-    if (selectedProject) {
-      loadLastScan()
+    const activeScanData = localStorage.getItem('activeScan')
+    if (activeScanData) {
+      try {
+        const { scanId, projectId } = JSON.parse(activeScanData)
+
+        // Only restore if it's for the current project
+        if (selectedProject?.id === projectId) {
+          console.log(`[ryn] Restoring active scan ${scanId} for project ${projectId}`)
+          setCurrentScanId(scanId)
+          setIsScanning(true)
+
+          // Restore progress by polling backend
+          get_scan_progress(scanId).then(scan => {
+            setScanProgress({
+              percentage: scan.total_files > 0
+                ? Math.round((scan.files_scanned / scan.total_files) * 100)
+                : 0,
+              currentFile: "Resuming scan...",
+              filesScanned: scan.files_scanned,
+              totalFiles: scan.total_files,
+            })
+          }).catch(err => {
+            console.error("[ryn] Failed to restore scan progress:", err)
+            // Clear stale scan data
+            localStorage.removeItem('activeScan')
+            setIsScanning(false)
+            setCurrentScanId(null)
+          })
+        }
+      } catch (error) {
+        console.error("[ryn] Failed to restore active scan:", error)
+        localStorage.removeItem('activeScan')
+      }
     }
-  }, [selectedProject])
+  }, []) // Run once on mount
+
+  // Load scan data whenever selected project changes
+  useEffect(() => {
+    // Immediately clear violations when project changes
+    setViolations([])
+    setLastScan(null)
+    setLastScanStats({
+      filesScanned: 0,
+      violationsFound: 0,
+      completedAt: "",
+    })
+
+    const verifyAndLoadProject = async () => {
+      if (selectedProject) {
+        try {
+          // Verify project still exists in database
+          const projects = await get_projects()
+          const exists = projects.some(p => p.id === selectedProject.id)
+
+          if (!exists) {
+            // Project was deleted or database was cleared
+            console.warn(`Project ${selectedProject.id} not found in database, clearing selection`)
+            setSelectedProject(null)
+            showInfo("Previous project no longer exists. Please select a project.")
+          } else {
+            // Project exists, load last scan data
+            await loadLastScan()
+          }
+        } catch (error) {
+          console.error("Failed to verify project:", error)
+          // On error, clear the selection to be safe
+          setSelectedProject(null)
+        }
+      }
+    }
+
+    verifyAndLoadProject()
+  }, [selectedProject?.id]) // React when project ID changes
 
   // Listen to real-time scan progress events
   useEffect(() => {
@@ -75,8 +150,39 @@ export function ScanResults() {
       }>("scan-progress", (event) => {
         const progress = event.payload
 
-        // Only update if it's for the current scan
-        if (progress.scan_id === currentScanId) {
+        // Update progress (accept all events while scanning, or filter by scan_id if it's set)
+        if (currentScanId === -1 || progress.scan_id === currentScanId) {
+          // Update the real scan ID when we receive the first event
+          if (currentScanId === -1) {
+            setCurrentScanId(progress.scan_id)
+          }
+
+          // Check for stalled scan (same file count for >30 seconds)
+          const now = Date.now()
+          const lastProgress = lastProgressRef.current
+          if (
+            progress.files_scanned === lastProgress.filesScanned &&
+            now - lastProgress.timestamp > 30000 &&
+            progress.files_scanned < progress.total_files
+          ) {
+            console.error("[ryn] Scan stalled - no progress for 30 seconds")
+            setIsScanning(false)
+
+            // Clear active scan from localStorage
+            localStorage.removeItem('activeScan')
+
+            handleTauriError("Scan timeout", "Scan stalled with no progress for 30 seconds. Please try again.")
+            return
+          }
+
+          // Update last progress tracker
+          if (progress.files_scanned !== lastProgress.filesScanned) {
+            lastProgressRef.current = {
+              filesScanned: progress.files_scanned,
+              timestamp: now,
+            }
+          }
+
           setScanProgress({
             percentage: progress.total_files > 0
               ? Math.round((progress.files_scanned / progress.total_files) * 100)
@@ -91,8 +197,11 @@ export function ScanResults() {
             setTimeout(async () => {
               setIsScanning(false)
 
+              // Clear active scan from localStorage
+              localStorage.removeItem('activeScan')
+
               // Load violations and refresh
-              await loadViolations(currentScanId)
+              await loadViolations(progress.scan_id)
               await loadLastScan()
 
               showSuccess(`Scan completed! Found ${progress.violations_found} violations`)
@@ -157,7 +266,7 @@ export function ScanResults() {
         // Load violations for stats
         const viols = await get_violations(latest.id, {})
         setLastScanStats({
-          filesScanned: 0, // Backend doesn't track this in scan table
+          filesScanned: latest.files_scanned || latest.total_files || 0,
           violationsFound: viols.length,
           completedAt: new Date(latest.created_at || latest.started_at).toLocaleString(),
         })
@@ -174,7 +283,9 @@ export function ScanResults() {
   const loadViolations = async (scanId: number) => {
     try {
       const viols = await get_violations(scanId, {})
-      setViolations(viols as unknown as Violation[])
+      // Filter out dismissed violations (status === 'dismissed')
+      const activeViolations = viols.filter((v: any) => v.status !== 'dismissed')
+      setViolations(activeViolations as unknown as Violation[])
     } catch (error) {
       handleTauriError(error, "Failed to load violations")
     }
@@ -190,30 +301,54 @@ export function ScanResults() {
       setIsScanning(true)
       setScanProgress({ percentage: 0, currentFile: "", filesScanned: 0, totalFiles: 0 })
 
-      showInfo("Starting scan...")
-
-      // Verify project exists in database before scanning
-      try {
-        const projects = await get_scans(selectedProject.id)
-        // If we can fetch scans for this project, it exists in the database
-      } catch (verifyError) {
-        // If the query fails, the project might not exist
-        console.warn(`Project ${selectedProject.id} verification failed`)
+      // Reset progress tracker to prevent false timeout on new scan
+      lastProgressRef.current = {
+        filesScanned: 0,
+        timestamp: Date.now(),
       }
 
-      // Start scan (this awaits until scan completes)
+      showInfo("Starting scan...")
+
+      // Verify project exists before scanning
+      try {
+        const projects = await get_projects()
+        const exists = projects.some(p => p.id === selectedProject.id)
+
+        if (!exists) {
+          throw new Error(`Project not found in database. Please select the project folder again.`)
+        }
+      } catch (verifyError) {
+        // Clear invalid project from state
+        setSelectedProject(null)
+        throw verifyError
+      }
+
+      // Set a temporary scan ID so event listener activates
+      setCurrentScanId(-1)
+
+      // Start scan - this runs asynchronously and emits events
       const scan = await scan_project(selectedProject.id)
+
+      // Update with real scan ID
       setCurrentScanId(scan.id)
 
-      // Scan is already complete by this point (events were emitted during the await)
-      // Manually fetch the final results
-      setIsScanning(false)
-      await loadViolations(scan.id)
-      await loadLastScan()
+      // Save active scan to localStorage so it persists across page navigation
+      localStorage.setItem('activeScan', JSON.stringify({
+        scanId: scan.id,
+        projectId: selectedProject.id,
+        startedAt: new Date().toISOString()
+      }))
 
-      showSuccess(`Scan completed! Found ${scan.violations_found} violations`)
+      console.log(`[ryn] Scan ${scan.id} started and saved to localStorage`)
+
+      // Note: Completion is handled by the event listener now
     } catch (error) {
       setIsScanning(false)
+      setCurrentScanId(null)
+
+      // Clear active scan from localStorage on error
+      localStorage.removeItem('activeScan')
+
       handleTauriError(error, "Failed to start scan")
     }
   }
@@ -245,6 +380,9 @@ export function ScanResults() {
       setShowCostLimitDialog(false)
       setIsScanning(false)
 
+      // Clear active scan from localStorage
+      localStorage.removeItem('activeScan')
+
       // Load violations found so far
       await loadViolations(currentScanId)
       await loadLastScan()
@@ -252,6 +390,23 @@ export function ScanResults() {
       showInfo("Scan stopped. Using violations found so far.")
     } catch (error) {
       handleTauriError(error, "Failed to stop scan")
+    }
+  }
+
+  const handleCancelScan = async () => {
+    if (!currentScanId || currentScanId === -1) return
+
+    try {
+      await cancel_scan(currentScanId)
+      setIsScanning(false)
+      setCurrentScanId(null)
+
+      // Clear active scan from localStorage
+      localStorage.removeItem('activeScan')
+
+      showInfo("Scan cancelled")
+    } catch (error) {
+      handleTauriError(error, "Failed to cancel scan")
     }
   }
 
@@ -339,7 +494,7 @@ export function ScanResults() {
                 </div>
                 <div>
                   <p className="text-xs text-white/40 mb-1">Files Scanned</p>
-                  <p className="text-lg font-bold tabular-nums">{lastScanStats.filesScanned || "N/A"}</p>
+                  <p className="text-lg font-bold tabular-nums">{lastScanStats.filesScanned ?? "N/A"}</p>
                 </div>
                 <div>
                   <p className="text-xs text-white/40 mb-1">Violations Found</p>
@@ -368,16 +523,27 @@ export function ScanResults() {
             )}
           </div>
 
-          {/* Action Button */}
-          <Button
-            onClick={handleStartScan}
-            disabled={isScanning}
-            size="lg"
-            className="w-full gap-2 h-14"
-          >
-            <Play className="w-5 h-5" />
-            {isScanning ? "Scanning..." : "Start New Scan"}
-          </Button>
+          {/* Action Buttons */}
+          {isScanning ? (
+            <Button
+              onClick={handleCancelScan}
+              size="lg"
+              variant="destructive"
+              className="w-full gap-2 h-14"
+            >
+              <X className="w-5 h-5" />
+              Cancel Scan
+            </Button>
+          ) : (
+            <Button
+              onClick={handleStartScan}
+              size="lg"
+              className="w-full gap-2 h-14"
+            >
+              <Play className="w-5 h-5" />
+              Start New Scan
+            </Button>
+          )}
         </div>
       </div>
 
@@ -433,63 +599,86 @@ export function ScanResults() {
       </div>
 
       {/* Violations Table */}
-      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden animate-fade-in-up delay-500">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-white/10">
-                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Severity</th>
-                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Control</th>
-                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Description</th>
-                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Location</th>
-                <th className="text-right px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredViolations.map((violation, i) => (
-                <tr key={violation.id} className="group border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${
-                      violation.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
-                      violation.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
-                      violation.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-white/10 text-white/60'
-                    }`}>
-                      {violation.severity === 'critical' && <AlertCircle className="w-3 h-3" />}
-                      {violation.severity}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white/5 text-xs font-mono font-medium">
-                      {violation.control_id}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-sm text-white/90">{violation.description}</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-xs text-white/60 font-mono">
-                      {violation.file_path}
-                      <span className="text-white/40">:{violation.line_number}</span>
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <Link
-                      href={`/violation/${violation.id}`}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-white/60 hover:text-white transition-colors"
-                    >
-                      View details
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {isScanning ? (
+        /* Show loading state during scan */
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-12 animate-fade-in-up delay-500">
+          <div className="flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 border-4 border-white/10 border-t-white rounded-full animate-spin mb-6" />
+            <h3 className="text-xl font-semibold mb-2">Analyzing code...</h3>
+            <p className="text-white/60">Please wait while we scan your project for violations</p>
+          </div>
         </div>
-      </div>
+      ) : filteredViolations.length === 0 ? (
+        /* Show empty state - always prompt to scan */
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-12 animate-fade-in-up delay-500">
+          <div className="flex flex-col items-center justify-center text-center">
+            <Play className="w-16 h-16 text-blue-400 mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Ready to scan</h3>
+            <p className="text-white/60 mb-4">
+              Click the &quot;Start New Scan&quot; button above to analyze this project for SOC 2 compliance violations.
+            </p>
+          </div>
+        </div>
+      ) : (
+        /* Show violations table */
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden animate-fade-in-up delay-500">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Severity</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Control</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Description</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Location</th>
+                  <th className="text-right px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredViolations.map((violation, i) => (
+                  <tr key={violation.id} className="group border-b border-white/5 hover:bg-white/5 transition-colors">
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                        violation.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                        violation.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                        violation.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                        'bg-white/10 text-white/60'
+                      }`}>
+                        {violation.severity === 'critical' && <AlertCircle className="w-3 h-3" />}
+                        {violation.severity}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white/5 text-xs font-mono font-medium">
+                        {violation.control_id}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm text-white/90">{violation.description}</p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-xs text-white/60 font-mono">
+                        {violation.file_path}
+                        <span className="text-white/40">:{violation.line_number}</span>
+                      </p>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <Link
+                        href={`/violation/${violation.id}`}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-white/60 hover:text-white transition-colors"
+                      >
+                        View details
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Cost Limit Dialog */}
       {showCostLimitDialog && (

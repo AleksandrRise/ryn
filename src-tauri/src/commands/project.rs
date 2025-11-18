@@ -79,6 +79,27 @@ pub async fn create_project(
         return Ok(existing_project);
     }
 
+    // Get database connection
+    let conn = db::init_db()
+        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+
+    // Check if project already exists with this path
+    if let Some(existing_project) = queries::select_project_by_path(&conn, &path)
+        .map_err(|e| format!("Failed to check for existing project: {}", e))? {
+        // Project already exists - update framework if provided and return it
+        if let Some(fw) = framework.as_deref() {
+            queries::update_project(&conn, existing_project.id, &existing_project.name, Some(fw))
+                .map_err(|e| format!("Failed to update existing project: {}", e))?;
+
+            // Fetch updated project
+            return queries::select_project(&conn, existing_project.id)
+                .map_err(|e| format!("Failed to fetch updated project: {}", e))?
+                .ok_or_else(|| "Project was updated but could not be retrieved".to_string());
+        }
+
+        return Ok(existing_project);
+    }
+
     // Extract project name from path if not provided
     let project_name = match name {
         Some(n) => n,

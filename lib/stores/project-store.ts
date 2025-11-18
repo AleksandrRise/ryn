@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { Project } from '@/lib/tauri/commands'
+import { get_projects } from '@/lib/tauri/commands'
 
 interface ProjectStore {
   selectedProject: Project | null
@@ -25,6 +26,19 @@ function isValidProject(project: any): project is Project {
 }
 
 /**
+ * Verifies that a project exists in the database
+ */
+async function projectExistsInDatabase(projectId: number): Promise<boolean> {
+  try {
+    const projects = await get_projects()
+    return projects.some(p => p.id === projectId)
+  } catch (error) {
+    console.error('[project-store] Failed to verify project in database:', error)
+    return false
+  }
+}
+
+/**
  * Global project state store using Zustand
  *
  * Persists selected project to localStorage for app restarts
@@ -42,15 +56,25 @@ export const useProjectStore = create<ProjectStore>()(
     {
       name: 'ryn-project-storage',
       storage: createJSONStorage(() => localStorage),
-      onRehydrateStorage: () => (state) => {
+      onRehydrateStorage: () => async (state) => {
         // Validate loaded project and clear if invalid
         if (state?.selectedProject) {
           const isValid = isValidProject(state.selectedProject)
 
           if (!isValid) {
             console.warn(
-              '[project-store] Invalid project in localStorage, clearing:',
+              '[project-store] Invalid project structure in localStorage, clearing:',
               state.selectedProject
+            )
+            state.clearProject()
+            return
+          }
+
+          // Verify project exists in database
+          const exists = await projectExistsInDatabase(state.selectedProject.id)
+          if (!exists) {
+            console.warn(
+              `[project-store] Project ${state.selectedProject.id} not found in database, clearing from localStorage`
             )
             state.clearProject()
           } else {
