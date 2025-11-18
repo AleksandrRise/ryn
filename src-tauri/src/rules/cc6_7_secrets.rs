@@ -56,6 +56,9 @@ impl CC67SecretsRule {
         // Pattern 8: API keys (generic)
         violations.extend(Self::detect_generic_api_keys(code, file_path, scan_id)?);
 
+        // Pattern 9: Flask/Django config dictionary secrets
+        violations.extend(Self::detect_config_dict_secrets(code, file_path, scan_id)?);
+
         Ok(violations)
     }
 
@@ -195,7 +198,10 @@ impl CC67SecretsRule {
         )
         .context("Failed to compile password pattern")?;
 
-        let is_example = Regex::new(r"(example|test|demo|fake|temp|xxx|password123|12345|admin)")
+        // More precise example pattern - only skip obvious documentation examples
+        // Removed "admin" to allow detection of real passwords like "admin123"
+        // Removed "placeholder" to detect hardcoded placeholder values like '[placeholder_password]'
+        let is_example = Regex::new(r"(example|test|demo|fake|temp|xxx|password123|12345|changeme|your_|my_)")
             .context("Failed to compile example pattern")?;
 
         let is_comment =
@@ -419,6 +425,62 @@ impl CC67SecretsRule {
                     "CC6.7".to_string(),
                     Severity::High,
                     "Hardcoded API key detected".to_string(),
+                    file_path.to_string(),
+                    (idx + 1) as i64,
+                    Self::redact_line(line),
+                ));
+            }
+        }
+
+        Ok(violations)
+    }
+
+    /// Detects Flask/Django config dictionary secrets
+    ///
+    /// Detects patterns like:
+    /// - app.config['SECRET_KEY'] = 'value'
+    /// - config['API_KEY'] = 'value'
+    /// - settings['PASSWORD'] = 'value'
+    fn detect_config_dict_secrets(code: &str, file_path: &str, scan_id: i64) -> Result<Vec<Violation>> {
+        let mut violations = Vec::new();
+
+        // Pattern: config['KEYWORD'] = 'value' or config["KEYWORD"] = "value"
+        // Matches Flask/Django style config dictionaries
+        let config_pattern = Regex::new(
+            r#"(?i)(config|settings|app\.config)\[['"](\w*(?:SECRET|PASSWORD|API_KEY|TOKEN|KEY)\w*)['"]\]\s*=\s*['"]([^'"]{6,})['"]"#
+        )
+        .context("Failed to compile config dict pattern")?;
+
+        let placeholder_pattern = Regex::new(
+            r"(your_?|xxx|test|demo|example|fake|placeholder|change_?this|put_?your|<|>|\{\{|\}\})"
+        )
+        .context("Failed to compile placeholder pattern")?;
+
+        for (idx, line) in code.lines().enumerate() {
+            // Skip comments
+            if line.trim().starts_with("#") || line.trim().starts_with("//") {
+                continue;
+            }
+
+            if let Some(caps) = config_pattern.captures(line) {
+                let value = &caps[3];
+
+                // Skip if it's obviously a placeholder
+                if placeholder_pattern.is_match(value) {
+                    continue;
+                }
+
+                // Skip if it references environment variables
+                if line.contains("os.getenv") || line.contains("process.env") || line.contains("ENV[")
+                {
+                    continue;
+                }
+
+                violations.push(Violation::new(
+                    scan_id,
+                    "CC6.7".to_string(),
+                    Severity::Critical,
+                    format!("Hardcoded secret in config dictionary: {}", &caps[2]),
                     file_path.to_string(),
                     (idx + 1) as i64,
                     Self::redact_line(line),
@@ -724,4 +786,47 @@ DB_PASSWORD = "production_secret_key_xyz"
 "#;
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect DB_PASSWORD secret. Found {} violations", violations.len());
+    }
+
+    /// CRITICAL GAP TEST: Flask config dictionary assignments with hardcoded secrets
+    #[test]
+    fn test_detect_flask_config_secret() {
+        let code = r#"
+app.config['SECRET_KEY_HMAC'] = 'secret'
+app.config['SECRET_KEY_HMAC_2'] = 'am0r3C0mpl3xK3y'
+"#;
+        let violations = CC67SecretsRule::analyze(code, "app.py", 1).unwrap();
+        assert!(
+            violations.len() >= 2,
+            "Should detect Flask config secrets. Found {} violations, expected 2. This is a KNOWN GAP in CC6.7.",
+            violations.len()
+        );
+    }
+
+    /// CRITICAL GAP TEST: Generic passwords like 'admin123' should NOT be skipped
+    #[test]
+    fn test_detect_admin_password() {
+        let code = r#"
+user.password = 'admin123'
+"#;
+        let violations = CC67SecretsRule::analyze(code, "app.py", 1).unwrap();
+        assert!(
+            !violations.is_empty(),
+            "Should detect 'admin123' password. Found {} violations. Currently SKIPPED due to overly broad 'admin' exclusion.",
+            violations.len()
+        );
+    }
+
+    /// Test that we correctly identify real Django config secrets
+    #[test]
+    fn test_detect_django_secret_key() {
+        let code = r#"
+SECRET_KEY = 'django-insecure-actual-secret-key-here'
+"#;
+        let violations = CC67SecretsRule::analyze(code, "settings.py", 1).unwrap();
+        assert!(
+            !violations.is_empty(),
+            "Should detect Django SECRET_KEY. Found {} violations",
+            violations.len()
+        );
     }
