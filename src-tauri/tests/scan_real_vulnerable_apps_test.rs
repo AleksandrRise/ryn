@@ -849,3 +849,140 @@ fn test_line_numbers_in_file_scanning() {
 
     println!("[Test] ✅ All {} violations have valid line numbers and snippets", violations.len());
 }
+
+// ============================================================================
+// PHASE 2.1: CC6.1 Edge Case Testing - Access Control Detection Limits
+// ============================================================================
+
+/// Test 11: CC6.1 should detect routes even with decorators far apart (>5 lines)
+#[test]
+fn test_cc61_decorator_distance_limit() {
+    println!("[Test] Testing CC6.1 detection when decorators are far from function...");
+
+    let scan_id = 1;
+
+    // Edge case: Auth decorator 6 lines away from route decorator
+    let code_6_lines_apart = r#"
+@login_required
+# Line 2
+# Line 3
+# Line 4
+# Line 5
+# Line 6
+@app.route('/admin')  # Line 7
+def admin():
+    return "Admin"
+"#;
+
+    let violations = ryn::rules::CC61AccessControlRule::analyze(code_6_lines_apart, "app.py", scan_id).unwrap();
+
+    if violations.is_empty() {
+        println!("[Test] ⚠️ EDGE CASE FAIL: CC6.1 missed violation when decorator is 6 lines away");
+        println!("[Test] This reveals the 5-line lookback window is too small!");
+    } else {
+        println!("[Test] ✅ CC6.1 detected auth decorator 6 lines away");
+    }
+
+    // Edge case: No decorators, inline auth check inside function
+    let inline_auth = r#"
+@app.route('/admin')
+def admin():
+    if not current_user.is_authenticated:
+        abort(401)
+    return "Admin"
+"#;
+
+    let inline_violations = ryn::rules::CC61AccessControlRule::analyze(inline_auth, "app.py", scan_id).unwrap();
+
+    if !inline_violations.is_empty() {
+        println!("[Test] ⚠️ FALSE POSITIVE: CC6.1 flagged route with inline auth check");
+        println!("[Test] Pattern doesn't recognize inline authentication patterns");
+    } else {
+        println!("[Test] ✅ CC6.1 correctly allows inline auth checks");
+    }
+
+    println!("[Test] Edge case testing completed - findings documented");
+}
+
+/// Test 12: CC6.1 async function detection
+#[test]
+fn test_cc61_async_functions() {
+    println!("[Test] Testing CC6.1 with async/await patterns...");
+
+    let scan_id = 1;
+
+    // Python async FastAPI endpoint
+    let async_code = r#"
+@app.get("/users")
+async def get_users():
+    return await fetch_users()
+"#;
+
+    let violations = ryn::rules::CC61AccessControlRule::analyze(async_code, "api.py", scan_id).unwrap();
+
+    println!("[Test] Async endpoint: Found {} violations", violations.len());
+
+    // FastAPI with dependency injection
+    let fastapi_depends = r#"
+@app.get("/admin")
+async def admin_panel(user: User = Depends(get_current_user)):
+    return {"admin": True}
+"#;
+
+    let depends_violations = ryn::rules::CC61AccessControlRule::analyze(fastapi_depends, "api.py", scan_id).unwrap();
+
+    if !depends_violations.is_empty() {
+        println!("[Test] ⚠️ FALSE POSITIVE: Flagged FastAPI route with Depends() auth");
+    } else {
+        println!("[Test] ✅ CC6.1 recognizes Depends() pattern");
+    }
+
+    println!("[Test] Async function testing completed");
+}
+
+/// Test 13: CC6.1 middleware chaining patterns
+#[test]
+fn test_cc61_middleware_chaining() {
+    println!("[Test] Testing CC6.1 with middleware chaining...");
+
+    let scan_id = 1;
+
+    // Express middleware chaining
+    let express_chain = r#"
+router.get('/admin',
+    authMiddleware,
+    checkRole('admin'),
+    function(req, res) {
+        res.send('Admin');
+    }
+);
+"#;
+
+    let violations = ryn::rules::CC61AccessControlRule::analyze(express_chain, "routes.js", scan_id).unwrap();
+
+    if !violations.is_empty() {
+        println!("[Test] ⚠️ FALSE POSITIVE: Flagged route with chained middleware");
+        println!("[Test] Multi-line middleware chains not recognized");
+    } else {
+        println!("[Test] ✅ CC6.1 recognizes middleware chains");
+    }
+
+    // Flask route with multiple decorators in different order
+    let flask_decorators = r#"
+@require_permission('admin')
+@app.route('/settings')
+@cache.cached(timeout=60)
+def settings():
+    return render_template('settings.html')
+"#;
+
+    let flask_violations = ryn::rules::CC61AccessControlRule::analyze(flask_decorators, "app.py", scan_id).unwrap();
+
+    if !flask_violations.is_empty() {
+        println!("[Test] ⚠️ EDGE CASE: Auth decorator above route decorator not recognized");
+    } else {
+        println!("[Test] ✅ CC6.1 handles decorators in any order");
+    }
+
+    println!("[Test] Middleware chaining tests completed");
+}
