@@ -470,6 +470,7 @@ export function ScanResults() {
             <thead>
               <tr className="border-b border-white/10">
                 <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Severity</th>
+                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Detection</th>
                 <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Control</th>
                 <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Description</th>
                 <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Location</th>
@@ -488,6 +489,16 @@ export function ScanResults() {
                     }`}>
                       {violation.severity === 'critical' && <AlertCircle className="w-3 h-3" />}
                       {violation.severity}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
+                      violation.detection_method === 'llm' ? 'bg-purple-500/20 text-purple-400' :
+                      violation.detection_method === 'hybrid' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white border border-white/10' :
+                      'bg-blue-500/10 text-blue-400'
+                    }`}>
+                      {violation.detection_method === 'llm' ? 'AI' :
+                       violation.detection_method === 'hybrid' ? 'Hybrid' : 'Pattern'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
