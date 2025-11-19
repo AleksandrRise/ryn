@@ -66,8 +66,9 @@ fn main() {
             settings::clear_database,
             settings::export_data,
             settings::complete_onboarding,
-            // Analytics Commands (1)
+            // Analytics Commands (2)
             analytics::get_scan_costs,
+            analytics::get_scan_cost,
             // Logger Commands (1)
             logger::log_frontend_message,
         ])

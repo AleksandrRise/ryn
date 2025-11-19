@@ -13,8 +13,10 @@ import {
   get_violations,
   get_scans,
   respond_to_cost_limit,
+  get_scan_cost,
   type Violation,
-  type ScanResult
+  type ScanResult,
+  type ScanCost
 } from "@/lib/tauri/commands"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
 import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
@@ -38,6 +40,7 @@ export function ScanResults() {
   })
   const [violations, setViolations] = useState<Violation[]>([])
   const [lastScan, setLastScan] = useState<ScanResult | null>(null)
+  const [lastScanCost, setLastScanCost] = useState<ScanCost | null>(null)
   const [lastScanStats, setLastScanStats] = useState({
     filesScanned: 0,
     violationsFound: 0,
@@ -60,7 +63,7 @@ export function ScanResults() {
 
   // Listen to real-time scan progress events
   useEffect(() => {
-    if (!isScanning || !currentScanId) return
+    if (!isScanning) return
 
     let unlisten: (() => void) | null = null
 
@@ -75,30 +78,15 @@ export function ScanResults() {
       }>("scan-progress", (event) => {
         const progress = event.payload
 
-        // Only update if it's for the current scan
-        if (progress.scan_id === currentScanId) {
-          setScanProgress({
-            percentage: progress.total_files > 0
-              ? Math.round((progress.files_scanned / progress.total_files) * 100)
-              : 0,
-            currentFile: progress.current_file,
-            filesScanned: progress.files_scanned,
-            totalFiles: progress.total_files,
-          })
-
-          // Check if scan completed (100%)
-          if (progress.files_scanned === progress.total_files && progress.total_files > 0) {
-            setTimeout(async () => {
-              setIsScanning(false)
-
-              // Load violations and refresh
-              await loadViolations(currentScanId)
-              await loadLastScan()
-
-              showSuccess(`Scan completed! Found ${progress.violations_found} violations`)
-            }, 500) // Small delay to ensure DB is updated
-          }
-        }
+        // Update progress bar and file counters for any in-flight scan
+        setScanProgress({
+          percentage: progress.total_files > 0
+            ? Math.round((progress.files_scanned / progress.total_files) * 100)
+            : 0,
+          currentFile: progress.current_file,
+          filesScanned: progress.files_scanned,
+          totalFiles: progress.total_files,
+        })
       })
     }
 
@@ -107,11 +95,11 @@ export function ScanResults() {
     return () => {
       if (unlisten) unlisten()
     }
-  }, [isScanning, currentScanId])
+  }, [isScanning])
 
   // Listen to cost limit reached events
   useEffect(() => {
-    if (!isScanning || !currentScanId) return
+    if (!isScanning) return
 
     let unlisten: (() => void) | null = null
 
@@ -125,16 +113,16 @@ export function ScanResults() {
       }>("cost-limit-reached", (event) => {
         const data = event.payload
 
-        // Only show dialog if it's for the current scan
-        if (data.scan_id === currentScanId) {
-          setCostLimitData({
-            currentCost: data.current_cost_usd,
-            costLimit: data.cost_limit_usd,
-            filesAnalyzed: data.files_analyzed,
-            totalFiles: data.total_files,
-          })
-          setShowCostLimitDialog(true)
-        }
+        // Record the scan ID that hit the cost limit so we can respond
+        setCurrentScanId((prev) => prev ?? data.scan_id)
+
+        setCostLimitData({
+          currentCost: data.current_cost_usd,
+          costLimit: data.cost_limit_usd,
+          filesAnalyzed: data.files_analyzed,
+          totalFiles: data.total_files,
+        })
+        setShowCostLimitDialog(true)
       })
     }
 
@@ -143,7 +131,7 @@ export function ScanResults() {
     return () => {
       if (unlisten) unlisten()
     }
-  }, [isScanning, currentScanId])
+  }, [isScanning])
 
   const loadLastScan = async () => {
     if (!selectedProject) return
@@ -154,10 +142,19 @@ export function ScanResults() {
         const latest = scans[0]
         setLastScan(latest)
 
+        // Load scan cost if available
+        try {
+          const cost = await get_scan_cost(latest.id)
+          setLastScanCost(cost)
+        } catch (e) {
+          console.warn("Failed to load scan cost", e)
+          setLastScanCost(null)
+        }
+
         // Load violations for stats
         const viols = await get_violations(latest.id, {})
         setLastScanStats({
-          filesScanned: 0, // Backend doesn't track this in scan table
+          filesScanned: latest.files_scanned || 0,
           violationsFound: viols.length,
           completedAt: new Date(latest.created_at || latest.started_at).toLocaleString(),
         })
@@ -280,6 +277,15 @@ export function ScanResults() {
     }
   }
 
+  const getModeLabel = (mode: string) => {
+    switch (mode) {
+      case "regex_only": return "Pattern Only"
+      case "smart": return "Smart"
+      case "analyze_all": return "Analyze All"
+      default: return mode
+    }
+  }
+
   return (
     <div className="px-8 py-8 max-w-[1800px] mx-auto">
       <div className="mb-8 animate-fade-in-up">
@@ -330,7 +336,14 @@ export function ScanResults() {
         <div className="col-span-4 space-y-6">
           {/* Quick Stats */}
           <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-            <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-6">Last Scan</h3>
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Last Scan</h3>
+              {lastScan && (
+                <span className="px-2 py-1 rounded bg-white/10 text-xs text-white/60 border border-white/10">
+                  {getModeLabel(lastScan.scan_mode)}
+                </span>
+              )}
+            </div>
             {lastScan ? (
               <div className="space-y-4">
                 <div>
@@ -344,6 +357,24 @@ export function ScanResults() {
                 <div>
                   <p className="text-xs text-white/40 mb-1">Violations Found</p>
                   <p className="text-lg font-bold tabular-nums">{lastScanStats.violationsFound}</p>
+                </div>
+                
+                {/* AI Stats */}
+                <div className="pt-4 border-t border-white/10">
+                   {lastScan.scan_mode === 'regex_only' ? (
+                      <p className="text-sm text-white/40 italic">AI disabled for this scan</p>
+                   ) : (
+                     <div className="grid grid-cols-2 gap-4">
+                        <div>
+                           <p className="text-xs text-white/40 mb-1">Files Analyzed with AI</p>
+                           <p className="text-sm font-bold tabular-nums">{lastScanCost?.files_analyzed_with_llm || 0}</p>
+                        </div>
+                        <div>
+                           <p className="text-xs text-white/40 mb-1">AI Cost</p>
+                           <p className="text-sm font-bold tabular-nums">${lastScanCost?.total_cost_usd?.toFixed(4) || "0.0000"}</p>
+                        </div>
+                     </div>
+                   )}
                 </div>
 
                 {/* Stale scan indicator */}

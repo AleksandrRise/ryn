@@ -25,6 +25,7 @@ export interface ScanResult {
   files_scanned: number
   total_files: number
   violations_found: number
+  scan_mode: string
   critical_count: number
   high_count: number
   medium_count: number
@@ -339,6 +340,14 @@ export type TimeRange = "24h" | "7d" | "30d" | "all"
  */
 export async function get_scan_costs(timeRange: TimeRange): Promise<ScanCost[]> {
   return await invoke<ScanCost[]>("get_scan_costs", { timeRange })
+}
+
+/**
+ * Get cost details for a specific scan
+ * @param scanId - ID of the scan to fetch cost for
+ */
+export async function get_scan_cost(scanId: number): Promise<ScanCost | null> {
+  return await invoke<ScanCost | null>("get_scan_cost", { scanId })
 }
 
 /**
