@@ -567,6 +567,7 @@ pub fn select_all_scans(conn: &Connection) -> Result<Vec<Scan>> {
             violations_found: row.get(5)?,
             started_at: row.get(6)?,
             completed_at: row.get(7)?,
+            scan_mode: "regex_only".to_string(),  // Default for old queries
             critical_count: 0,
             high_count: 0,
             medium_count: 0,
