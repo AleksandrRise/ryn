@@ -43,6 +43,14 @@ struct CostLimitEvent {
     files_remaining: i32,
 }
 
+/// LLM error event payload emitted when AI scanning fails
+#[derive(Clone, Serialize)]
+struct LlmErrorEvent {
+    scan_id: i64,
+    error_message: String,
+    scan_mode: String,
+}
+
 /// Channels for handling scan-time cost limit prompts and cancellations
 ///
 /// When a scan hits a cost limit, it sends a prompt to the frontend via Tauri events
@@ -310,7 +318,8 @@ async fn scan_project_internal<R: tauri::Runtime>(
                 }
 
                 // Emit progress event every 10 files for real-time UI updates
-                if files_scanned % 10 == 0 || files_scanned == total_files {
+                // Don't emit at total_files since we emit a final event after violations are inserted
+                if files_scanned % 10 == 0 && files_scanned < total_files {
                     let progress = ScanProgressEvent {
                         scan_id,
                         files_scanned,
@@ -354,10 +363,39 @@ async fn scan_project_internal<R: tauri::Runtime>(
                 }
             }
             Err(_) => {
-                // Skip files that can't be read
+                // Count file as scanned even if it can't be read (binary files, permission errors, etc.)
+                // This ensures files_scanned matches total_files count
+                files_scanned += 1;
+
+                // Emit progress for unreadable files too (every 10 files)
+                // Don't emit at total_files since we emit a final event after violations are inserted
+                if files_scanned % 10 == 0 && files_scanned < total_files {
+                    let progress = ScanProgressEvent {
+                        scan_id,
+                        files_scanned,
+                        total_files,
+                        violations_found,
+                        current_file: file_path.to_string_lossy().to_string(),
+                    };
+                    let _ = app.emit("scan-progress", progress);
+                }
                 continue;
             }
         }
+    }
+
+    // Emit progress event showing file scanning is complete, transitioning to AI analysis
+    // Don't set files_scanned to total_files yet - that would trigger completion in UI
+    // Keep it at total_files - 1 to show we're at 99%, waiting for AI results
+    if !files_for_llm_analysis.is_empty() {
+        let ai_transition_progress = ScanProgressEvent {
+            scan_id,
+            files_scanned: total_files.saturating_sub(1),  // Show 99% to indicate not complete
+            total_files,
+            violations_found,
+            current_file: format!("Analyzing {} files with AI...", files_for_llm_analysis.len()),
+        };
+        let _ = app.emit("scan-progress", ai_transition_progress);
     }
 
     // Merge regex and LLM violations, then insert deduplicated results
@@ -373,7 +411,7 @@ async fn scan_project_internal<R: tauri::Runtime>(
 
         match analyze_files_with_llm(
             scan_id,
-            files_for_llm_analysis,
+            files_for_llm_analysis.clone(),
             channels_arc,
             app.clone(),
         ).await {
@@ -385,8 +423,18 @@ async fn scan_project_internal<R: tauri::Runtime>(
                 llm_violations
             }
             Err(e) => {
-                println!("[ryn] LLM analysis failed: {}", e);
-                // Continue with empty LLM violations
+                let error_msg = format!("AI scanning failed: {}", e);
+                println!("[ryn] {}", error_msg);
+
+                // Emit LLM error event to frontend so user knows AI scanning failed
+                let error_event = LlmErrorEvent {
+                    scan_id,
+                    error_message: error_msg,
+                    scan_mode: llm_scan_mode.clone(),
+                };
+                let _ = app.emit("llm-error", error_event);
+
+                // Continue with empty LLM violations (scan completes with regex-only results)
                 Vec::new()
             }
         }
@@ -412,6 +460,17 @@ async fn scan_project_internal<R: tauri::Runtime>(
     } // Connection dropped here
 
     println!("[ryn] Inserted {} final violations after deduplication", violations_found);
+
+    // Emit final progress event now that violations are in database
+    // This ensures UI reaches 100% and can load the violations successfully
+    let final_progress = ScanProgressEvent {
+        scan_id,
+        files_scanned: total_files,  // Force to 100% for UI completion
+        total_files,
+        violations_found,
+        current_file: "Scan complete".to_string(),
+    };
+    let _ = app.emit("scan-progress", final_progress);
 
     // Update scan with results and fetch final data (scoped to drop connection)
     let scan = {
