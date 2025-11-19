@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { useFileWatcher } from "@/lib/hooks/useFileWatcher"
+import { toast } from "sonner"
 import {
   get_scans,
   get_violations,

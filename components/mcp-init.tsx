@@ -1,73 +1,67 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from 'react'
+import { listen } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
 
 export function McpInit() {
-  const [status, setStatus] = useState<string>("initializing")
-
   useEffect(() => {
-    // Only run in browser
-    if (typeof window === "undefined") {
-      return
+    if (typeof window === 'undefined') return
+
+    // Register global MCP callback handler (still used by some debug scripts)
+    window.__MCPCallback = (id: string, data: any = null, error: string | null = null) => {
+      invoke('plugin:mcp-bridge|js_callback', { id, data, error }).catch((e) => {
+        console.error('[MCP] Failed to send callback to backend:', e)
+      })
     }
 
-    // Check if we're in Tauri context
-    const isTauri = typeof (window as any).__TAURI__ !== "undefined"
-    console.log("[MCP Init] Tauri context:", isTauri)
+    let unlistenExecuteCallback: (() => void) | null = null
+    let unlistenExecuteJs: (() => void) | null = null
 
-    if (!isTauri) {
-      console.log("[MCP Init] Not running in Tauri, skipping MCP setup")
-      setStatus("browser mode (no MCP)")
-      return
+    const setupListeners = async () => {
+      // Backwards-compatible listener for legacy callback-based scripts
+      unlistenExecuteCallback = await listen('mcp-execute-callback', (event: any) => {
+        const { id, code } = event.payload
+        try {
+          // Execute injected JavaScript that will call plugin:mcp-bridge|js_callback
+          eval(code)
+        } catch (e) {
+          console.error('[MCP] Failed to execute callback code:', e)
+          window.__MCPCallback?.(id, null, `Execution error: ${e}`)
+        }
+      })
+
+      // Fire-and-forget JavaScript execution (browser_execute)
+      unlistenExecuteJs = await listen('mcp-execute-js', (event: any) => {
+        const code = event.payload
+        try {
+          eval(code)
+        } catch (e) {
+          console.error('[MCP] Failed to execute JS code:', e)
+        }
+      })
+
+      console.log('[MCP] MCPInit listeners initialized')
     }
 
-    // Setup MCP plugin event listeners
-    let cleanupFn: (() => Promise<void>) | null = null
+    setupListeners().catch((e) => {
+      console.error('[MCP] Failed to setup MCP listeners:', e)
+    })
 
-    ;(async () => {
-      try {
-        const { setupPluginListeners, cleanupPluginListeners } = await import("tauri-plugin-mcp")
-        await setupPluginListeners()
-        cleanupFn = cleanupPluginListeners
-        console.log("[MCP Init] Plugin listeners setup complete")
-        setStatus("ready")
-      } catch (error) {
-        console.error("[MCP Init] Failed to setup plugin listeners:", error)
-        setStatus("error")
-      }
-    })()
-
-    // Cleanup on unmount
     return () => {
-      if (cleanupFn) {
-        cleanupFn().then(() => {
-          console.log("[MCP Init] Plugin listeners cleaned up")
-        })
-      }
+      // Cleanup
+      delete window.__MCPCallback
+      if (unlistenExecuteCallback) unlistenExecuteCallback()
+      if (unlistenExecuteJs) unlistenExecuteJs()
     }
   }, [])
 
-  // Show status in development
-  if (process.env.NODE_ENV === "development") {
-    return (
-      <div
-        style={{
-          position: "fixed",
-          bottom: 10,
-          right: 10,
-          background: "rgba(0,0,0,0.8)",
-          color: "#0f0",
-          padding: "4px 8px",
-          fontSize: "10px",
-          fontFamily: "monospace",
-          zIndex: 9999,
-          borderRadius: "3px",
-        }}
-      >
-        MCP: {status}
-      </div>
-    )
-  }
-
   return null
+}
+
+// TypeScript declaration
+declare global {
+  interface Window {
+    __MCPCallback?: (id: string, data?: any, error?: string | null) => void
+  }
 }

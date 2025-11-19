@@ -78,7 +78,7 @@ export function ViolationTable({ violations }: ViolationTableProps) {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right">
                   <div className="flex items-center justify-end gap-2">
-                    <Link href={`/violation/${violation.id}`}>
+                    <Link href={`/violation?id=${violation.id}`}>
                       <Button variant="outline" size="sm" className="gap-2 bg-transparent">
                         <ExternalLink className="w-3.5 h-3.5" />
                         View

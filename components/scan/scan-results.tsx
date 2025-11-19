@@ -475,7 +475,7 @@ export function ScanResults() {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <Link
-                      href={`/violation/${violation.id}`}
+                      href={`/violation?id=${violation.id}`}
                       className="inline-flex items-center gap-1.5 text-xs font-medium text-white/60 hover:text-white transition-colors"
                     >
                       View details

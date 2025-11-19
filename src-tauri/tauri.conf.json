@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.ryn.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npm run dev:static",
     "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../out"
@@ -35,7 +35,8 @@
             "core:webview:allow-internal-toggle-devtools",
             "dialog:allow-open",
             "dialog:allow-save",
-            "dialog:default"
+            "dialog:default",
+            "mcp-bridge:allow-js-callback"
           ]
         }
       ]
