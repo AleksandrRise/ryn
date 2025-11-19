@@ -155,11 +155,28 @@ fn migrate_to_v3(conn: &Connection) -> Result<()> {
         [],
     ).context("Failed to add violations.function_name column")?;
 
-    // class_name: Extracted via tree-sitter for better fix context
+    // class_name: The class where violation was found (NULL if not in a class)
     conn.execute(
         "ALTER TABLE violations ADD COLUMN class_name TEXT",
         [],
     ).context("Failed to add violations.class_name column")?;
+
+    Ok(())
+}
+
+/// Migrate from v3 to v4 (scan mode tracking)
+/// Adds scan_mode to scans table:
+/// - scan_mode: The mode used for the scan (regex_only/smart/analyze_all)
+fn migrate_to_v4(conn: &Connection) -> Result<()> {
+    // ============================================================
+    // SCANS TABLE: Add scan_mode column
+    // ============================================================
+
+    // scan_mode: The mode used for the scan, defaults to 'regex_only' for existing scans
+    conn.execute(
+        "ALTER TABLE scans ADD COLUMN scan_mode TEXT NOT NULL DEFAULT 'regex_only'",
+        [],
+    ).context("Failed to add scans.scan_mode column")?;
 
     Ok(())
 }
@@ -198,6 +215,7 @@ pub fn seed_settings(conn: &Connection) -> Result<()> {
 /// - v1: Initial schema (7 tables, 8 indexes)
 /// - v2: Hybrid scanning schema (detection_method, scan_costs, etc.)
 /// - v3: Tree-sitter context fields (function_name, class_name)
+/// - v4: Scan mode tracking (scan_mode column in scans table)
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     let current_version = get_schema_version(conn)?;
 
@@ -215,6 +233,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 3 {
         migrate_to_v3(conn)?;
         set_schema_version(conn, 3)?;
+    }
+
+    if current_version < 4 {
+        migrate_to_v4(conn)?;
+        set_schema_version(conn, 4)?;
     }
 
     // Seed default settings (idempotent - won't overwrite existing values)
@@ -715,5 +738,33 @@ mod tests {
         );
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_migrate_to_v4_adds_scan_mode() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let conn = Connection::open(&db_path).unwrap();
+
+        // Apply v3 first
+        migrate_to_v1(&conn).unwrap();
+        migrate_to_v2(&conn).unwrap();
+        migrate_to_v3(&conn).unwrap();
+
+        // Apply v4 migration
+        migrate_to_v4(&conn).unwrap();
+
+        // Verify new column exists in scans table
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(scans)")
+            .unwrap();
+
+        let column_names: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert!(column_names.contains(&"scan_mode".to_string()));
     }
 }

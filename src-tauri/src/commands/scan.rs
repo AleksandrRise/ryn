@@ -215,7 +215,7 @@ async fn scan_project_internal<R: tauri::Runtime>(
             .map_err(|e| format!("Security: Invalid project path: {}", e))?;
 
         // Create scan record
-        let scan_id = queries::insert_scan(&conn, project_id)
+        let scan_id = queries::insert_scan(&conn, project_id, &llm_scan_mode)
             .map_err(|e| format!("Failed to create scan: {}", e))?;
 
         (llm_scan_mode, project, scan_id)
