@@ -31,6 +31,52 @@ static RATE_LIMITER: Lazy<Arc<RateLimiter>> = Lazy::new(|| {
     Arc::new(RateLimiter::with_config(config))
 });
 
+/// Normalize AI-generated fixed code into a pure source snippet.
+///
+/// Many LLMs return code wrapped in Markdown fences like:
+/// ```js
+/// const x = 1;
+/// ```
+///
+/// Ryn must apply only the inner code to source files. This helper strips
+/// the outer ``` fences (and optional language identifiers) while leaving
+/// the code body unchanged. If no fences are present, the input is returned
+/// unchanged (minus surrounding newlines).
+fn normalize_fixed_code(raw: &str) -> String {
+    let trimmed = raw.trim_matches('\n');
+
+    // Fast path: no Markdown fence present
+    if !trimmed.contains("```") {
+        return trimmed.to_string();
+    }
+
+    // Work on leading fence, if any
+    let mut lines = trimmed.lines();
+    let first = lines.next().unwrap_or_default();
+
+    if !first.trim_start().starts_with("```") {
+        // Fences somewhere else – best effort: strip any lone ``` lines
+        let cleaned_lines: Vec<&str> = trimmed
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("```"))
+            .collect();
+        return cleaned_lines.join("\n");
+    }
+
+    // First line is a fence like ``` or ```js – capture until closing fence.
+    let mut code_lines: Vec<&str> = Vec::new();
+    for line in lines {
+        if line.trim_start().starts_with("```") {
+            break;
+        }
+        code_lines.push(line);
+    }
+
+    let result = code_lines.join("\n");
+    // Final trim on trailing newlines only, to preserve indentation and leading spaces
+    result.trim_matches('\n').to_string()
+}
+
 /// Generate a fix for a violation using the AI agent (langchain-rust + Claude)
 ///
 /// Calls Claude API directly via langchain-rust to generate a fix for a specific violation,
@@ -86,7 +132,7 @@ pub async fn generate_fix(
 
     let framework_str = _project_framework.as_deref().unwrap_or("unknown");
 
-    let fixed_code = grok_client.generate_fix(
+    let fixed_code_raw = grok_client.generate_fix(
         &_violation.control_id,
         &_violation.description,
         &_violation.code_snippet,
@@ -96,6 +142,9 @@ pub async fn generate_fix(
     )
     .await
     .map_err(|e| format!("Claude API error: {}", e))?;
+
+    // Strip Markdown fences (```lang ... ```) and keep only the inner code.
+    let fixed_code = normalize_fixed_code(&fixed_code_raw);
 
     // Generate explanation based on control ID
     let explanation = match _violation.control_id.as_str() {
@@ -323,10 +372,15 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
     let file_content = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
+    // Normalize fixed_code again at apply time so that older fixes in the
+    // database (created before normalization existed) are still applied
+    // correctly even if they contain Markdown fences.
+    let normalized_fixed = normalize_fixed_code(&fix.fixed_code);
+
     let updated_content = apply_fix_to_content(
         &file_content,
         &fix.original_code,
-        &fix.fixed_code,
+        &normalized_fixed,
         violation.line_number,
     )?;
 
@@ -395,6 +449,29 @@ mod tests {
         let _guard = TestDbGuard::new();
         let result = apply_fix(999).await;
         assert!(result.is_err());
+    }
+
+    // === UNIT TESTS: normalize_fixed_code ===
+
+    #[test]
+    fn test_normalize_fixed_code_plain() {
+        let input = "const x = 1;\nconst y = 2;\n";
+        let normalized = normalize_fixed_code(input);
+        assert_eq!(normalized, "const x = 1;\nconst y = 2;");
+    }
+
+    #[test]
+    fn test_normalize_fixed_code_markdown_fence_with_language() {
+        let input = "```javascript\nconst x = 1;\nconst y = 2;\n```\n";
+        let normalized = normalize_fixed_code(input);
+        assert_eq!(normalized, "const x = 1;\nconst y = 2;");
+    }
+
+    #[test]
+    fn test_normalize_fixed_code_markdown_fence_without_language() {
+        let input = "```\npassword = \"secret\"\n```\n";
+        let normalized = normalize_fixed_code(input);
+        assert_eq!(normalized, "password = \"secret\"");
     }
 
     // === UNIT TESTS: Pure function tests (fast, no git/DB) ===

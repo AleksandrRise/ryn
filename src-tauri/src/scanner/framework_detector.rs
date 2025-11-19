@@ -8,6 +8,7 @@
 //! Supports: Django, Flask, Express, Next.js, React
 
 use anyhow::{anyhow, Context, Result};
+use walkdir::WalkDir;
 use std::path::Path;
 
 /// Framework detector for identifying project frameworks
@@ -91,20 +92,48 @@ impl FrameworkDetector {
     // Private helper methods
 
     fn is_django(project_path: &Path) -> Result<bool> {
-        // Check for manage.py
+        // Quick checks at project root
         if project_path.join("manage.py").exists() {
             return Ok(true);
         }
 
-        // Check for settings.py in common Django patterns
         if project_path.join("settings.py").exists() {
             return Ok(true);
         }
 
-        // Check requirements.txt for Django
         if let Ok(content) = std::fs::read_to_string(project_path.join("requirements.txt")) {
             if content.to_lowercase().contains("django") {
                 return Ok(true);
+            }
+        }
+
+        // Fallback: look for Django markers in nested directories (common layout
+        // for real-world apps like `<proj>/vda/manage.py` or `<proj>/<app>/settings.py`).
+        for entry in WalkDir::new(project_path)
+            .max_depth(4)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+
+            let name = match path.file_name().and_then(|n| n.to_str()) {
+                Some(n) => n,
+                None => continue,
+            };
+
+            if name == "manage.py" || name == "settings.py" {
+                return Ok(true);
+            }
+
+            if name == "requirements.txt" {
+                if let Ok(content) = std::fs::read_to_string(path) {
+                    if content.to_lowercase().contains("django") {
+                        return Ok(true);
+                    }
+                }
             }
         }
 
@@ -191,6 +220,17 @@ mod tests {
             "requirements.txt",
             "Django==3.2.0\npsycopg2-binary==2.9.0",
         )]);
+        let result = FrameworkDetector::detect_framework(temp_dir.path());
+
+        assert_eq!(result.unwrap(), Some("django".to_string()));
+    }
+
+    #[test]
+    fn test_detect_django_nested_structure() {
+        let temp_dir = create_test_project(vec![
+            ("vda/manage.py", "import django"),
+            ("vda/vda/settings.py", "DEBUG = True"),
+        ]);
         let result = FrameworkDetector::detect_framework(temp_dir.path());
 
         assert_eq!(result.unwrap(), Some("django".to_string()));
