@@ -13,6 +13,7 @@
 use anyhow::Context;
 use anyhow::Result;
 use crate::models::{Severity, Violation};
+use crate::utils::extract_context_from_string;
 use regex::Regex;
 
 /// A1.2 Resilience & Error Handling Rule Engine
@@ -97,14 +98,17 @@ impl A12ResilienceRule {
                 // Flag as violation if no error handling at all
                 // Allow if: (try AND except) OR (with statement) OR (.catch() pattern)
                 if !((has_try && has_except) || has_with_statement || line_has_with) {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _relative_line) = extract_context_from_string(code, line_number, 5);
+
                     violations.push(Violation::new(
                         scan_id,
                         "A1.2".to_string(),
                         Severity::High,
                         "External service call without error handling".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                 }
             }
@@ -144,14 +148,17 @@ impl A12ResilienceRule {
                 let next_lines = lines[idx..check_end].join(" ");
 
                 if !timeout_pattern.is_match(&next_lines) {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _relative_line) = extract_context_from_string(code, line_number, 5);
+
                     violations.push(Violation::new(
                         scan_id,
                         "A1.2".to_string(),
                         Severity::High,
                         "External request without timeout configuration".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                 }
             }
@@ -185,14 +192,17 @@ impl A12ResilienceRule {
                 if api_call.is_match(line) && !line.trim().starts_with("#")
                     && !line.trim().starts_with("//")
                 {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _relative_line) = extract_context_from_string(code, line_number, 5);
+
                     violations.push(Violation::new(
                         scan_id,
                         "A1.2".to_string(),
                         Severity::Medium,
                         "No retry logic for transient failures".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                     break; // Report once per file
                 }
@@ -233,14 +243,17 @@ impl A12ResilienceRule {
                 let context_lines = lines[check_start..check_end].join(" ");
 
                 if !error_handling.is_match(&context_lines) {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _relative_line) = extract_context_from_string(code, line_number, 5);
+
                     violations.push(Violation::new(
                         scan_id,
                         "A1.2".to_string(),
                         Severity::High,
                         "Database operation without error handling".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                 }
             }
@@ -276,14 +289,17 @@ impl A12ResilienceRule {
                 if external_service.is_match(line) && !line.trim().starts_with("#")
                     && !line.trim().starts_with("//")
                 {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _relative_line) = extract_context_from_string(code, line_number, 5);
+
                     violations.push(Violation::new(
                         scan_id,
                         "A1.2".to_string(),
                         Severity::Medium,
                         "Multiple external calls without circuit breaker pattern".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                     break; // Report once per file
                 }

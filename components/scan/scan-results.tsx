@@ -254,6 +254,43 @@ export function ScanResults() {
     }
   }, [isScanning, currentScanId])
 
+  // Listen to LLM error events
+  useEffect(() => {
+    if (!isScanning || !currentScanId) return
+
+    let unlisten: (() => void) | null = null
+
+    const setupListener = async () => {
+      unlisten = await listen<{
+        scan_id: number
+        error_message: string
+        scan_mode: string
+      }>("llm-error", (event) => {
+        const data = event.payload
+
+        // Only show error if it's for the current scan
+        if (data.scan_id === currentScanId) {
+          const modeNames: Record<string, string> = {
+            smart: "Smart",
+            analyze_all: "Analyze All",
+            regex_only: "Pattern Only"
+          }
+          const modeName = modeNames[data.scan_mode] || data.scan_mode
+          handleTauriError(
+            "AI Scanning Failed",
+            `${modeName} mode is enabled but AI analysis failed. Scan completed with pattern-only results. Check your API key and try again.`
+          )
+        }
+      })
+    }
+
+    setupListener()
+
+    return () => {
+      if (unlisten) unlisten()
+    }
+  }, [isScanning, currentScanId])
+
   const loadLastScan = async () => {
     if (!selectedProject) return
 

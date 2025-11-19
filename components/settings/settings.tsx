@@ -221,6 +221,33 @@ export function Settings() {
     setState((prev) => ({ ...prev, [key]: value }))
   }
 
+  // Auto-save specific setting to backend immediately
+  const updateAndSaveSetting = async (key: keyof SettingsState, value: any) => {
+    // Update local state
+    setState((prev) => ({ ...prev, [key]: value }))
+
+    try {
+      // Save to backend immediately
+      const backendKey = settingsKeyMap[key]
+      const stringValue = typeof value === "boolean" ? value.toString() : value
+      await update_settings(backendKey, stringValue)
+
+      // Show user-friendly success message
+      if (key === "llmScanMode") {
+        const modeNames: Record<string, string> = {
+          regex_only: "Pattern Only",
+          smart: "Smart",
+          analyze_all: "Analyze All"
+        }
+        showSuccess(`Scanning mode changed to ${modeNames[value] || value}`)
+      } else {
+        showSuccess("Setting saved successfully!")
+      }
+    } catch (error) {
+      handleTauriError(error, `Failed to update ${key}`)
+    }
+  }
+
   // Loading state
   if (isLoading) {
     return (
@@ -324,7 +351,7 @@ export function Settings() {
                     name="scanMode"
                     value="regex_only"
                     checked={state.llmScanMode === "regex_only"}
-                    onChange={(e) => updateSetting("llmScanMode", e.target.value)}
+                    onChange={(e) => updateAndSaveSetting("llmScanMode", e.target.value)}
                     className="mt-1"
                   />
                   <div className="flex-1">
@@ -338,7 +365,7 @@ export function Settings() {
                     name="scanMode"
                     value="smart"
                     checked={state.llmScanMode === "smart"}
-                    onChange={(e) => updateSetting("llmScanMode", e.target.value)}
+                    onChange={(e) => updateAndSaveSetting("llmScanMode", e.target.value)}
                     className="mt-1"
                   />
                   <div className="flex-1">
@@ -354,7 +381,7 @@ export function Settings() {
                     name="scanMode"
                     value="analyze_all"
                     checked={state.llmScanMode === "analyze_all"}
-                    onChange={(e) => updateSetting("llmScanMode", e.target.value)}
+                    onChange={(e) => updateAndSaveSetting("llmScanMode", e.target.value)}
                     className="mt-1"
                   />
                   <div className="flex-1">

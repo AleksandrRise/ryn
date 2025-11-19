@@ -13,6 +13,7 @@
 use anyhow::Context;
 use anyhow::Result;
 use crate::models::{Severity, Violation};
+use crate::utils::extract_context_from_string;
 use regex::Regex;
 
 /// CC7.2 Logging & Monitoring Rule Engine
@@ -76,14 +77,17 @@ impl CC72LoggingRule {
                 let context_lines = lines[check_start..check_end].join(" ");
 
                 if !logging_keywords.is_match(&context_lines) {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _relative_line) = extract_context_from_string(code, line_number, 5);
+
                     violations.push(Violation::new(
                         scan_id,
                         "CC7.2".to_string(),
                         Severity::Medium,
                         "Sensitive operation without audit logging".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                 }
             }
@@ -130,14 +134,17 @@ impl CC72LoggingRule {
                 let line_lower = line.to_lowercase();
                 for (keyword, display_name) in sensitive_patterns.iter() {
                     if line_lower.contains(keyword) {
+                        let line_number = (idx + 1) as i64;
+                        let (code_snippet, _relative_line) = extract_context_from_string(code, line_number, 5);
+
                         violations.push(Violation::new(
                             scan_id,
                             "CC7.2".to_string(),
                             Severity::Critical,
                             format!("Sensitive data ({}) in logging statement", display_name),
                             file_path.to_string(),
-                            (idx + 1) as i64,
-                            line.trim().to_string(),
+                            line_number,
+                            code_snippet,
                         ));
                         break; // Report once per line
                     }
@@ -176,14 +183,17 @@ impl CC72LoggingRule {
                 let next_lines = lines[idx + 1..check_end].join(" ");
 
                 if !logging_keywords.is_match(&next_lines) {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _relative_line) = extract_context_from_string(code, line_number, 5);
+
                     violations.push(Violation::new(
                         scan_id,
                         "CC7.2".to_string(),
                         Severity::High,
                         "Authentication event without logging".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                 }
             }
@@ -217,14 +227,17 @@ impl CC72LoggingRule {
 
             for (idx, line) in lines.iter().enumerate() {
                 if db_transaction.is_match(line) {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _relative_line) = extract_context_from_string(code, line_number, 5);
+
                     violations.push(Violation::new(
                         scan_id,
                         "CC7.2".to_string(),
                         Severity::Medium,
                         "Database transaction without logging mechanism".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                     break; // Only report once per file
                 }
