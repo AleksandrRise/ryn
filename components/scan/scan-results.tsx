@@ -1,181 +1,68 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import type { Severity } from "@/lib/types/violation"
-import { listen } from "@tauri-apps/api/event"
-import { Button } from "@/components/ui/button"
-import { Play, Check, FileSearch, AlertCircle, Shield } from "lucide-react"
-import { useProjectStore } from "@/lib/stores/project-store"
-import {
-  scan_project,
-  get_scan_progress,
-  get_violations,
-  get_scans,
-  respond_to_cost_limit,
-  get_scan_cost,
-  type Violation,
-  type ScanResult,
-  type ScanCost
-} from "@/lib/tauri/commands"
-import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
+import { useMemo, useState } from "react"
+import { Play } from "lucide-react"
 import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
+import { LastScanSummary } from "@/components/scan/last-scan-summary"
+import { ScanControls } from "@/components/scan/scan-controls"
+import { ScanProgressCard } from "@/components/scan/scan-progress-card"
+import { SeverityFilter } from "@/components/scan/severity-filter"
+import { ViolationsTable } from "@/components/scan/violations-table"
+import { Button } from "@/components/ui/button"
+import { useScanData } from "@/components/scan/hooks/use-scan-data"
+import { useScanRunner } from "@/components/scan/hooks/use-scan-runner"
+import { useProjectStore } from "@/lib/stores/project-store"
+import type { Severity } from "@/lib/types/violation"
+import { formatDateTime } from "@/lib/utils/date"
+import { handleTauriError, showInfo, showSuccess } from "@/lib/utils/error-handler"
 
 export function ScanResults() {
-  const { selectedProject, setSelectedProject } = useProjectStore()
+  const { selectedProject } = useProjectStore()
   const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
-  const [selectedControls, setSelectedControls] = useState({
+  const [selectedControls, setSelectedControls] = useState<Record<string, boolean>>({
     "CC6.1": true,
     "CC6.7": true,
     "CC7.2": true,
     "A1.2": true,
   })
-  const [isScanning, setIsScanning] = useState(false)
-  const [currentScanId, setCurrentScanId] = useState<number | null>(null)
-  const [scanProgress, setScanProgress] = useState({
-    percentage: 0,
-    currentFile: "",
-    filesScanned: 0,
-    totalFiles: 0,
-  })
-  const [violations, setViolations] = useState<Violation[]>([])
-  const [lastScan, setLastScan] = useState<ScanResult | null>(null)
-  const [lastScanCost, setLastScanCost] = useState<ScanCost | null>(null)
-  const [lastScanStats, setLastScanStats] = useState({
-    filesScanned: 0,
-    violationsFound: 0,
-    completedAt: "",
-  })
-  const [showCostLimitDialog, setShowCostLimitDialog] = useState(false)
-  const [costLimitData, setCostLimitData] = useState({
-    currentCost: 0,
-    costLimit: 0,
-    filesAnalyzed: 0,
-    totalFiles: 0,
+
+  const {
+    isLoading,
+    lastScan,
+    lastScanCost,
+    violations,
+    lastScanStats,
+    reload,
+  } = useScanData(selectedProject?.id)
+
+  const {
+    isScanning,
+    progress,
+    costLimitPrompt,
+    startScan,
+    continueAfterCostLimit,
+    stopAfterCostLimit,
+  } = useScanRunner(selectedProject?.id, {
+    onScanCompleted: reload,
+    onScanStopped: reload,
   })
 
-  // Load last scan on mount
-  useEffect(() => {
-    if (selectedProject) {
-      loadLastScan()
-    }
-  }, [selectedProject])
-
-  // Listen to real-time scan progress events
-  useEffect(() => {
-    if (!isScanning) return
-
-    let unlisten: (() => void) | null = null
-
-    // Set up event listener for scan progress
-    const setupListener = async () => {
-      unlisten = await listen<{
-        scan_id: number
-        files_scanned: number
-        total_files: number
-        violations_found: number
-        current_file: string
-      }>("scan-progress", (event) => {
-        const progress = event.payload
-
-        // Update progress bar and file counters for any in-flight scan
-        setScanProgress({
-          percentage: progress.total_files > 0
-            ? Math.round((progress.files_scanned / progress.total_files) * 100)
-            : 0,
-          currentFile: progress.current_file,
-          filesScanned: progress.files_scanned,
-          totalFiles: progress.total_files,
-        })
-      })
-    }
-
-    setupListener()
-
-    return () => {
-      if (unlisten) unlisten()
-    }
-  }, [isScanning])
-
-  // Listen to cost limit reached events
-  useEffect(() => {
-    if (!isScanning) return
-
-    let unlisten: (() => void) | null = null
-
-    const setupListener = async () => {
-      unlisten = await listen<{
-        scan_id: number
-        current_cost_usd: number
-        cost_limit_usd: number
-        files_analyzed: number
-        total_files: number
-      }>("cost-limit-reached", (event) => {
-        const data = event.payload
-
-        // Record the scan ID that hit the cost limit so we can respond
-        setCurrentScanId((prev) => prev ?? data.scan_id)
-
-        setCostLimitData({
-          currentCost: data.current_cost_usd,
-          costLimit: data.cost_limit_usd,
-          filesAnalyzed: data.files_analyzed,
-          totalFiles: data.total_files,
-        })
-        setShowCostLimitDialog(true)
-      })
-    }
-
-    setupListener()
-
-    return () => {
-      if (unlisten) unlisten()
-    }
-  }, [isScanning])
-
-  const loadLastScan = async () => {
-    if (!selectedProject) return
-
-    try {
-      const scans = await get_scans(selectedProject.id)
-      if (scans.length > 0) {
-        const latest = scans[0]
-        setLastScan(latest)
-
-        // Load scan cost if available
-        try {
-          const cost = await get_scan_cost(latest.id)
-          setLastScanCost(cost)
-        } catch (e) {
-          console.warn("Failed to load scan cost", e)
-          setLastScanCost(null)
-        }
-
-        // Load violations for stats
-        const viols = await get_violations(latest.id, {})
-        setLastScanStats({
-          filesScanned: latest.files_scanned || 0,
-          violationsFound: viols.length,
-          completedAt: new Date(latest.created_at || latest.started_at).toLocaleString(),
-        })
-
-        // Load violations for display
-        await loadViolations(latest.id)
-      }
-    } catch (error) {
-      // Silent fail - no scans yet is OK
-      console.log("No previous scans found")
-    }
+  const toggleControl = (control: string) => {
+    setSelectedControls((prev) => ({
+      ...prev,
+      [control]: !prev[control],
+    }))
   }
 
-  const loadViolations = async (scanId: number) => {
-    try {
-      const viols = await get_violations(scanId, {})
-      setViolations(viols as unknown as Violation[])
-    } catch (error) {
-      handleTauriError(error, "Failed to load violations")
-    }
-  }
+  const filteredViolations = useMemo(
+    () =>
+      violations.filter((violation) => {
+        const matchesSeverity = selectedSeverity === "all" || violation.severity === selectedSeverity
+        const matchesControl = selectedControls[violation.controlId] !== false
+        return matchesSeverity && matchesControl
+      }),
+    [selectedSeverity, selectedControls, violations],
+  )
 
   const handleStartScan = async () => {
     if (!selectedProject) {
@@ -184,225 +71,51 @@ export function ScanResults() {
     }
 
     try {
-      setIsScanning(true)
-      setScanProgress({ percentage: 0, currentFile: "", filesScanned: 0, totalFiles: 0 })
-
       showInfo("Starting scan...")
-
-      // Verify project exists in database before scanning
-      try {
-        const projects = await get_scans(selectedProject.id)
-        // If we can fetch scans for this project, it exists in the database
-      } catch (verifyError) {
-        // If the query fails, the project might not exist
-        console.warn(`Project ${selectedProject.id} verification failed`)
-      }
-
-      // Start scan (this awaits until scan completes)
-      const scan = await scan_project(selectedProject.id)
-      setCurrentScanId(scan.id)
-
-      // Scan is already complete by this point (events were emitted during the await)
-      // Manually fetch the final results
-      setIsScanning(false)
-      await loadViolations(scan.id)
-      await loadLastScan()
-
-      showSuccess(`Scan completed! Found ${scan.violations_found} violations`)
+      const scan = await startScan()
+      showSuccess(`Scan completed! Found ${scan.violationsFound} violations`)
     } catch (error) {
-      setIsScanning(false)
       handleTauriError(error, "Failed to start scan")
     }
   }
 
-  const toggleControl = (control: string) => {
-    setSelectedControls(prev => ({
-      ...prev,
-      [control]: !prev[control as keyof typeof prev]
-    }))
-  }
-
-  const handleCostLimitContinue = async () => {
-    if (!currentScanId) return
-
-    try {
-      await respond_to_cost_limit(currentScanId, true)
-      setShowCostLimitDialog(false)
-      showInfo("Continuing scan...")
-    } catch (error) {
-      handleTauriError(error, "Failed to continue scan")
-    }
-  }
-
-  const handleCostLimitStop = async () => {
-    if (!currentScanId) return
-
-    try {
-      await respond_to_cost_limit(currentScanId, false)
-      setShowCostLimitDialog(false)
-      setIsScanning(false)
-
-      // Load violations found so far
-      await loadViolations(currentScanId)
-      await loadLastScan()
-
-      showInfo("Scan stopped. Using violations found so far.")
-    } catch (error) {
-      handleTauriError(error, "Failed to stop scan")
-    }
-  }
-
-  const filteredViolations = violations.filter((v) => {
-    // Filter by severity
-    const matchesSeverity = selectedSeverity === "all" || v.severity === selectedSeverity
-
-    // Filter by selected controls
-    const matchesControl = selectedControls[v.control_id as keyof typeof selectedControls] !== false
-
-    return matchesSeverity && matchesControl
-  })
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case "critical":
-        return "text-[#ef4444]"
-      case "high":
-        return "text-[#f97316]"
-      case "medium":
-        return "text-[#eab308]"
-      case "low":
-        return "text-[#e8e8e8]"
-      default:
-        return "text-white"
-    }
-  }
-
-  const getModeLabel = (mode: string) => {
-    switch (mode) {
-      case "regex_only": return "Pattern Only"
-      case "smart": return "Smart"
-      case "analyze_all": return "Analyze All"
-      default: return mode
-    }
+  if (!selectedProject) {
+    return (
+      <div className="px-8 py-8 max-w-[1800px] mx-auto">
+        <div className="mb-4">
+          <h1 className="text-5xl font-bold leading-none tracking-tight mb-2">Scan Results</h1>
+          <p className="text-white/60">Select a project from the header to view and run scans.</p>
+        </div>
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6">
+          <p className="text-sm text-white/60">No project selected.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="px-8 py-8 max-w-[1800px] mx-auto">
       <div className="mb-8 animate-fade-in-up">
         <h1 className="text-5xl font-bold leading-none tracking-tight mb-3">Scan Results</h1>
-        <p className="text-lg text-white/60">Configure, run, and review compliance scans</p>
+        <p className="text-lg text-white/60">
+          Configure, run, and review compliance scans for {selectedProject.name}
+        </p>
       </div>
 
-      {/* Scan Configuration Panel */}
       <div className="mb-8 grid grid-cols-12 gap-6 animate-fade-in-up delay-100">
-        {/* Left: Controls - 8 cols */}
         <div className="col-span-8 space-y-6">
-          {/* SOC 2 Controls */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-white/5 rounded-lg">
-                <Shield className="w-5 h-5 text-white/60" />
-              </div>
-              <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">SOC 2 Controls</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {Object.entries(selectedControls).map(([control, checked]) => (
-                <button
-                  key={control}
-                  onClick={() => toggleControl(control)}
-                  className={`relative overflow-hidden rounded-xl px-5 py-4 text-left transition-all duration-300 border-2 ${
-                    checked
-                      ? "bg-white/20 text-white border-white/30 shadow-lg"
-                      : "bg-black/40 text-white/60 border-white/10 hover:border-white/20"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-bold tracking-wide">{control}</p>
-                    {checked && <Check className="w-4 h-4" />}
-                  </div>
-                  <p className={`text-xs ${checked ? "text-white/70" : "text-white/40"}`}>
-                    {control === "CC6.1" && "Access Controls"}
-                    {control === "CC6.7" && "Encryption & Secrets"}
-                    {control === "CC7.2" && "Logging & Monitoring"}
-                    {control === "A1.2" && "Data Availability"}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </div>
+          <ScanControls selectedControls={selectedControls} onToggle={toggleControl} />
         </div>
 
-        {/* Right: Quick Stats & Actions - 4 cols */}
         <div className="col-span-4 space-y-6">
-          {/* Quick Stats */}
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Last Scan</h3>
-              {lastScan && (
-                <span className="px-2 py-1 rounded bg-white/10 text-xs text-white/60 border border-white/10">
-                  {getModeLabel(lastScan.scan_mode)}
-                </span>
-              )}
-            </div>
-            {lastScan ? (
-              <div className="space-y-4">
-                <div>
-                  <p className="text-xs text-white/40 mb-1">Completed</p>
-                  <p className="text-lg font-bold">{lastScanStats.completedAt || "Unknown"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-white/40 mb-1">Files Scanned</p>
-                  <p className="text-lg font-bold tabular-nums">{lastScanStats.filesScanned || "N/A"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-white/40 mb-1">Violations Found</p>
-                  <p className="text-lg font-bold tabular-nums">{lastScanStats.violationsFound}</p>
-                </div>
-                
-                {/* AI Stats */}
-                <div className="pt-4 border-t border-white/10">
-                   {lastScan.scan_mode === 'regex_only' ? (
-                      <p className="text-sm text-white/40 italic">AI disabled for this scan</p>
-                   ) : (
-                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                           <p className="text-xs text-white/40 mb-1">Files Analyzed with AI</p>
-                           <p className="text-sm font-bold tabular-nums">{lastScanCost?.files_analyzed_with_llm || 0}</p>
-                        </div>
-                        <div>
-                           <p className="text-xs text-white/40 mb-1">AI Cost</p>
-                           <p className="text-sm font-bold tabular-nums">${lastScanCost?.total_cost_usd?.toFixed(4) || "0.0000"}</p>
-                        </div>
-                     </div>
-                   )}
-                </div>
-
-                {/* Stale scan indicator */}
-                {lastScan && (() => {
-                  const scanTime = new Date(lastScan.created_at || lastScan.started_at).getTime()
-                  const now = Date.now()
-                  const diffMs = now - scanTime
-                  const diffHours = Math.floor(diffMs / 3600000)
-                  const isStale = diffHours >= 1
-
-                  return isStale ? (
-                    <div className="mt-4 p-3 bg-yellow-500/15 border border-yellow-500/30 rounded-xl">
-                      <p className="text-xs text-yellow-400 mb-2">
-                        Scan data is {diffHours} hour{diffHours > 1 ? "s" : ""} old
-                      </p>
-                    </div>
-                  ) : null
-                })()}
-              </div>
-            ) : (
-              <p className="text-sm text-white/40">No scans yet</p>
-            )}
-          </div>
-
-          {/* Action Button */}
+          <LastScanSummary
+            lastScan={lastScan}
+            lastScanCost={lastScanCost}
+            lastScanStats={lastScanStats}
+          />
           <Button
             onClick={handleStartScan}
-            disabled={isScanning}
+            disabled={isScanning || isLoading}
             size="lg"
             className="w-full gap-2 h-14"
           >
@@ -412,136 +125,36 @@ export function ScanResults() {
         </div>
       </div>
 
-      {/* Scan Progress Indicator */}
-      {isScanning && (
-        <div className="mb-8 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 animate-fade-in-up delay-200">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 bg-blue-500/20 rounded-xl animate-pulse">
-              <FileSearch className="w-6 h-6 text-blue-400" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold mb-1">Scanning in progress...</h3>
-              <p className="text-sm text-white/60 font-mono truncate">{scanProgress.currentFile || "Initializing scan..."}</p>
-            </div>
-            <div className="text-right">
-              <div className="text-3xl font-bold tabular-nums">{scanProgress.percentage}%</div>
-              <p className="text-xs text-white/40">{scanProgress.filesScanned} / {scanProgress.totalFiles} files</p>
-            </div>
-          </div>
-          <div className="relative h-2 bg-white/5 rounded-full overflow-hidden">
-            <div
-              className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-300"
-              style={{ width: `${scanProgress.percentage}%` }}
-            />
-          </div>
+      {isScanning && <ScanProgressCard progress={progress} />}
+
+      <div className="mb-6 animate-fade-in-up delay-300 flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold leading-none tracking-tight mb-2">Violations</h2>
+          <p className="text-white/60">{filteredViolations.length} violations found</p>
         </div>
-      )}
-
-      {/* Results Header */}
-      <div className="mb-6 animate-fade-in-up delay-300">
-        <h2 className="text-3xl font-bold leading-none tracking-tight mb-2">Violations</h2>
-        <p className="text-white/60">{filteredViolations.length} violations found</p>
+        {lastScan && (
+          <p className="text-xs text-white/40">
+            Last scan {formatDateTime(lastScan.createdAt || lastScan.startedAt)}
+          </p>
+        )}
       </div>
 
-      {/* Filter Tabs */}
-      <div className="mb-6 flex gap-3 animate-fade-in-up delay-400">
-        {(["all", "critical", "high", "medium", "low"] as const).map((severity) => {
-          const count = severity === "all" ? violations.length : violations.filter(v => v.severity === severity).length
-          return (
-            <button
-              key={severity}
-              onClick={() => setSelectedSeverity(severity as Severity | "all")}
-              className={`px-4 py-2.5 rounded-xl text-sm font-semibold uppercase tracking-wide transition-all ${
-                selectedSeverity === severity
-                  ? "bg-white/20 text-white shadow-lg"
-                  : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white/80"
-              }`}
-            >
-              {severity} <span className="ml-2 opacity-60">({count})</span>
-            </button>
-          )
-        })}
-      </div>
+      <SeverityFilter
+        selected={selectedSeverity}
+        onSelect={setSelectedSeverity}
+        violations={violations}
+      />
 
-      {/* Violations Table */}
-      <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden animate-fade-in-up delay-500">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-white/10">
-                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Severity</th>
-                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Detection</th>
-                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Control</th>
-                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Description</th>
-                <th className="text-left px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Location</th>
-                <th className="text-right px-6 py-4 text-xs font-semibold text-white/60 uppercase tracking-wider">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredViolations.map((violation, i) => (
-                <tr key={violation.id} className="group border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${
-                      violation.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
-                      violation.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
-                      violation.severity === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-white/10 text-white/60'
-                    }`}>
-                      {violation.severity === 'critical' && <AlertCircle className="w-3 h-3" />}
-                      {violation.severity}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider ${
-                      violation.detection_method === 'llm' ? 'bg-purple-500/20 text-purple-400' :
-                      violation.detection_method === 'hybrid' ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white border border-white/10' :
-                      'bg-blue-500/10 text-blue-400'
-                    }`}>
-                      {violation.detection_method === 'llm' ? 'AI' :
-                       violation.detection_method === 'hybrid' ? 'Hybrid' : 'Pattern'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-white/5 text-xs font-mono font-medium">
-                      {violation.control_id}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-sm text-white/90">{violation.description}</p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-xs text-white/60 font-mono">
-                      {violation.file_path}
-                      <span className="text-white/40">:{violation.line_number}</span>
-                    </p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <Link
-                      href={`/violation?id=${violation.id}`}
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-white/60 hover:text-white transition-colors"
-                    >
-                      View details
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <ViolationsTable violations={filteredViolations} />
 
-      {/* Cost Limit Dialog */}
-      {showCostLimitDialog && (
+      {costLimitPrompt.open && costLimitPrompt.data && (
         <CostLimitDialog
-          currentCost={costLimitData.currentCost}
-          costLimit={costLimitData.costLimit}
-          filesAnalyzed={costLimitData.filesAnalyzed}
-          totalFiles={costLimitData.totalFiles}
-          onContinue={handleCostLimitContinue}
-          onStop={handleCostLimitStop}
+          currentCost={costLimitPrompt.data.currentCost}
+          costLimit={costLimitPrompt.data.costLimit}
+          filesAnalyzed={costLimitPrompt.data.filesAnalyzed}
+          totalFiles={costLimitPrompt.data.totalFiles}
+          onContinue={continueAfterCostLimit}
+          onStop={stopAfterCostLimit}
         />
       )}
     </div>
