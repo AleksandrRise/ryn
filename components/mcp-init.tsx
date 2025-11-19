@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from 'react'
-import { listen } from '@tauri-apps/api/event'
+import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 
 export function McpInit() {
@@ -15,25 +15,49 @@ export function McpInit() {
       })
     }
 
-    let unlistenExecuteCallback: (() => void) | null = null
-    let unlistenExecuteJs: (() => void) | null = null
+    let unlistenExecuteCallback: UnlistenFn | null = null
+    let unlistenExecuteJs: UnlistenFn | null = null
 
     const setupListeners = async () => {
       // Backwards-compatible listener for legacy callback-based scripts
       unlistenExecuteCallback = await listen('mcp-execute-callback', (event: any) => {
-        const { id, code } = event.payload
+        const payload = event.payload as any
+        const { id, code } = payload ?? {}
+
+        if (typeof code !== 'string') {
+          console.error('[MCP] Invalid callback payload, expected code string:', payload)
+          if (id) {
+            window.__MCPCallback?.(id, null, 'Invalid callback payload')
+          }
+          return
+        }
+
         try {
           // Execute injected JavaScript that will call plugin:mcp-bridge|js_callback
           eval(code)
         } catch (e) {
           console.error('[MCP] Failed to execute callback code:', e)
-          window.__MCPCallback?.(id, null, `Execution error: ${e}`)
+          if (id) {
+            window.__MCPCallback?.(id, null, `Execution error: ${String(e)}`)
+          }
         }
       })
 
       // Fire-and-forget JavaScript execution (browser_execute)
       unlistenExecuteJs = await listen('mcp-execute-js', (event: any) => {
-        const code = event.payload
+        const payload = event.payload as any
+        const code =
+          typeof payload === 'string'
+            ? payload
+            : payload && typeof payload.code === 'string'
+              ? payload.code
+              : null
+
+        if (typeof code !== 'string') {
+          console.error('[MCP] Invalid JS execute payload, expected string code:', payload)
+          return
+        }
+
         try {
           eval(code)
         } catch (e) {
@@ -65,3 +89,4 @@ declare global {
     __MCPCallback?: (id: string, data?: any, error?: string | null) => void
   }
 }
+
