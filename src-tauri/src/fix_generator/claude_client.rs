@@ -432,7 +432,11 @@ impl ClaudeClient {
         }
 
         let claude_response: ClaudeResponse = serde_json::from_str(&response_text)
-            .context("Failed to parse Grok API response")?;
+            .map_err(|e| {
+                eprintln!("[ryn] Grok API response parsing error: {}", e);
+                eprintln!("[ryn] Raw response (first 500 chars): {}", &response_text.chars().take(500).collect::<String>());
+                anyhow!("Failed to parse Grok API response: {}", e)
+            })?;
 
         Ok(claude_response)
     }
