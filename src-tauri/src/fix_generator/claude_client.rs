@@ -1,14 +1,13 @@
-//! Claude Haiku 4.5 API Client for SOC 2 compliance fix generation
+//! Grok API Client for SOC 2 compliance fix generation
 //!
-//! This module provides a production-ready client for the Anthropic Claude Messages API,
-//! with support for streaming, prompt caching, and structured error handling.
+//! This module provides a production-ready client for the xAI Grok API,
+//! with support for streaming and structured error handling.
 //!
-//! API Specifications (from context7 documentation):
-//! - Model: claude-haiku-4-5-20251001
-//! - Endpoint: POST https://api.anthropic.com/v1/messages
-//! - API Version: 2023-06-01
+//! API Specifications:
+//! - Model: grok-code-fast-1 (fast coding model)
+//! - Endpoint: POST https://api.x.ai/v1/chat/completions
+//! - Format: OpenAI-compatible
 //! - Streaming: Supported via stream: true
-//! - Prompt Caching: Ephemeral type with 2048 token minimum for Haiku
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
@@ -16,19 +15,19 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use crate::models::{Control, Violation, Severity, DetectionMethod};
 
-/// Request body structure for Claude Messages API
-/// Matches Anthropic API specification exactly
+/// Request body structure for Grok API
+/// Matches OpenAI-compatible API specification
 #[derive(Debug, Clone, Serialize)]
 pub struct ClaudeRequest {
-    /// Model identifier (must be claude-haiku-4-5-20251001)
+    /// Model identifier (grok-code-fast-1 for fast coding model)
     pub model: String,
     /// Maximum tokens in response
     pub max_tokens: i32,
     /// Conversation messages
     pub messages: Vec<Message>,
-    /// System prompt blocks (optional, supports caching)
+    /// Temperature for response randomness (0.0-2.0)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub system: Option<Vec<SystemBlock>>,
+    pub temperature: Option<f32>,
     /// Enable streaming responses (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<bool>,
@@ -65,24 +64,32 @@ pub struct CacheControl {
     pub control_type: String,
 }
 
-/// Response from Claude Messages API
+/// Response from Grok API (OpenAI-compatible format)
 #[derive(Debug, Clone, Deserialize)]
 pub struct ClaudeResponse {
-    /// Message ID
+    /// Response ID
     pub id: String,
-    /// Response type (always "message")
-    #[serde(rename = "type")]
-    pub response_type: String,
-    /// Role (always "assistant")
-    pub role: String,
-    /// Content blocks
-    pub content: Vec<ContentBlock>,
+    /// Object type (always "chat.completion")
+    pub object: String,
+    /// Creation timestamp
+    pub created: i64,
     /// Model used
     pub model: String,
-    /// Stop reason (e.g., "end_turn")
-    pub stop_reason: String,
+    /// Response choices
+    pub choices: Vec<Choice>,
     /// Token usage metrics
     pub usage: UsageMetrics,
+}
+
+/// Choice in response
+#[derive(Debug, Clone, Deserialize)]
+pub struct Choice {
+    /// Choice index
+    pub index: i32,
+    /// Message content
+    pub message: Message,
+    /// Finish reason (e.g., "stop")
+    pub finish_reason: String,
 }
 
 /// Content block in response
@@ -174,7 +181,7 @@ impl ClaudeClient {
         Ok(Self {
             api_key,
             http_client: Client::new(),
-            api_base: "https://api.anthropic.com/v1".to_string(),
+            api_base: "https://api.x.ai/v1".to_string(),
         })
     }
 
@@ -185,7 +192,7 @@ impl ClaudeClient {
         Ok(Self {
             api_key,
             http_client: Client::new(),
-            api_base: "https://api.anthropic.com/v1".to_string(),
+            api_base: "https://api.x.ai/v1".to_string(),
         })
     }
 
@@ -244,9 +251,9 @@ impl ClaudeClient {
         let response = self.call_api(&prompt, None).await?;
 
         Ok(response
-            .content
+            .choices
             .first()
-            .map(|b| b.text.clone())
+            .map(|choice| choice.message.content.clone())
             .unwrap_or_default())
     }
 
@@ -275,9 +282,9 @@ impl ClaudeClient {
         let response = self.call_api(&prompt, Some(system_context.to_string())).await?;
 
         Ok(response
-            .content
+            .choices
             .first()
-            .map(|b| b.text.clone())
+            .map(|choice| choice.message.content.clone())
             .unwrap_or_default())
     }
 
@@ -368,59 +375,43 @@ impl ClaudeClient {
     ///
     /// Sends request to API with proper headers, error handling, and response parsing
     async fn call_api(&self, prompt: &str, system: Option<String>) -> Result<ClaudeResponse> {
-        // Build system blocks
-        let mut system_blocks = vec![SystemBlock {
-            block_type: "text".to_string(),
-            text: "You are a security-focused code fixer for SOC 2 compliance. \
+        // Build system prompt for OpenAI-compatible format (Grok)
+        let mut system_content = "You are a security-focused code fixer for SOC 2 compliance. \
                    Your task is to fix compliance violations in code without breaking functionality. \
-                   Always follow the framework's best practices."
-                .to_string(),
-            cache_control: None,
-        }];
+                   Always follow the framework's best practices.".to_string();
 
         // Add system context if provided
-        // Only cache if >= 2048 tokens (context7 spec for Haiku)
         if let Some(ctx) = system {
-            let word_count = ctx.split_whitespace().count();
-            // Rough estimate: ~8 tokens per word in English text
-            let estimated_tokens = (word_count / 8) * 10; // Slightly overestimate
-
-            if estimated_tokens >= 2048 {
-                system_blocks.push(SystemBlock {
-                    block_type: "text".to_string(),
-                    text: ctx,
-                    cache_control: Some(CacheControl {
-                        control_type: "ephemeral".to_string(),
-                    }),
-                });
-            } else {
-                system_blocks.push(SystemBlock {
-                    block_type: "text".to_string(),
-                    text: ctx,
-                    cache_control: None,
-                });
-            }
+            system_content.push_str("\n\n");
+            system_content.push_str(&ctx);
         }
 
-        // Build request
-        let request = ClaudeRequest {
-            model: "claude-haiku-4-5-20251001".to_string(),
-            max_tokens: 4096,
-            messages: vec![Message {
+        // Build request with OpenAI-compatible format
+        let messages = vec![
+            Message {
+                role: "system".to_string(),
+                content: system_content,
+            },
+            Message {
                 role: "user".to_string(),
                 content: prompt.to_string(),
-            }],
-            system: Some(system_blocks),
+            },
+        ];
+
+        let request = ClaudeRequest {
+            model: "grok-code-fast-1".to_string(),
+            max_tokens: 4096,
+            messages,
+            temperature: Some(0.0),
             stream: Some(false),
         };
 
         // Send request
         let response = self
             .http_client
-            .post(format!("{}/messages", self.api_base))
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
+            .post(format!("{}/chat/completions", self.api_base))
+            .header("Authorization", format!("Bearer {}", &self.api_key))
+            .header("Content-Type", "application/json")
             .json(&request)
             .send()
             .await
@@ -441,7 +432,7 @@ impl ClaudeClient {
         }
 
         let claude_response: ClaudeResponse = serde_json::from_str(&response_text)
-            .context("Failed to parse Claude API response")?;
+            .context("Failed to parse Grok API response")?;
 
         Ok(claude_response)
     }
@@ -478,9 +469,13 @@ impl ClaudeClient {
         // Call API with retry logic for transient errors
         let response = self.call_api_with_retry(&user_prompt, Some(system_prompt), 3).await?;
 
-        // Parse violations from response
+        // Parse violations from response (Grok uses OpenAI format with choices)
+        let response_text = response.choices.first()
+            .map(|choice| choice.message.content.as_str())
+            .unwrap_or("");
+
         let violations = Self::parse_violations_response(
-            &response.content.first().map(|b| b.text.as_str()).unwrap_or(""),
+            response_text,
             scan_id,
             file_path,
         )?;
@@ -690,7 +685,7 @@ impl ClaudeClient {
 
     /// Get the model name (for validation/debugging)
     pub fn model() -> &'static str {
-        "claude-haiku-4-5-20251001"
+        "grok-code-fast-1"
     }
 
     /// Get the API version (for validation/debugging)
@@ -700,7 +695,7 @@ impl ClaudeClient {
 
     /// Get the API endpoint (for validation/debugging)
     pub fn api_endpoint() -> &'static str {
-        "https://api.anthropic.com/v1/messages"
+        "https://api.x.ai/v1/chat/completions"
     }
 }
 
@@ -828,47 +823,26 @@ mod tests {
     #[test]
     fn test_claude_request_serialization_minimal() {
         let request = ClaudeRequest {
-            model: "claude-haiku-4-5-20251001".to_string(),
+            model: "grok-code-fast-1".to_string(),
             max_tokens: 4096,
             messages: vec![Message {
                 role: "user".to_string(),
                 content: "Hello".to_string(),
             }],
-            system: None,
+            temperature: None,
             stream: Some(false),
         };
 
         let json = serde_json::to_string(&request).unwrap();
-        assert!(json.contains("\"model\":\"claude-haiku-4-5-20251001\""));
+        assert!(json.contains("\"model\":\"grok-beta\""));
         assert!(json.contains("\"max_tokens\":4096"));
         assert!(json.contains("\"role\":\"user\""));
         assert!(json.contains("\"content\":\"Hello\""));
         assert!(json.contains("\"stream\":false"));
-        assert!(!json.contains("\"system\""));
     }
 
-    #[test]
-    fn test_claude_request_with_system_blocks() {
-        let request = ClaudeRequest {
-            model: "claude-haiku-4-5-20251001".to_string(),
-            max_tokens: 4096,
-            messages: vec![Message {
-                role: "user".to_string(),
-                content: "Fix this".to_string(),
-            }],
-            system: Some(vec![SystemBlock {
-                block_type: "text".to_string(),
-                text: "You are helpful".to_string(),
-                cache_control: None,
-            }]),
-            stream: Some(false),
-        };
-
-        let json = serde_json::to_string(&request).unwrap();
-        assert!(json.contains("\"system\""));
-        assert!(json.contains("\"type\":\"text\""));
-        assert!(json.contains("\"text\":\"You are helpful\""));
-    }
+    // Test removed: Grok uses OpenAI format with system message in messages array,
+    // not separate system field like Claude
 
     #[test]
     fn test_system_block_without_cache_control() {
@@ -914,12 +888,18 @@ mod tests {
     #[test]
     fn test_claude_response_parsing() {
         let json = r#"{
-            "id": "msg_123",
-            "type": "message",
-            "role": "assistant",
-            "content": [{"type": "text", "text": "Fixed code here"}],
-            "model": "claude-haiku-4-5-20251001",
-            "stop_reason": "end_turn",
+            "id": "chatcmpl-123",
+            "object": "chat.completion",
+            "created": 1677652288,
+            "model": "grok-code-fast-1",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Fixed code here"
+                },
+                "finish_reason": "stop"
+            }],
             "usage": {
                 "input_tokens": 100,
                 "output_tokens": 50,
@@ -929,9 +909,8 @@ mod tests {
         }"#;
 
         let response: ClaudeResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.id, "msg_123");
-        assert_eq!(response.role, "assistant");
-        assert_eq!(response.content[0].text, "Fixed code here");
+        assert_eq!(response.id, "chatcmpl-123");
+        assert_eq!(response.choices[0].message.content, "Fixed code here");
         assert_eq!(response.usage.input_tokens, 100);
         assert_eq!(response.usage.output_tokens, 50);
     }
@@ -1013,7 +992,7 @@ mod tests {
 
     #[test]
     fn test_model_constant() {
-        assert_eq!(ClaudeClient::model(), "claude-haiku-4-5-20251001");
+        assert_eq!(ClaudeClient::model(), "grok-beta");
     }
 
     #[test]
@@ -1025,7 +1004,7 @@ mod tests {
     fn test_api_endpoint_constant() {
         assert_eq!(
             ClaudeClient::api_endpoint(),
-            "https://api.anthropic.com/v1/messages"
+            "https://api.x.ai/v1/chat/completions"
         );
     }
 
@@ -1059,71 +1038,73 @@ mod tests {
 
     #[test]
     fn test_full_request_structure() {
-        let blocks = vec![SystemBlock {
-            block_type: "text".to_string(),
-            text: "You are helpful".to_string(),
-            cache_control: None,
-        }];
-
         let request = ClaudeRequest {
-            model: "claude-haiku-4-5-20251001".to_string(),
+            model: "grok-code-fast-1".to_string(),
             max_tokens: 4096,
             messages: vec![
+                Message {
+                    role: "system".to_string(),
+                    content: "You are helpful".to_string(),
+                },
                 Message {
                     role: "user".to_string(),
                     content: "Fix this code".to_string(),
                 },
             ],
-            system: Some(blocks),
+            temperature: Some(0.0),
             stream: Some(false),
         };
 
         let json = serde_json::to_value(&request).unwrap();
-        assert_eq!(json["model"], "claude-haiku-4-5-20251001");
+        assert_eq!(json["model"], "grok-beta");
         assert_eq!(json["max_tokens"], 4096);
-        assert_eq!(json["messages"][0]["role"], "user");
-        assert_eq!(json["system"][0]["type"], "text");
+        assert_eq!(json["messages"][0]["role"], "system");
+        assert_eq!(json["messages"][1]["role"], "user");
     }
 
     #[test]
-    fn test_multiple_content_blocks_in_response() {
+    fn test_multiple_choices_in_response() {
         let json = r#"{
-            "id": "msg_123",
-            "type": "message",
-            "role": "assistant",
-            "content": [
-                {"type": "text", "text": "First block"},
-                {"type": "text", "text": "Second block"}
-            ],
-            "model": "claude-haiku-4-5-20251001",
-            "stop_reason": "end_turn",
+            "id": "chatcmpl-123",
+            "object": "chat.completion",
+            "created": 1677652288,
+            "model": "grok-code-fast-1",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "First response"
+                },
+                "finish_reason": "stop"
+            }],
             "usage": {
                 "input_tokens": 100,
-                "output_tokens": 50
+                "output_tokens": 50,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0
             }
         }"#;
 
         let response: ClaudeResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.content.len(), 2);
-        assert_eq!(response.content[0].text, "First block");
-        assert_eq!(response.content[1].text, "Second block");
+        assert_eq!(response.choices.len(), 1);
+        assert_eq!(response.choices[0].message.content, "First response");
     }
 
     #[test]
     fn test_skip_serializing_optional_fields() {
         let request = ClaudeRequest {
-            model: "claude-haiku-4-5-20251001".to_string(),
+            model: "grok-code-fast-1".to_string(),
             max_tokens: 4096,
             messages: vec![Message {
                 role: "user".to_string(),
                 content: "Hello".to_string(),
             }],
-            system: None,
+            temperature: None,
             stream: None,
         };
 
         let json = serde_json::to_string(&request).unwrap();
-        assert!(!json.contains("\"system\""));
+        assert!(!json.contains("\"temperature\""));
         assert!(!json.contains("\"stream\""));
     }
 }

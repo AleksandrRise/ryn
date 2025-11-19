@@ -95,7 +95,7 @@ pub async fn generate_fix(
         _violation.class_name.as_deref(),
     )
     .await
-    .map_err(|e| format!("Claude API error: {}", e))?;
+    .map_err(|e| format!("Grok API error: {}", e))?;
 
     // Generate explanation based on control ID
     let explanation = match _violation.control_id.as_str() {

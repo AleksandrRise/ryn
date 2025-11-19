@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, memo, useMemo, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 import { get_violation, generate_fix, apply_fix, dismiss_violation, type ViolationDetail } from "@/lib/tauri/commands"
@@ -96,12 +97,15 @@ const MemoizedDiffBlock = memo(function MemoizedDiffBlock({
 })
 
 export function ViolationDetail({ violationId }: ViolationDetailProps) {
+  const router = useRouter()
   const [showDiff, setShowDiff] = useState(false)
   const [showApplyConfirm, setShowApplyConfirm] = useState(false)
+  const [showDismissConfirm, setShowDismissConfirm] = useState(false)
   const [violationDetail, setViolationDetail] = useState<ViolationDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isGeneratingFix, setIsGeneratingFix] = useState(false)
   const [isApplying, setIsApplying] = useState(false)
+  const [isDismissing, setIsDismissing] = useState(false)
 
   // Fetch violation detail on mount
   useEffect(() => {
@@ -191,11 +195,18 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
 
   const handleDismiss = async () => {
     try {
+      setIsDismissing(true)
       await dismiss_violation(violationId)
-      showSuccess("Violation dismissed")
-      // Could navigate back to scan results here
+      showSuccess("Violation dismissed - redirecting to scan results...")
+      setShowDismissConfirm(false)
+
+      // Navigate back to scan results page
+      setTimeout(() => {
+        router.push('/scan')
+      }, 1000)
     } catch (error) {
       handleTauriError(error, "Failed to dismiss violation")
+      setIsDismissing(false)
     }
   }
 
@@ -244,6 +255,11 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
               </span>
               <span className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">{violation.control_id}</span>
               <DetectionBadge method={violation.detection_method} />
+              {scan?.scan_mode && (
+                <span className="text-[11px] uppercase tracking-wider px-2 py-1 bg-gray-500/10 text-gray-400 rounded-md">
+                  {scan.scan_mode === 'regex_only' ? 'Pattern Only' : scan.scan_mode === 'smart' ? 'Smart' : 'Analyze All'}
+                </span>
+              )}
               <span className={`text-[11px] uppercase tracking-wider px-2 py-1 ${getConfidenceBadge(trustLevel)}`}>
                 {trustLevel} trust
               </span>
@@ -303,13 +319,13 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">Confidence</span>
                         <span className="text-[13px] font-medium text-purple-400">
-                          {Math.round(violation.confidence_score * 100)}%
+                          {Math.round(violation.confidence_score)}%
                         </span>
                       </div>
                       <div className="h-2 bg-black/50 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-500"
-                          style={{ width: `${violation.confidence_score * 100}%` }}
+                          style={{ width: `${violation.confidence_score}%` }}
                         />
                       </div>
                     </div>
@@ -360,7 +376,7 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
               </button>
             )}
             <button
-              onClick={handleDismiss}
+              onClick={() => setShowDismissConfirm(true)}
               className="px-6 py-3 border border-[#1a1a1a] text-[13px] hover:bg-[#0a0a0a] transition-colors"
             >
               Dismiss
@@ -398,21 +414,21 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[13px] text-[#aaaaaa]">Detection Certainty</span>
                 <span className="text-[18px] font-bold text-purple-400">
-                  {Math.round(violation.confidence_score * 100)}%
+                  {Math.round(violation.confidence_score)}%
                 </span>
               </div>
               <div className="h-2 bg-black/50 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-500"
-                  style={{ width: `${violation.confidence_score * 100}%` }}
+                  style={{ width: `${violation.confidence_score}%` }}
                 />
               </div>
               <p className="text-[11px] text-[#777] mt-2">
-                {violation.confidence_score >= 0.9
+                {violation.confidence_score >= 90
                   ? "Very high confidence"
-                  : violation.confidence_score >= 0.7
+                  : violation.confidence_score >= 70
                     ? "High confidence"
-                    : violation.confidence_score >= 0.5
+                    : violation.confidence_score >= 50
                       ? "Moderate confidence"
                       : "Low confidence - review recommended"}
               </p>
@@ -465,6 +481,38 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
               <button
                 onClick={() => setShowApplyConfirm(false)}
                 disabled={isApplying}
+                className="flex-1 px-6 py-3 border border-[#1a1a1a] text-[13px] hover:bg-[#050505] transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dismiss Confirmation Dialog */}
+      {showDismissConfirm && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-[#0a0a0a] border border-[#1a1a1a] p-8 max-w-md">
+            <h3 className="text-[24px] font-bold mb-4 text-[#ef4444]">Dismiss Safety Issue?</h3>
+            <p className="text-[14px] text-[#aaaaaa] mb-6">
+              Are you sure you want to dismiss this{" "}
+              <span className="text-white font-medium">{violation.severity}</span> severity violation?
+              <br />
+              <br />
+              This will mark the issue as acknowledged and remove it from your active violations list.
+            </p>
+            <div className="flex gap-4">
+              <button
+                onClick={handleDismiss}
+                disabled={isDismissing}
+                className="flex-1 px-6 py-3 bg-[#ef4444] text-white text-[13px] font-medium hover:bg-[#dc2626] transition-colors disabled:opacity-50"
+              >
+                {isDismissing ? "Dismissing..." : "Yes, Dismiss"}
+              </button>
+              <button
+                onClick={() => setShowDismissConfirm(false)}
+                disabled={isDismissing}
                 className="flex-1 px-6 py-3 border border-[#1a1a1a] text-[13px] hover:bg-[#050505] transition-colors disabled:opacity-50"
               >
                 Cancel

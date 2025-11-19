@@ -29,6 +29,7 @@ export interface ScanResult {
   high_count: number
   medium_count: number
   low_count: number
+  scan_mode: string
 }
 
 export interface Violation {
@@ -353,5 +354,15 @@ export async function respond_to_cost_limit(
   await invoke<void>("respond_to_cost_limit", {
     scanId,
     shouldContinue,
+  })
+}
+
+/**
+ * Cancel a running scan
+ * @param scanId - The ID of the scan to cancel
+ */
+export async function cancel_scan(scanId: number): Promise<void> {
+  await invoke<void>("cancel_scan", {
+    scanId,
   })
 }

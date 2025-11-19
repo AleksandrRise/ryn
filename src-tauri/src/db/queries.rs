@@ -102,9 +102,13 @@ pub fn delete_project(conn: &Connection, id: i64) -> Result<()> {
 // ===== SCAN CRUD =====
 
 pub fn insert_scan(conn: &Connection, project_id: i64) -> Result<i64> {
+    insert_scan_with_mode(conn, project_id, "regex_only")
+}
+
+pub fn insert_scan_with_mode(conn: &Connection, project_id: i64, scan_mode: &str) -> Result<i64> {
     conn.execute(
-        "INSERT INTO scans (project_id, status) VALUES (?, ?)",
-        params![project_id, "running"],
+        "INSERT INTO scans (project_id, status, scan_mode) VALUES (?, ?, ?)",
+        params![project_id, "running", scan_mode],
     ).context("Failed to insert scan")?;
 
     Ok(conn.last_insert_rowid())
@@ -112,7 +116,7 @@ pub fn insert_scan(conn: &Connection, project_id: i64) -> Result<i64> {
 
 pub fn select_scans(conn: &Connection, project_id: i64) -> Result<Vec<Scan>> {
     let mut stmt = conn
-        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, total_files, violations_found, status FROM scans WHERE project_id = ? ORDER BY started_at DESC")
+        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, total_files, violations_found, status, scan_mode FROM scans WHERE project_id = ? ORDER BY started_at DESC")
         .context("Failed to prepare select scans query")?;
 
     let scans = stmt
@@ -126,6 +130,7 @@ pub fn select_scans(conn: &Connection, project_id: i64) -> Result<Vec<Scan>> {
                 total_files: row.get(5)?,
                 violations_found: row.get(6)?,
                 status: row.get(7)?,
+                scan_mode: row.get(8)?,
                 critical_count: 0,
                 high_count: 0,
                 medium_count: 0,
@@ -141,7 +146,7 @@ pub fn select_scans(conn: &Connection, project_id: i64) -> Result<Vec<Scan>> {
 
 pub fn select_scan(conn: &Connection, id: i64) -> Result<Option<Scan>> {
     let mut stmt = conn
-        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, total_files, violations_found, status FROM scans WHERE id = ?")
+        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, total_files, violations_found, status, scan_mode FROM scans WHERE id = ?")
         .context("Failed to prepare select scan query")?;
 
     let scan = stmt
@@ -155,6 +160,7 @@ pub fn select_scan(conn: &Connection, id: i64) -> Result<Option<Scan>> {
                 total_files: row.get(5)?,
                 violations_found: row.get(6)?,
                 status: row.get(7)?,
+                scan_mode: row.get(8)?,
                 critical_count: 0,
                 high_count: 0,
                 medium_count: 0,

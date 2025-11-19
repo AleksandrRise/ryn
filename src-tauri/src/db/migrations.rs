@@ -164,6 +164,24 @@ fn migrate_to_v3(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migrate from v3 to v4 (scan mode tracking)
+/// Adds scan_mode column to scans table to track which scanning mode was used:
+/// - scan_mode: Which mode was used for the scan (regex_only/smart/analyze_all)
+fn migrate_to_v4(conn: &Connection) -> Result<()> {
+    // ============================================================
+    // SCANS TABLE: Add scan_mode column
+    // ============================================================
+
+    // scan_mode: Track which scanning mode was used (regex_only/smart/analyze_all)
+    conn.execute(
+        "ALTER TABLE scans ADD COLUMN scan_mode TEXT NOT NULL DEFAULT 'regex_only'
+         CHECK(scan_mode IN ('regex_only', 'smart', 'analyze_all'))",
+        [],
+    ).context("Failed to add scans.scan_mode column")?;
+
+    Ok(())
+}
+
 /// Seed default settings into the database
 ///
 /// Inserts default values for hybrid scanning settings:
@@ -198,6 +216,7 @@ pub fn seed_settings(conn: &Connection) -> Result<()> {
 /// - v1: Initial schema (7 tables, 8 indexes)
 /// - v2: Hybrid scanning schema (detection_method, scan_costs, etc.)
 /// - v3: Tree-sitter context fields (function_name, class_name)
+/// - v4: Scan mode tracking (scan_mode column in scans table)
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     let current_version = get_schema_version(conn)?;
 
@@ -215,6 +234,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 3 {
         migrate_to_v3(conn)?;
         set_schema_version(conn, 3)?;
+    }
+
+    if current_version < 4 {
+        migrate_to_v4(conn)?;
+        set_schema_version(conn, 4)?;
     }
 
     // Seed default settings (idempotent - won't overwrite existing values)

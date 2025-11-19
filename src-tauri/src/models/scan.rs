@@ -45,10 +45,15 @@ pub struct Scan {
     pub high_count: i32,
     pub medium_count: i32,
     pub low_count: i32,
+    pub scan_mode: String,
 }
 
 impl Scan {
     pub fn new(project_id: i64) -> Self {
+        Self::new_with_mode(project_id, "regex_only")
+    }
+
+    pub fn new_with_mode(project_id: i64, scan_mode: &str) -> Self {
         Self {
             id: 0,
             project_id,
@@ -62,6 +67,7 @@ impl Scan {
             high_count: 0,
             medium_count: 0,
             low_count: 0,
+            scan_mode: scan_mode.to_string(),
         }
     }
 
