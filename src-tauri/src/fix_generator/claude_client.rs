@@ -105,9 +105,11 @@ pub struct ContentBlock {
 /// Token usage and cache metrics
 #[derive(Debug, Clone, Deserialize)]
 pub struct UsageMetrics {
-    /// Input tokens used
+    /// Input tokens used (Claude: input_tokens, OpenAI/Grok: prompt_tokens)
+    #[serde(alias = "prompt_tokens")]
     pub input_tokens: i32,
-    /// Output tokens generated
+    /// Output tokens generated (Claude: output_tokens, OpenAI/Grok: completion_tokens)
+    #[serde(alias = "completion_tokens")]
     pub output_tokens: i32,
     /// Tokens created in cache (prompt caching)
     #[serde(default)]
