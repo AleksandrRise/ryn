@@ -228,7 +228,7 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
     )
   }
 
-  const { violation, control, fix } = violationDetail
+  const { violation, control, fix, scan } = violationDetail
   const language = getLanguage(violation.file_path)
   const trustLevel = fix?.trust_level || "review"
 
