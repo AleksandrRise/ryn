@@ -9,7 +9,7 @@
 ## Build, Test, and Development Commands
 - Install deps: `pnpm install`.
 - Web build: `pnpm build` (Next.js production build to `out/`).
-- Dev (Tauri + static server): `PORT=4000 pnpm tauri dev --no-dev-server-wait --no-dev-server` (avoids port 3000 conflicts).
+- Dev (Tauri app + Next dev): `./run-ryn-dev.sh` (loads `.env` and runs `pnpm tauri dev`).
 - Tauri prod bundle (codesign/ad-hoc as configured): `pnpm tauri build`.
 - Unit/UI tests: `pnpm test` (Vitest), `pnpm test:run`, `pnpm test:coverage`.
 - E2E (WebdriverIO): `pnpm test:e2e`.

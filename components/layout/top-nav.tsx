@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useProjectStore } from "@/lib/stores/project-store"
@@ -9,13 +10,24 @@ import { Folder } from "lucide-react"
 import {
   create_project,
   detect_framework,
+  get_projects,
   type Project,
 } from "@/lib/tauri/commands"
 import { handleTauriError, showSuccess } from "@/lib/utils/error-handler"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 export function TopNav() {
   const pathname = usePathname()
   const { selectedProject, setSelectedProject } = useProjectStore()
+  const [projects, setProjects] = useState<Project[]>([])
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false)
 
   const links = [
     { href: "/", label: "Dashboard" },
@@ -24,7 +36,6 @@ export function TopNav() {
     { href: "/settings", label: "Settings" },
   ]
 
-  // Get breadcrumb path based on current pathname
   const getBreadcrumbLabel = (path: string) => {
     const pathMap: Record<string, string> = {
       "/": "Dashboard",
@@ -35,8 +46,23 @@ export function TopNav() {
     return pathMap[path] || "Page"
   }
 
-  // Handle project selection
-  const handleSelectProject = async () => {
+  const loadProjects = async () => {
+    try {
+      setIsLoadingProjects(true)
+      const list = await get_projects()
+      setProjects(list)
+    } catch (error) {
+      handleTauriError(error, "Failed to load projects")
+    } finally {
+      setIsLoadingProjects(false)
+    }
+  }
+
+  useEffect(() => {
+    loadProjects()
+  }, [])
+
+  const handleSelectProjectFromDisk = async () => {
     try {
       const selected = await open({
         directory: true,
@@ -45,32 +71,41 @@ export function TopNav() {
       })
 
       if (selected && typeof selected === "string") {
-        // Detect framework
         const framework = await detect_framework(selected)
-
-        // Create project in database
         const project = await create_project(selected, undefined, framework)
-
-        // Update global state
         setSelectedProject(project)
-
         showSuccess(`Project "${project.name}" loaded successfully`)
+        await loadProjects()
       }
     } catch (error) {
       handleTauriError(error, "Failed to select project")
     }
   }
 
+  const handleProjectChange = async (value: string) => {
+    if (value === "__add_new__") {
+      await handleSelectProjectFromDisk()
+      return
+    }
+
+    const projectId = Number(value)
+    const project = projects.find((p) => p.id === projectId)
+    if (!project) return
+
+    setSelectedProject(project)
+    showSuccess(`Switched to project "${project.name}"`)
+  }
+
+  const currentProjectId = selectedProject ? String(selectedProject.id) : undefined
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-black border-b border-white/10">
       <div className="flex items-center h-10 px-6">
-        {/* Logo */}
         <div className="flex items-center gap-6">
           <Link href="/" className="text-lg font-bold tracking-tight hover:text-white/80 transition-colors">
             ryn
           </Link>
 
-          {/* Navigation links */}
           <div className="flex gap-4">
             {links.map((link) => {
               const isActive = pathname === link.href
@@ -89,9 +124,7 @@ export function TopNav() {
           </div>
         </div>
 
-        {/* Right side - breadcrumbs + project selector */}
         <div className="ml-auto flex items-center gap-3">
-          {/* Breadcrumbs */}
           <div className="flex items-center gap-2 text-[10px] text-white/40">
             {selectedProject ? (
               <>
@@ -102,20 +135,55 @@ export function TopNav() {
                 <span>{getBreadcrumbLabel(pathname)}</span>
               </>
             ) : (
-              <span>No project selected</span>
+              <>
+                <span>No project selected</span>
+                <span>•</span>
+                <span>{getBreadcrumbLabel(pathname)}</span>
+              </>
             )}
           </div>
 
-          {/* Project selector button */}
-          <Button
-            onClick={handleSelectProject}
-            variant="outline"
-            size="sm"
-            className="gap-1.5 text-xs h-7 px-2.5"
-          >
-            <Folder className="w-3 h-3" />
-            {selectedProject ? "Change" : "Select"}
-          </Button>
+          <Select value={currentProjectId} onValueChange={handleProjectChange}>
+            <SelectTrigger
+              className="!gap-2 !text-[13px] !h-9 !px-3 !min-w-[216px] !rounded-[11px] !bg-white/[0.04] !border !border-white/8 hover:!bg-white/[0.07] hover:!border-white/12 shadow-sm backdrop-blur-sm"
+            >
+              <Folder className="w-3 h-3" />
+              <SelectValue
+                placeholder={
+                  isLoadingProjects
+                    ? "Loading projects..."
+                    : selectedProject
+                    ? selectedProject.name
+                    : "Select project"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent className="!bg-black/85 !border !border-white/10 !backdrop-blur-2xl !rounded-2xl !shadow-2xl px-1 py-1">
+              {projects.length > 0 ? (
+                projects.map((project) => (
+                  <SelectItem key={project.id} value={String(project.id)} className="rounded-lg px-3 py-2 hover:bg-white/5 focus:bg-white/8">
+                    <span className="flex flex-col items-start">
+                      <span className="text-sm font-medium">{project.name}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {project.framework || project.path}
+                      </span>
+                    </span>
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value="__no_projects__" disabled>
+                  No projects yet
+                </SelectItem>
+              )}
+              <SelectSeparator />
+              <SelectItem value="__add_new__" className="rounded-lg px-3 py-2 hover:bg-white/5 focus:bg-white/8">
+                <span className="flex items-center gap-2 text-sm">
+                  <Folder className="w-3 h-3" />
+                  <span>Add new project…</span>
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
     </nav>

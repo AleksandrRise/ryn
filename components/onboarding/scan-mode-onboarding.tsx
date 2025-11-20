@@ -65,7 +65,7 @@ export function ScanModeOnboarding({ open, onComplete }: ScanModeOnboardingProps
             <Label className="text-base font-semibold">Scanning Mode</Label>
             <RadioGroup value={selectedMode} onValueChange={(value) => setSelectedMode(value as ScanMode)}>
               {/* Pattern-Only Mode */}
-              <div className="border border-white/10 bg-white/5 rounded-lg p-4 hover:bg-white/10 hover:border-white/20 transition-all duration-300 cursor-pointer"
+              <div className="border border-white/10 bg-white/5 rounded-lg p-4 hover:bg-white/10 hover:border-white/15 transition-all duration-300 cursor-pointer"
                    onClick={() => setSelectedMode('regex_only')}>
                 <div className="flex items-start gap-3">
                   <RadioGroupItem value="regex_only" id="regex_only" className="mt-1" />
@@ -90,7 +90,7 @@ export function ScanModeOnboarding({ open, onComplete }: ScanModeOnboardingProps
               </div>
 
               {/* Smart Mode (Recommended) */}
-              <div className="border border-white/20 bg-white/10 rounded-lg p-4 hover:bg-white/15 hover:border-white/30 transition-all duration-300 cursor-pointer"
+              <div className="border border-white/10 bg-white/10 rounded-lg p-4 hover:bg-white/15 hover:border-white/20 transition-all duration-300 cursor-pointer"
                    onClick={() => setSelectedMode('smart')}>
                 <div className="flex items-start gap-3">
                   <RadioGroupItem value="smart" id="smart" className="mt-1" />
@@ -118,7 +118,7 @@ export function ScanModeOnboarding({ open, onComplete }: ScanModeOnboardingProps
               </div>
 
               {/* Analyze All Mode */}
-              <div className="border border-white/10 bg-white/5 rounded-lg p-4 hover:bg-white/10 hover:border-white/20 transition-all duration-300 cursor-pointer"
+              <div className="border border-white/10 bg-white/5 rounded-lg p-4 hover:bg-white/10 hover:border-white/15 transition-all duration-300 cursor-pointer"
                    onClick={() => setSelectedMode('analyze_all')}>
                 <div className="flex items-start gap-3">
                   <RadioGroupItem value="analyze_all" id="analyze_all" className="mt-1" />
