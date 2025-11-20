@@ -8,6 +8,7 @@ import {
   get_projects,
   get_scans,
   get_violations,
+  get_settings,
 } from "@/lib/tauri/commands"
 import { toAuditEvent, toScanSummary, toViolation } from "@/lib/tauri/transformers"
 import type { AuditEvent } from "@/lib/types/audit"
@@ -43,6 +44,24 @@ export function useDashboardData(projectId?: number): UseDashboardDataResult {
   const [fixesAppliedCount, setFixesAppliedCount] = useState(0)
   const [complianceScore, setComplianceScore] = useState(0)
   const [totalViolations, setTotalViolations] = useState(0)
+  const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useState(true)
+
+  // Load notification preference once on mount
+  useEffect(() => {
+    const loadNotificationSetting = async () => {
+      try {
+        const settings = await get_settings()
+        const desktop = settings.find((s) => s.key === "desktop_notifications")
+        if (desktop) {
+          setDesktopNotificationsEnabled(desktop.value === "true")
+        }
+      } catch (error) {
+        console.error("[ryn] Failed to load desktop notification setting:", error)
+      }
+    }
+
+    void loadNotificationSetting()
+  }, [])
 
   const refresh = useCallback(async () => {
     if (!projectId) {
@@ -124,7 +143,7 @@ export function useDashboardData(projectId?: number): UseDashboardDataResult {
     onFileChanged: () => {
       void refresh()
     },
-    showNotifications: true,
+    showNotifications: desktopNotificationsEnabled,
   })
 
   return {

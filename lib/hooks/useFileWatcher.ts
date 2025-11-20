@@ -15,9 +15,16 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { listen, type UnlistenFn } from "@tauri-apps/api/event"
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification"
 import { toast } from "sonner"
 import * as commands from "@/lib/tauri/commands"
 import type { FileChangedEvent } from "@/lib/types/events"
+
+const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI__)
 
 interface UseFileWatcherOptions {
   /**
@@ -89,6 +96,28 @@ export function useFileWatcher(
   const [isWatching, setIsWatching] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const notifyDesktop = useCallback(
+    async (title: string, body?: string) => {
+      if (!showNotifications || !isTauri) return false
+
+      try {
+        let granted = await isPermissionGranted()
+        if (!granted) {
+          const permission = await requestPermission()
+          granted = permission === "granted"
+        }
+
+        if (!granted) return false
+        await sendNotification({ title, body })
+        return true
+      } catch (err) {
+        console.error("[useFileWatcher] Desktop notification failed", err)
+        return false
+      }
+    },
+    [showNotifications]
+  )
 
   // Start watching for file changes
   const startWatching = useCallback(async () => {
@@ -211,21 +240,18 @@ export function useFileWatcher(
               onFileChanged(payload)
             }
 
-            // Show toast notification
+            // Show OS-level notification, fallback to in-app toast if not available
             if (showNotifications) {
-              const emoji =
-                payload.eventType === "deleted"
-                  ? "🗑️"
-                  : payload.eventType === "created"
-                    ? "✨"
-                    : "📝"
+              notifyDesktop(`File ${payload.eventType}`, payload.filePath).then((sent) => {
+                if (sent) return
 
-              toast.info(
-                `File ${payload.eventType}: ${payload.filePath}`,
-                {
-                  description: `Project ID ${projectId}`,
-                }
-              )
+                toast.info(
+                  `File ${payload.eventType}: ${payload.filePath}`,
+                  {
+                    description: `Project ID ${projectId}`,
+                  }
+                )
+              })
             }
           }
         )
@@ -248,7 +274,7 @@ export function useFileWatcher(
         unlisten()
       }
     }
-  }, [isWatching, projectId, onFileChanged, showNotifications])
+  }, [isWatching, projectId, onFileChanged, showNotifications, notifyDesktop])
 
   // Auto-start watching if enabled
   useEffect(() => {

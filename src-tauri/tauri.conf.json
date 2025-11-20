@@ -36,6 +36,7 @@
             "dialog:allow-open",
             "dialog:allow-save",
             "dialog:default",
+            "notification:default",
             "mcp-bridge:allow-js-callback"
           ]
         }

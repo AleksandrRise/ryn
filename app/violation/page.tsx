@@ -2,7 +2,6 @@
 
 import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
-import { TopNav } from "@/components/layout/top-nav"
 import { ViolationDetail } from "@/components/violation/violation-detail"
 
 function ViolationPageInner() {
@@ -13,8 +12,7 @@ function ViolationPageInner() {
   if (!idParam || Number.isNaN(violationId) || violationId <= 0) {
     return (
       <>
-        <TopNav />
-        <main className="pt-10">
+        <main>
           <div className="px-8 py-12 flex items-center justify-center">
             <p className="text-sm text-red-400">
               Invalid or missing violation id. Please open this page from the Scan Results view.
@@ -27,8 +25,7 @@ function ViolationPageInner() {
 
   return (
     <>
-      <TopNav />
-      <main className="pt-10">
+      <main>
         <ViolationDetail violationId={violationId} />
       </main>
     </>
@@ -40,8 +37,7 @@ export default function ViolationPage() {
     <Suspense
       fallback={
         <>
-          <TopNav />
-          <main className="pt-10">
+          <main>
             <div className="px-8 py-12 flex items-center justify-center">
               <p className="text-sm text-gray-400">Loading violation details...</p>
             </div>

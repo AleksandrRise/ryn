@@ -124,25 +124,7 @@ export function TopNav() {
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-3">
-          <div className="flex items-center gap-2 text-[10px] text-white/40">
-            {selectedProject ? (
-              <>
-                <Link href="/" className="hover:text-white/60 transition-colors">
-                  {selectedProject.name}
-                </Link>
-                <span>•</span>
-                <span>{getBreadcrumbLabel(pathname)}</span>
-              </>
-            ) : (
-              <>
-                <span>No project selected</span>
-                <span>•</span>
-                <span>{getBreadcrumbLabel(pathname)}</span>
-              </>
-            )}
-          </div>
-
+        <div className="ml-auto flex items-center">
           <Select value={currentProjectId} onValueChange={handleProjectChange}>
             <SelectTrigger
               className="!gap-2 !text-[13px] !h-9 !px-3 !min-w-[216px] !rounded-[11px] !bg-white/[0.04] !border !border-white/8 hover:!bg-white/[0.07] hover:!border-white/12 shadow-sm backdrop-blur-sm"

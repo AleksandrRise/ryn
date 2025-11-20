@@ -6,6 +6,7 @@ import { ConsoleLogger } from "@/components/console-logger"
 import { McpInit } from "@/components/mcp-init"
 import { Toaster } from "sonner"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
+import { TopNav } from "@/components/layout/top-nav"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -34,7 +35,10 @@ export default function RootLayout({
           <ConsoleLogger />
           <WaterBackground />
           <div className="fixed inset-0 bg-black/78 backdrop-blur-[2px] z-[5]" />
-          <div className="relative z-10">{children}</div>
+          <div className="relative z-10">
+            <TopNav />
+            <div className="pt-10">{children}</div>
+          </div>
           <Toaster theme="dark" richColors />
         </ErrorBoundary>
       </body>

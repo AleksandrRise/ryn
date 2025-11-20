@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { TopNav } from "@/components/layout/top-nav"
 import { Dashboard } from "@/components/dashboard/dashboard"
 import { ScanModeOnboarding } from "@/components/onboarding/scan-mode-onboarding"
 import { get_settings, complete_onboarding } from "@/lib/tauri/commands"
@@ -53,8 +52,7 @@ export default function HomePage() {
 
   return (
     <>
-      <TopNav />
-      <main className="pt-10">
+      <main>
         <Dashboard />
       </main>
 

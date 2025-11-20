@@ -3,14 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Save, Download, Code, BarChart3, Sparkles, Eye } from "lucide-react"
+import { Save, Download, BarChart3, Sparkles, Eye } from "lucide-react"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { useFileWatcher } from "@/lib/hooks/useFileWatcher"
 import {
@@ -26,51 +19,21 @@ import { writeTextFile } from "@tauri-apps/plugin-fs"
 
 // Settings state type
 interface SettingsState {
-  autoApplyLow: boolean
-  autoApplyMedium: boolean
-  continuousMonitoring: boolean
-  autoDetectFramework: boolean
-  framework: string
-  scanFrequency: string
-  databaseType: string
-  connectionString: string
   desktopNotifications: boolean
-  emailAlerts: boolean
-  slackWebhook: string
   llmScanMode: string
   costLimitPerScan: string
 }
 
 // Default state values
 const defaultState: SettingsState = {
-  autoApplyLow: true,
-  autoApplyMedium: false,
-  continuousMonitoring: true,
-  autoDetectFramework: true,
-  framework: "Django",
-  scanFrequency: "on-commit",
-  databaseType: "PostgreSQL",
-  connectionString: "",
   desktopNotifications: true,
-  emailAlerts: false,
-  slackWebhook: "",
   llmScanMode: "smart",
   costLimitPerScan: "5.00",
 }
 
 // Map frontend state keys to backend storage keys
 const settingsKeyMap: Record<keyof SettingsState, string> = {
-  autoApplyLow: "auto_apply_low",
-  autoApplyMedium: "auto_apply_medium",
-  continuousMonitoring: "continuous_monitoring",
-  autoDetectFramework: "auto_detect_framework",
-  framework: "framework",
-  scanFrequency: "scan_frequency",
-  databaseType: "database_type",
-  connectionString: "connection_string",
   desktopNotifications: "desktop_notifications",
-  emailAlerts: "email_alerts",
-  slackWebhook: "slack_webhook",
   llmScanMode: "llm_scan_mode",
   costLimitPerScan: "cost_limit_per_scan",
 }
@@ -99,32 +62,13 @@ function settingsArrayToState(settings: SettingsType[]): SettingsState {
   return state
 }
 
-// Modern Toggle Component
-function Toggle({ enabled, onChange }: { enabled: boolean; onChange: () => void }) {
-  return (
-    <button
-      onClick={onChange}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all duration-300 hover:scale-105 active:scale-95 ${
-        enabled ? "bg-white shadow-md" : "bg-white/20 hover:bg-white/30"
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full transition-all duration-300 ${
-          enabled ? "translate-x-6 bg-black shadow-sm" : "translate-x-1 bg-white/60"
-        }`}
-      />
-    </button>
-  )
-}
-
 export function Settings() {
   const { selectedProject } = useProjectStore()
+  const [state, setState] = useState<SettingsState>(defaultState)
   const { isWatching, startWatching, stopWatching, isLoading: isWatcherLoading } = useFileWatcher(
     selectedProject?.id,
-    { autoStart: false, showNotifications: true }
+    { autoStart: false, showNotifications: state.desktopNotifications }
   )
-
-  const [state, setState] = useState<SettingsState>(defaultState)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -216,6 +160,15 @@ export function Settings() {
     await handleExport()
   }
 
+  const handleLlmScanModeChange = async (value: string) => {
+    updateSetting("llmScanMode", value)
+    try {
+      await update_settings(settingsKeyMap.llmScanMode, value)
+    } catch (error) {
+      handleTauriError(error, "Failed to update scanning mode")
+    }
+  }
+
   // Update individual setting in state
   const updateSetting = (key: keyof SettingsState, value: any) => {
     setState((prev) => ({ ...prev, [key]: value }))
@@ -263,50 +216,8 @@ export function Settings() {
       </div>
 
       {/* Settings Grid */}
-      <div className="grid grid-cols-2 gap-6 animate-fade-in-up delay-100">
-        {/* Framework Detection Card */}
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-white/5 rounded-lg">
-              <Code className="w-5 h-5 text-white/60" />
-            </div>
-            <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Framework</h2>
-          </div>
-          <div className="space-y-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium mb-1">Auto-detect framework</p>
-                <p className="text-xs text-white/50">Automatically identify your project</p>
-              </div>
-              <Toggle
-                enabled={state.autoDetectFramework}
-                onChange={() => updateSetting("autoDetectFramework", !state.autoDetectFramework)}
-              />
-            </div>
-
-            {!state.autoDetectFramework && (
-              <div>
-                <label className="block mb-2 text-sm font-medium">Select framework</label>
-                <Select value={state.framework} onValueChange={(value) => updateSetting("framework", value)}>
-                  <SelectTrigger className="w-full bg-black/40 border-white/10 rounded-xl hover:bg-black/50 focus:border-white/30 transition-all duration-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-black/95 border-white/10 backdrop-blur-xl">
-                    <SelectItem value="Django" className="focus:bg-white/10 cursor-pointer">Django</SelectItem>
-                    <SelectItem value="Flask" className="focus:bg-white/10 cursor-pointer">Flask</SelectItem>
-                    <SelectItem value="Express" className="focus:bg-white/10 cursor-pointer">Express (Node.js)</SelectItem>
-                    <SelectItem value="Rails" className="focus:bg-white/10 cursor-pointer">Ruby on Rails</SelectItem>
-                    <SelectItem value="Spring Boot" className="focus:bg-white/10 cursor-pointer">Spring Boot</SelectItem>
-                    <SelectItem value="Go" className="focus:bg-white/10 cursor-pointer">Go (Gin/Echo)</SelectItem>
-                    <SelectItem value="Rust" className="focus:bg-white/10 cursor-pointer">Rust (Actix/Rocket)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* AI Scanning Configuration Card */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 animate-fade-in-up delay-100">
+        {/* AI Scanning Configuration */}
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-white/5 rounded-lg">
@@ -324,7 +235,7 @@ export function Settings() {
                     name="scanMode"
                     value="regex_only"
                     checked={state.llmScanMode === "regex_only"}
-                    onChange={(e) => updateSetting("llmScanMode", e.target.value)}
+                    onChange={(e) => handleLlmScanModeChange(e.target.value)}
                     className="mt-1"
                   />
                   <div className="flex-1">
@@ -338,7 +249,7 @@ export function Settings() {
                     name="scanMode"
                     value="smart"
                     checked={state.llmScanMode === "smart"}
-                    onChange={(e) => updateSetting("llmScanMode", e.target.value)}
+                    onChange={(e) => handleLlmScanModeChange(e.target.value)}
                     className="mt-1"
                   />
                   <div className="flex-1">
@@ -354,7 +265,7 @@ export function Settings() {
                     name="scanMode"
                     value="analyze_all"
                     checked={state.llmScanMode === "analyze_all"}
-                    onChange={(e) => updateSetting("llmScanMode", e.target.value)}
+                    onChange={(e) => handleLlmScanModeChange(e.target.value)}
                     className="mt-1"
                   />
                   <div className="flex-1">
@@ -384,69 +295,34 @@ export function Settings() {
             )}
           </div>
         </div>
-
-        {/* Trust Levels */}
-        <section className="animate-fade-in-up delay-300">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Trust Levels</h2>
-          <div className="space-y-6">
-            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
-              <div>
-                <p className="text-[14px] mb-1">Auto-apply low risk fixes</p>
-                <p className="text-[12px] text-[#aaaaaa]">Automatically apply fixes with minimal impact</p>
-              </div>
-              <button
-                onClick={() => updateSetting("autoApplyLow", !state.autoApplyLow)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
-                  state.autoApplyLow
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
-                }`}
-              >
-                {state.autoApplyLow ? "ON" : "OFF"}
-              </button>
+        {/* Monitoring & Notifications */}
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-white/5 rounded-lg">
+              <Eye className="w-5 h-5 text-white/60" />
             </div>
-
-            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
-              <div>
-                <p className="text-[14px] mb-1">Auto-apply medium risk fixes</p>
-                <p className="text-[12px] text-[#aaaaaa]">Requires preview before applying</p>
-              </div>
-              <button
-                onClick={() => updateSetting("autoApplyMedium", !state.autoApplyMedium)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
-                  state.autoApplyMedium
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
-                }`}
-              >
-                {state.autoApplyMedium ? "ON" : "OFF"}
-              </button>
-            </div>
+            <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Monitoring</h2>
           </div>
-        </section>
 
-        {/* Scan Preferences */}
-        <section className="animate-fade-in-up delay-400">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Scan Preferences</h2>
           <div className="space-y-6">
             <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
               <div>
-                <p className="text-[14px] mb-1">Enable continuous monitoring</p>
-                <p className="text-[12px] text-[#aaaaaa]">Automatically scan files when they change</p>
+                <p className="text-[14px] mb-1">Desktop notifications</p>
+                <p className="text-[12px] text-[#aaaaaa]">Use OS-level alerts for file changes and scans</p>
               </div>
               <button
-                onClick={() => updateSetting("continuousMonitoring", !state.continuousMonitoring)}
+                onClick={() => updateSetting("desktopNotifications", !state.desktopNotifications)}
                 className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
-                  state.continuousMonitoring
+                  state.desktopNotifications
                     ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
                     : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
                 }`}
               >
-                {state.continuousMonitoring ? "ON" : "OFF"}
+                {state.desktopNotifications ? "ON" : "OFF"}
               </button>
             </div>
 
-            {selectedProject && (
+            {selectedProject ? (
               <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
                 <div>
                   <div className="flex items-center gap-2">
@@ -471,146 +347,41 @@ export function Settings() {
                   {isWatcherLoading ? "..." : isWatching ? "ON" : "OFF"}
                 </button>
               </div>
+            ) : (
+              <div className="py-4 border-b border-[#1a1a1a] text-[12px] text-[#aaaaaa]">
+                Select a project to enable file watching and notifications.
+              </div>
             )}
+          </div>
+        </div>
 
-            <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-sm font-medium">Scan frequency</label>
-              <Select value={state.scanFrequency} onValueChange={(value) => updateSetting("scanFrequency", value)}>
-                <SelectTrigger className="w-full bg-black/40 border-white/10 rounded-xl hover:bg-black/50 focus:border-white/30 transition-all duration-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-black/95 border-white/10 backdrop-blur-xl">
-                  <SelectItem value="on-commit" className="focus:bg-white/10 cursor-pointer">On every commit</SelectItem>
-                  <SelectItem value="daily" className="focus:bg-white/10 cursor-pointer">Daily</SelectItem>
-                  <SelectItem value="weekly" className="focus:bg-white/10 cursor-pointer">Weekly</SelectItem>
-                  <SelectItem value="manual" className="focus:bg-white/10 cursor-pointer">Manual only</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-white/50 mt-2">When to automatically run compliance scans</p>
+        {/* Data & Maintenance */}
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 xl:col-span-2">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-white/5 rounded-lg">
+              <BarChart3 className="w-5 h-5 text-white/60" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Data & Maintenance</h2>
+              <p className="text-xs text-white/50">Export data or wipe scan history if you need a clean slate</p>
             </div>
           </div>
-        </section>
 
-        {/* Database */}
-        <section className="animate-fade-in-up delay-500">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Database</h2>
-          <div className="space-y-6">
-            <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-sm font-medium">Database type</label>
-              <Select value={state.databaseType} onValueChange={(value) => updateSetting("databaseType", value)}>
-                <SelectTrigger className="w-full bg-black/40 border-white/10 rounded-xl hover:bg-black/50 focus:border-white/30 transition-all duration-200">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-black/95 border-white/10 backdrop-blur-xl">
-                  <SelectItem value="PostgreSQL" className="focus:bg-white/10 cursor-pointer">PostgreSQL</SelectItem>
-                  <SelectItem value="MongoDB" className="focus:bg-white/10 cursor-pointer">MongoDB</SelectItem>
-                  <SelectItem value="MySQL" className="focus:bg-white/10 cursor-pointer">MySQL</SelectItem>
-                  <SelectItem value="SQLite" className="focus:bg-white/10 cursor-pointer">SQLite</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-sm font-medium">Connection string</label>
-              <input
-                type="text"
-                value={state.connectionString}
-                onChange={(e) => updateSetting("connectionString", e.target.value)}
-                placeholder="postgresql://user:password@localhost:5432/dbname"
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-white/30 transition-all duration-200 hover:bg-black/50"
-              />
-              <p className="text-xs text-white/50 mt-2">Used for scanning database access patterns</p>
-            </div>
-
-            <div className="space-y-4">
-              <button onClick={handleClearDatabase} className="text-[13px] hover:underline transition-all duration-200 hover:text-white hover:translate-x-0.5">
-                Clear scan history
-              </button>
-              <span className="text-[#aaaaaa] mx-2">•</span>
-              <button onClick={handleExportAll} className="text-[13px] hover:underline transition-all duration-200 hover:text-white hover:translate-x-0.5">
-                Export all data
-              </button>
-            </div>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={handleExportAll} variant="outline" className="gap-2">
+              <Download className="w-4 h-4" />
+              Export all data
+            </Button>
+            <Button onClick={handleClearDatabase} variant="outline" className="gap-2 border-red-400/50 text-red-100 hover:bg-red-500/20">
+              <Save className="w-4 h-4" />
+              Clear scan history
+            </Button>
           </div>
-        </section>
 
-        {/* Notifications */}
-        <section className="animate-fade-in-up delay-600">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">Notifications</h2>
-          <div className="space-y-6">
-            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
-              <div>
-                <p className="text-[14px] mb-1">Desktop notifications</p>
-                <p className="text-[12px] text-[#aaaaaa]">Show alerts for new violations and scan completion</p>
-              </div>
-              <button
-                onClick={() => updateSetting("desktopNotifications", !state.desktopNotifications)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
-                  state.desktopNotifications
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
-                }`}
-              >
-                {state.desktopNotifications ? "ON" : "OFF"}
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
-              <div>
-                <p className="text-[14px] mb-1">Email alerts</p>
-                <p className="text-[12px] text-[#aaaaaa]">Receive critical violation alerts via email</p>
-              </div>
-              <button
-                onClick={() => updateSetting("emailAlerts", !state.emailAlerts)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
-                  state.emailAlerts
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
-                }`}
-              >
-                {state.emailAlerts ? "ON" : "OFF"}
-              </button>
-            </div>
-
-            <div className="py-4 border-b border-[#1a1a1a]">
-              <label className="block mb-2 text-sm font-medium">Slack webhook URL</label>
-              <input
-                type="text"
-                value={state.slackWebhook}
-                onChange={(e) => updateSetting("slackWebhook", e.target.value)}
-                placeholder="https://hooks.slack.com/services/..."
-                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-white/30 transition-all duration-200 hover:bg-black/50"
-              />
-              <p className="text-xs text-white/50 mt-2">Send compliance updates to Slack</p>
-            </div>
-          </div>
-        </section>
-
-        {/* IDE Integration */}
-        <section className="animate-fade-in-up delay-700">
-          <h2 className="text-[13px] uppercase tracking-wider text-[#aaaaaa] mb-6">IDE Integration</h2>
-          <div className="space-y-6">
-            <div className="py-4 border-b border-[#1a1a1a]">
-              <p className="text-[14px] mb-2">VS Code Extension</p>
-              <p className="text-[12px] text-[#aaaaaa] mb-4">
-                Get real-time compliance feedback as you code
-              </p>
-              <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-white/20">
-                Download Extension →
-              </button>
-            </div>
-
-            <div className="py-4 border-b border-[#1a1a1a]">
-              <p className="text-[14px] mb-2">JetBrains Plugin</p>
-              <p className="text-[12px] text-[#aaaaaa] mb-4">
-                Support for IntelliJ IDEA, PyCharm, WebStorm, and more
-              </p>
-              <button className="px-4 py-2 bg-[#0a0a0a] border border-[#1a1a1a] text-[13px] hover:bg-[#111] transition-all duration-200 hover:scale-105 active:scale-95 hover:border-white/20 opacity-60 cursor-not-allowed" disabled>
-                Coming Soon
-              </button>
-            </div>
-          </div>
-        </section>
+          <p className="text-[12px] text-[#aaaaaa] mt-4">
+            Clearing scan history removes violations, fixes, and audit events. Projects and settings stay intact.
+          </p>
+        </div>
       </div>
     </div>
   )
