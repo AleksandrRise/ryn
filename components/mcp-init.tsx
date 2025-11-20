@@ -76,6 +76,8 @@ export function McpInit() {
           return
         }
 
+        console.debug('[MCP] mcp-get-url received', requestId, window.location.href)
+
         const href = window.location.href
         const title = document.title
 
