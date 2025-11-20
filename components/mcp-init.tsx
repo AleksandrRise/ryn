@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from 'react'
-import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 
 export function McpInit() {
@@ -17,6 +17,7 @@ export function McpInit() {
 
     let unlistenExecuteCallback: UnlistenFn | null = null
     let unlistenExecuteJs: UnlistenFn | null = null
+    let unlistenGetUrl: UnlistenFn | null = null
 
     const setupListeners = async () => {
       // Backwards-compatible listener for legacy callback-based scripts
@@ -65,6 +66,26 @@ export function McpInit() {
         }
       })
 
+      // Respond to URL requests from MCP bridge
+      unlistenGetUrl = await listen('mcp-get-url', async (event: any) => {
+        const payload = event.payload as any
+        const requestId = payload?.requestId
+
+        if (!requestId) {
+          console.error('[MCP] Missing requestId in mcp-get-url payload:', payload)
+          return
+        }
+
+        const href = window.location.href
+        const title = document.title
+
+        try {
+          await emit('mcp-url-response', { requestId, href, title })
+        } catch (err) {
+          console.error('[MCP] Failed to emit mcp-url-response:', err)
+        }
+      })
+
       console.log('[MCP] MCPInit listeners initialized')
     }
 
@@ -77,6 +98,7 @@ export function McpInit() {
       delete window.__MCPCallback
       if (unlistenExecuteCallback) unlistenExecuteCallback()
       if (unlistenExecuteJs) unlistenExecuteJs()
+      if (unlistenGetUrl) unlistenGetUrl()
     }
   }, [])
 
@@ -89,4 +111,3 @@ declare global {
     __MCPCallback?: (id: string, data?: any, error?: string | null) => void
   }
 }
-
