@@ -41,6 +41,7 @@ pub struct Scan {
     pub total_files: i32,
     pub violations_found: i32,
     pub status: String,
+    pub scan_mode: String,
     pub critical_count: i32,
     pub high_count: i32,
     pub medium_count: i32,
@@ -48,7 +49,7 @@ pub struct Scan {
 }
 
 impl Scan {
-    pub fn new(project_id: i64) -> Self {
+    pub fn new(project_id: i64, scan_mode: String) -> Self {
         Self {
             id: 0,
             project_id,
@@ -58,6 +59,7 @@ impl Scan {
             total_files: 0,
             violations_found: 0,
             status: ScanStatus::Running.as_str().to_string(),
+            scan_mode,
             critical_count: 0,
             high_count: 0,
             medium_count: 0,
@@ -107,31 +109,32 @@ mod tests {
 
     #[test]
     fn test_scan_creation() {
-        let scan = Scan::new(1);
+        let scan = Scan::new(1, "regex_only".to_string());
         assert_eq!(scan.project_id, 1);
         assert_eq!(scan.status, "running");
         assert_eq!(scan.files_scanned, 0);
         assert_eq!(scan.violations_found, 0);
         assert_eq!(scan.completed_at, None);
+        assert_eq!(scan.scan_mode, "regex_only");
     }
 
     #[test]
     fn test_scan_status_transitions() {
-        let scan = Scan::new(1);
+        let scan = Scan::new(1, "regex_only".to_string());
         assert_eq!(scan.get_status(), Some(ScanStatus::Running));
 
         let completed = scan.clone().complete();
         assert_eq!(completed.get_status(), Some(ScanStatus::Completed));
         assert!(completed.completed_at.is_some());
 
-        let failed = Scan::new(1).fail();
+        let failed = Scan::new(1, "regex_only".to_string()).fail();
         assert_eq!(failed.get_status(), Some(ScanStatus::Failed));
         assert!(failed.completed_at.is_some());
     }
 
     #[test]
     fn test_scan_serde() {
-        let scan = Scan::new(1);
+        let scan = Scan::new(1, "regex_only".to_string());
         let json = serde_json::to_string(&scan).unwrap();
         let deserialized: Scan = serde_json::from_str(&json).unwrap();
         assert_eq!(scan, deserialized);

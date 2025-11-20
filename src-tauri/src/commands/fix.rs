@@ -31,6 +31,52 @@ static RATE_LIMITER: Lazy<Arc<RateLimiter>> = Lazy::new(|| {
     Arc::new(RateLimiter::with_config(config))
 });
 
+/// Normalize AI-generated fixed code into a pure source snippet.
+///
+/// Many LLMs return code wrapped in Markdown fences like:
+/// ```js
+/// const x = 1;
+/// ```
+///
+/// Ryn must apply only the inner code to source files. This helper strips
+/// the outer ``` fences (and optional language identifiers) while leaving
+/// the code body unchanged. If no fences are present, the input is returned
+/// unchanged (minus surrounding newlines).
+fn normalize_fixed_code(raw: &str) -> String {
+    let trimmed = raw.trim_matches('\n');
+
+    // Fast path: no Markdown fence present
+    if !trimmed.contains("```") {
+        return trimmed.to_string();
+    }
+
+    // Work on leading fence, if any
+    let mut lines = trimmed.lines();
+    let first = lines.next().unwrap_or_default();
+
+    if !first.trim_start().starts_with("```") {
+        // Fences somewhere else – best effort: strip any lone ``` lines
+        let cleaned_lines: Vec<&str> = trimmed
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("```"))
+            .collect();
+        return cleaned_lines.join("\n");
+    }
+
+    // First line is a fence like ``` or ```js – capture until closing fence.
+    let mut code_lines: Vec<&str> = Vec::new();
+    for line in lines {
+        if line.trim_start().starts_with("```") {
+            break;
+        }
+        code_lines.push(line);
+    }
+
+    let result = code_lines.join("\n");
+    // Final trim on trailing newlines only, to preserve indentation and leading spaces
+    result.trim_matches('\n').to_string()
+}
+
 /// Generate a fix for a violation using the AI agent (langchain-rust + Claude)
 ///
 /// Calls Claude API directly via langchain-rust to generate a fix for a specific violation,
@@ -86,7 +132,7 @@ pub async fn generate_fix(
 
     let framework_str = _project_framework.as_deref().unwrap_or("unknown");
 
-    let fixed_code = grok_client.generate_fix(
+    let fixed_code_raw = grok_client.generate_fix(
         &_violation.control_id,
         &_violation.description,
         &_violation.code_snippet,
@@ -96,6 +142,9 @@ pub async fn generate_fix(
     )
     .await
     .map_err(|e| format!("Claude API error: {}", e))?;
+
+    // Strip Markdown fences (```lang ... ```) and keep only the inner code.
+    let fixed_code = normalize_fixed_code(&fixed_code_raw);
 
     // Generate explanation based on control ID
     let explanation = match _violation.control_id.as_str() {
@@ -161,15 +210,14 @@ pub async fn generate_fix(
 ///
 /// # Returns
 /// * `Ok(String)` - Modified file content with fix applied
-/// * `Err(String)` - Error if line number is out of range or code doesn't match
+/// * `Err(String)` - Error if the original snippet cannot be located
 ///
 /// # Algorithm
-/// 1. Parse file content into lines
-/// 2. Convert 1-indexed line_number to 0-indexed array position
-/// 3. Validate line number is within bounds
-/// 4. Verify original_code exists on the target line
-/// 5. Replace original_code with fixed_code on that line only
-/// 6. Reconstruct file content with newline separators
+/// 1. Pre-compute line start offsets for the file content
+/// 2. Find all occurrences of `original_code` in the file content
+/// 3. Use `line_number` as a hint to choose the occurrence whose span covers that line
+/// 4. If no occurrence covers the line but there is exactly one match, use it
+/// 5. Replace that single occurrence with `fixed_code`, preserving the rest of the file
 ///
 /// # Example
 /// ```rust
@@ -182,7 +230,7 @@ pub async fn generate_fix(
 ///     "os.getenv(\"PASSWORD\")",
 ///     2  // Line 2
 /// );
-/// assert_eq!(result.unwrap(), "line1\npassword = os.getenv(\"PASSWORD\")\nline3");
+/// assert_eq!(result.unwrap(), "line1\npassword = os.getenv(\"PASSWORD\")\nline3\n");
 /// ```
 pub fn apply_fix_to_content(
     file_content: &str,
@@ -190,57 +238,95 @@ pub fn apply_fix_to_content(
     fixed_code: &str,
     line_number: i64,
 ) -> Result<String, String> {
-    // Validate inputs: reject newlines in original_code or fixed_code
-    // These would break the single-line replacement model
-    if original_code.contains('\n') || original_code.contains('\r') {
-        return Err(
-            "Invalid original_code: contains newline characters. \
-             This function operates on single lines only. \
-             Use separate replacements for multi-line changes.".to_string()
-        );
-    }
-    if fixed_code.contains('\n') || fixed_code.contains('\r') {
-        return Err(
-            "Invalid fixed_code: contains newline characters. \
-             This function operates on single lines only. \
-             Use separate replacements for multi-line changes.".to_string()
-        );
+    if line_number <= 0 {
+        return Err("Line number must be positive".to_string());
     }
 
-    // Parse lines
-    let mut lines: Vec<String> = file_content.lines().map(|s| s.to_string()).collect();
-
-    // Convert 1-indexed to 0-indexed
-    let target_line_idx = (line_number as usize).saturating_sub(1);
-
-    // Validate line number
-    if target_line_idx >= lines.len() {
+    // Empty file: nothing to patch, treat as out-of-range for any line.
+    if file_content.is_empty() {
         return Err(format!(
-            "Line number {} out of range (file has {} lines)",
-            line_number,
-            lines.len()
+            "Line number {} out of range (file has 0 lines)",
+            line_number
         ));
     }
 
-    // Verify original code exists on target line
-    let target_line = &lines[target_line_idx];
-    if !target_line.contains(original_code) {
+    // Pre-compute 1-based line start offsets so we can map
+    // byte indices back to line numbers.
+    let mut line_starts: Vec<usize> = Vec::new();
+    line_starts.push(0);
+    for (idx, ch) in file_content.char_indices() {
+        if ch == '\n' {
+            line_starts.push(idx + 1);
+        }
+    }
+    // Find all occurrences of the original snippet in the file.
+    let mut match_indices: Vec<usize> = Vec::new();
+    let mut search_start: usize = 0;
+    while let Some(pos) = file_content[search_start..].find(original_code) {
+        let start = search_start + pos;
+        match_indices.push(start);
+        // Move past this match to avoid infinite loops on empty patterns.
+        search_start = start + original_code.len().max(1);
+        if search_start >= file_content.len() {
+            break;
+        }
+    }
+
+    if match_indices.is_empty() {
         return Err(format!(
-            "Original code not found on line {}. Expected to find: '{}', but line contains: '{}'",
-            line_number,
-            original_code,
-            target_line
+            "Original code not found in file. Expected snippet: '{}'",
+            original_code
         ));
     }
 
-    // Replace only on the target line
-    let updated_line = target_line.replace(original_code, fixed_code);
-    lines[target_line_idx] = updated_line;
+    // Helper: map a byte index to a 1-based line number.
+    let byte_index_to_line = |idx: usize| -> usize {
+        match line_starts.binary_search(&idx) {
+            Ok(i) => i + 1,
+            Err(i) => i,
+        }
+    };
 
-    // Reconstruct file content
-    let updated_content = lines.join("\n");
+    // Determine how many lines the snippet spans.
+    let snippet_line_count = original_code.chars().filter(|&ch| ch == '\n').count() + 1;
+    let target_line = line_number as usize;
 
-    Ok(updated_content)
+    // Prefer the occurrence whose span covers the provided line_number.
+    let mut chosen_start: Option<usize> = None;
+    for start in &match_indices {
+        let start_line = byte_index_to_line(*start);
+        let end_line = start_line + snippet_line_count - 1;
+        if target_line >= start_line && target_line <= end_line {
+            chosen_start = Some(*start);
+            break;
+        }
+    }
+
+    // Fallback: if none cover the requested line but there is exactly one
+    // occurrence, use it. Otherwise, fail with a descriptive error.
+    let start_idx = if let Some(idx) = chosen_start {
+        idx
+    } else if match_indices.len() == 1 {
+        match_indices[0]
+    } else {
+        return Err(format!(
+            "Original code not found on or around line {}. \
+Found {} occurrences but none covered that line.",
+            line_number,
+            match_indices.len()
+        ));
+    };
+
+    let end_idx = start_idx + original_code.len();
+
+    let mut updated = String::with_capacity(
+        file_content.len() - original_code.len() + fixed_code.len(),
+    );
+    updated.push_str(&file_content[..start_idx]);
+    updated.push_str(fixed_code);
+    updated.push_str(&file_content[end_idx..]);
+
+    Ok(updated)
 }
 
 /// Apply a generated fix to the source code
@@ -286,22 +372,31 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
     let file_content = std::fs::read_to_string(&file_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
+    // Normalize fixed_code again at apply time so that older fixes in the
+    // database (created before normalization existed) are still applied
+    // correctly even if they contain Markdown fences.
+    let normalized_fixed = normalize_fixed_code(&fix.fixed_code);
+
     let updated_content = apply_fix_to_content(
         &file_content,
         &fix.original_code,
-        &fix.fixed_code,
+        &normalized_fixed,
         violation.line_number,
     )?;
 
-    // BACKUP: Create backup before modifying file
+    // BACKUP: Create backup before modifying file.
+    // Store backups directly under `.ryn-backups/` using a timestamped filename
+    // so integration tests can discover them easily.
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-    let backup_dir = repo_path.join(format!(".ryn-backups/{}", timestamp));
+    let backup_dir = repo_path.join(".ryn-backups");
     std::fs::create_dir_all(&backup_dir)
         .map_err(|e| format!("Failed to create backup directory: {}", e))?;
 
     let backup_file_name = file_path.file_name()
         .ok_or_else(|| "Failed to extract filename from path".to_string())?;
-    let backup_path = backup_dir.join(backup_file_name);
+    let backup_file_name_str = backup_file_name.to_string_lossy();
+    let backup_name = format!("{}_{}", backup_file_name_str, timestamp);
+    let backup_path = backup_dir.join(backup_name);
 
     std::fs::copy(&file_path, &backup_path)
         .map_err(|e| format!("Failed to create backup: {}", e))?;
@@ -356,6 +451,29 @@ mod tests {
         assert!(result.is_err());
     }
 
+    // === UNIT TESTS: normalize_fixed_code ===
+
+    #[test]
+    fn test_normalize_fixed_code_plain() {
+        let input = "const x = 1;\nconst y = 2;\n";
+        let normalized = normalize_fixed_code(input);
+        assert_eq!(normalized, "const x = 1;\nconst y = 2;");
+    }
+
+    #[test]
+    fn test_normalize_fixed_code_markdown_fence_with_language() {
+        let input = "```javascript\nconst x = 1;\nconst y = 2;\n```\n";
+        let normalized = normalize_fixed_code(input);
+        assert_eq!(normalized, "const x = 1;\nconst y = 2;");
+    }
+
+    #[test]
+    fn test_normalize_fixed_code_markdown_fence_without_language() {
+        let input = "```\npassword = \"secret\"\n```\n";
+        let normalized = normalize_fixed_code(input);
+        assert_eq!(normalized, "password = \"secret\"");
+    }
+
     // === UNIT TESTS: Pure function tests (fast, no git/DB) ===
 
     /// Test apply_fix_to_content line-specific replacement (pure function, no git)
@@ -388,7 +506,8 @@ mod tests {
     fn test_apply_fix_to_content_line_out_of_range() {
         let content = "line1\nline2\nline3\n";
 
-        // Line 10 is out of range (file has 3 lines)
+        // Line 10 is out of range (file has 3 lines) but we still expect the
+        // snippet to be replaced if it exists anywhere in the file.
         let result = apply_fix_to_content(
             content,
             "line1",
@@ -396,8 +515,9 @@ mod tests {
             10
         );
 
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("out of range"));
+        assert!(result.is_ok());
+        let updated = result.unwrap();
+        assert!(updated.starts_with("fixed"));
     }
 
     /// Test apply_fix_to_content code mismatch (pure function, no git)
@@ -423,7 +543,8 @@ mod tests {
         let content = "";
         let result = apply_fix_to_content(content, "code", "fixed", 1);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("out of range"));
+        let err = result.unwrap_err();
+        assert!(err.contains("out of range"));
     }
 
     /// Test line 0 - saturating_sub makes it access first line
@@ -431,10 +552,10 @@ mod tests {
     fn test_apply_fix_to_content_line_zero() {
         let content = "first line\nsecond line\nthird line";
         let result = apply_fix_to_content(content, "first", "FIRST", 0);
-        // Line 0 with saturating_sub(1) becomes index 0 (first line)
-        assert!(result.is_ok());
-        let updated = result.unwrap();
-        assert!(updated.starts_with("FIRST line"));
+        // Line numbers are 1-based; zero should be rejected
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("must be positive"));
     }
 
     /// Test line 1 (first line) explicitly
@@ -478,8 +599,8 @@ mod tests {
         let content = "var x = x + x;";
         let result = apply_fix_to_content(content, "x", "y", 1);
         assert!(result.is_ok());
-        // .replace() replaces ALL occurrences
-        assert_eq!(result.unwrap(), "var y = y + y;");
+        // Only the occurrence overlapping the specified line is replaced
+        assert_eq!(result.unwrap(), "var y = x + x;");
     }
 
     /// Test empty original_code
@@ -543,7 +664,7 @@ mod tests {
         let lines: Vec<&str> = updated.lines().collect();
         assert_eq!(lines.len(), 3);
         assert_eq!(lines[1], "LINE2");
-        // Note: .join("\n") does NOT add trailing newline
+        // We preserve the original trailing-newline semantics of the file.
     }
 
     /// Test trailing newline in input (gets stripped by .lines())
@@ -557,8 +678,8 @@ mod tests {
         // .lines() strips trailing newline, so we get 3 lines not 4
         assert_eq!(lines.len(), 3);
         assert_eq!(lines[1], "LINE2");
-        // Output has NO trailing newline (.join doesn't add it)
-        assert!(!updated.ends_with('\n'));
+        // Output preserves the trailing newline.
+        assert!(updated.ends_with('\n'));
     }
 
     /// Test multiple trailing newlines
@@ -569,11 +690,13 @@ mod tests {
         assert!(result.is_ok());
         let updated = result.unwrap();
         let lines: Vec<&str> = updated.lines().collect();
-        // .lines() keeps empty strings from intermediate newlines but strips final ones
-        assert_eq!(lines.len(), 3);  // "line1", "line2", "" - only last trailing \n\n stripped
+        // .lines() splits on '\n' but does not expose the very final trailing newline.
+        // The structure of the file (including intermediate blank lines) is preserved.
+        assert_eq!(lines.len(), 4);
         assert_eq!(lines[0], "LINE1");
         assert_eq!(lines[1], "line2");
-        assert_eq!(lines[2], "");  // One empty line from \n\n
+        assert_eq!(lines[2], "");
+        assert_eq!(lines[3], "");
     }
 
     /// Test whitespace-only lines
@@ -604,8 +727,8 @@ mod tests {
         let content = "password = get_password()";
         let result = apply_fix_to_content(content, "password", "secret", 1);
         assert!(result.is_ok());
-        // .replace() replaces ALL occurrences on the line
-        assert_eq!(result.unwrap(), "secret = get_secret()");
+        // Only the first occurrence is replaced; the rest of the line is unchanged
+        assert_eq!(result.unwrap(), "secret = get_password()");
     }
 
     /// Test original code is substring at end of line
@@ -696,7 +819,8 @@ mod tests {
         let content = "line1\nline2\nline3";
         let result = apply_fix_to_content(content, "line", "LINE", 4);  // File has 3 lines
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("out of range"));
+        let err = result.unwrap_err();
+        assert!(err.contains("not found on or around line"));
     }
 
     /// Test negative line number (will saturate to 0, then access first line)
@@ -712,29 +836,32 @@ mod tests {
         let _ = result;  // Either error or success is acceptable
     }
 
-    /// Test input validation: reject newline in original_code
+    /// Test multi-line original_code replacement
     #[test]
     fn test_apply_fix_to_content_newline_in_original() {
         let content = "line1\nline2\nline3\n";
         let result = apply_fix_to_content(content, "line1\nline2", "BOTH", 1);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.contains("Invalid original_code"));
-        assert!(err.contains("newline"));
-        assert!(err.contains("single lines only"));
+        assert!(result.is_ok());
+        let updated = result.unwrap();
+        let lines: Vec<&str> = updated.lines().collect();
+        // The first two lines should be replaced by the single line "BOTH"
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], "BOTH");
+        assert_eq!(lines[1], "line3");
     }
 
-    /// Test input validation: reject newline in fixed_code
+    /// Test multi-line fixed_code replacement
     #[test]
     fn test_apply_fix_to_content_newline_in_fixed() {
         let content = "password = \"secret\"\n";
         // Use actual newline character (not escaped \\n)
         let fixed_with_newline = "\"foo\nbar\"";
         let result = apply_fix_to_content(content, "\"secret\"", fixed_with_newline, 1);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(err.contains("Invalid fixed_code"));
-        assert!(err.contains("newline"));
-        assert!(err.contains("single lines only"));
+        assert!(result.is_ok());
+        let updated = result.unwrap();
+        let lines: Vec<&str> = updated.lines().collect();
+        // The assignment should span two lines after replacement.
+        assert_eq!(lines[0], "password = \"foo");
+        assert_eq!(lines[1], "bar\"");
     }
 }

@@ -41,6 +41,13 @@ src-tauri/WixTools/
 # macOS
 .DS_Store
 
+# Local AI helper docs and session notes
+.claude/
+2025-*.txt
+
+# MCP / Tauri screenshots
+src-tauri/screenshot-*.png
+
 # Intermediate logo files
 public/ryn-logo-square.png
 

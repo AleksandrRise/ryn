@@ -3,7 +3,7 @@
 //! Handles project scanning, framework detection, and scan progress tracking
 
 use crate::db::{self, queries};
-use crate::models::{Violation, Scan, DetectionMethod, Severity};
+use crate::models::{Violation, Scan, DetectionMethod, Severity, ScanCost};
 use crate::scanner::framework_detector::FrameworkDetector;
 use crate::scanner::llm_file_selector;
 use crate::scanner::tree_sitter_utils::{CodeParser, find_context_at_line};
@@ -252,7 +252,7 @@ async fn scan_project_internal<R: tauri::Runtime>(
             .map_err(|e| format!("Security: Invalid project path: {}", e))?;
 
         // Create scan record
-        let scan_id = queries::insert_scan(&conn, project_id)
+        let scan_id = queries::insert_scan(&conn, project_id, &llm_scan_mode)
             .map_err(|e| format!("Failed to create scan: {}", e))?;
 
         (llm_scan_mode, project, scan_id)
@@ -633,10 +633,13 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
     // Create semaphore for concurrency control (max 10 concurrent requests)
     let semaphore = Arc::new(Semaphore::new(10));
 
-    // Track cumulative cost and collected violations
+    // Track cumulative cost, token usage and collected violations
     let mut llm_violations: Vec<Violation> = Vec::new();
     let mut total_cost = 0.0;
     let total_files = files.len();
+    let mut total_input_tokens: i64 = 0;
+    let mut total_output_tokens: i64 = 0;
+    let mut files_analyzed_with_llm: i64 = 0;
 
     // Process files in batches, checking cost limit every 10 files
     for (batch_idx, chunk) in files.chunks(10).enumerate() {
@@ -681,8 +684,14 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
 
                 match result {
                     Ok(Ok(analysis)) => {
-                        // Return violations and cost (will be merged and inserted later)
-                        Ok((analysis.violations, analysis.usage.calculate_cost()))
+                        // Return violations, token usage and cost for this file.
+                        let usage = analysis.usage;
+                        Ok((
+                            analysis.violations,
+                            usage.prompt_tokens as i64,
+                            usage.completion_tokens as i64,
+                            usage.calculate_cost(),
+                        ))
                     }
                     Ok(Err(e)) => {
                         Err(format!("LLM analysis failed for {}: {}", file_path, e))
@@ -699,8 +708,11 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
         // Wait for this batch to complete and collect violations
         for task in tasks {
             match task.await {
-                Ok(Ok((mut violations, cost))) => {
+                Ok(Ok((mut violations, input_tokens, output_tokens, cost))) => {
                     llm_violations.append(&mut violations);
+                    total_input_tokens += input_tokens;
+                    total_output_tokens += output_tokens;
+                    files_analyzed_with_llm += 1;
                     total_cost += cost;
                 }
                 Ok(Err(e)) => {
@@ -752,6 +764,29 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
                     break;
                 }
             }
+        }
+    }
+
+    // Persist cumulative scan cost for analytics if we have any LLM usage
+    if files_analyzed_with_llm > 0 && total_cost > 0.0 {
+        let conn = db::get_connection();
+        let scan_cost = ScanCost {
+            id: 0,
+            scan_id,
+            files_analyzed_with_llm,
+            input_tokens: total_input_tokens,
+            output_tokens: total_output_tokens,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            total_cost_usd: total_cost,
+            created_at: chrono::Utc::now().to_rfc3339(),
+        };
+
+        if let Err(e) = queries::insert_scan_cost(&conn, &scan_cost) {
+            println!(
+                "[ryn] Failed to insert scan cost for scan {}: {}",
+                scan_id, e
+            );
         }
     }
 

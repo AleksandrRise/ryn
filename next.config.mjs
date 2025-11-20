@@ -1,14 +1,28 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  // Only use static export for production builds (Tauri bundling)
-  // During development, use standard Next.js server mode to support dynamic routes
-  output: process.env.NODE_ENV === 'production' ? 'export' : undefined,
-  images: {
-    unoptimized: true,
-  },
-  turbopack: {
-    root: process.cwd(),
-  },
+import { PHASE_PRODUCTION_BUILD } from 'next/constants.js'
+
+/** @type {import('next').NextConfig | ((phase: string) => import('next').NextConfig)} */
+const nextConfig = (phase) => {
+  const baseConfig = {
+    images: {
+      unoptimized: true,
+    },
+    turbopack: {
+      root: process.cwd(),
+    },
+  }
+
+  // Use static export only for production builds.
+  // In dev, fall back to the default output so Next.js
+  // can run the normal dev server without relying on
+  // .next/dev manifests.
+  if (phase === PHASE_PRODUCTION_BUILD) {
+    return {
+      ...baseConfig,
+      output: 'export',
+    }
+  }
+
+  return baseConfig
 }
 
 export default nextConfig

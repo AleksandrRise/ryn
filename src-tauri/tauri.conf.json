@@ -2,9 +2,9 @@
   "$schema": "https://tauri.app/schemas/tauri.conf.json",
   "productName": "ryn",
   "version": "0.1.0",
-  "identifier": "com.ryn.app",
+  "identifier": "com.ryn.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npm run dev:static",
     "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../out"
@@ -35,7 +35,8 @@
             "core:webview:allow-internal-toggle-devtools",
             "dialog:allow-open",
             "dialog:allow-save",
-            "dialog:default"
+            "dialog:default",
+            "mcp-bridge:allow-js-callback"
           ]
         }
       ]
@@ -55,7 +56,7 @@
     ],
     "macOS": {
       "minimumSystemVersion": "10.13",
-      "signingIdentity": "5CCB31F23E612854623105EA2C54E975DABCD398",
+      "signingIdentity": "-",
       "entitlements": "Entitlements.plist"
     }
   }

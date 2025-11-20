@@ -155,11 +155,49 @@ fn migrate_to_v3(conn: &Connection) -> Result<()> {
         [],
     ).context("Failed to add violations.function_name column")?;
 
-    // class_name: Extracted via tree-sitter for better fix context
+    // class_name: The class where violation was found (NULL if not in a class)
     conn.execute(
         "ALTER TABLE violations ADD COLUMN class_name TEXT",
         [],
     ).context("Failed to add violations.class_name column")?;
+
+    Ok(())
+}
+
+/// Migrate from v3 to v4 (scan mode tracking)
+/// Adds scan_mode to scans table:
+/// - scan_mode: The mode used for the scan (regex_only/smart/analyze_all)
+fn migrate_to_v4(conn: &Connection) -> Result<()> {
+    // ============================================================
+    // SCANS TABLE: Add scan_mode column
+    // ============================================================
+
+    // scan_mode: The mode used for the scan, defaults to 'regex_only' for existing scans
+    conn.execute(
+        "ALTER TABLE scans ADD COLUMN scan_mode TEXT NOT NULL DEFAULT 'regex_only'",
+        [],
+    ).context("Failed to add scans.scan_mode column")?;
+
+    Ok(())
+}
+
+/// Backfill scan_mode for historical scans that used LLM analysis
+///
+/// Rules (deterministic, no inference beyond stored data):
+/// - Only updates scans where scan_mode is still 'regex_only'
+/// - If a scan has any entry in scan_costs (i.e. it incurred LLM cost),
+///   we set scan_mode to 'smart' to indicate AI-assisted scanning.
+/// - Scans without scan_costs remain 'regex_only'
+fn backfill_scan_modes(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "
+        UPDATE scans
+        SET scan_mode = 'smart'
+        WHERE scan_mode = 'regex_only'
+          AND id IN (SELECT DISTINCT scan_id FROM scan_costs)
+        ",
+        [],
+    ).context("Failed to backfill scan_mode for historical scans")?;
 
     Ok(())
 }
@@ -198,6 +236,7 @@ pub fn seed_settings(conn: &Connection) -> Result<()> {
 /// - v1: Initial schema (7 tables, 8 indexes)
 /// - v2: Hybrid scanning schema (detection_method, scan_costs, etc.)
 /// - v3: Tree-sitter context fields (function_name, class_name)
+/// - v4: Scan mode tracking (scan_mode column in scans table)
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     let current_version = get_schema_version(conn)?;
 
@@ -217,8 +256,18 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         set_schema_version(conn, 3)?;
     }
 
+    if current_version < 4 {
+        migrate_to_v4(conn)?;
+        set_schema_version(conn, 4)?;
+    }
+
     // Seed default settings (idempotent - won't overwrite existing values)
     seed_settings(conn)?;
+
+    // Backfill scan_mode for any historical scans that used LLM analysis but
+    // were created before the scan_mode column existed.
+    // This is safe and idempotent: it only updates scans still marked regex_only.
+    backfill_scan_modes(conn)?;
 
     Ok(())
 }
@@ -715,5 +764,92 @@ mod tests {
         );
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_migrate_to_v4_adds_scan_mode() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let conn = Connection::open(&db_path).unwrap();
+
+        // Apply v3 first
+        migrate_to_v1(&conn).unwrap();
+        migrate_to_v2(&conn).unwrap();
+        migrate_to_v3(&conn).unwrap();
+
+        // Apply v4 migration
+        migrate_to_v4(&conn).unwrap();
+
+        // Verify new column exists in scans table
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(scans)")
+            .unwrap();
+
+        let column_names: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert!(column_names.contains(&"scan_mode".to_string()));
+    }
+
+    #[test]
+    fn test_backfill_scan_modes_updates_scans_with_costs() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test_backfill_scan_modes.db");
+        let conn = Connection::open(&db_path).unwrap();
+
+        // Apply full schema and migrations so scans / scan_costs exist
+        run_migrations(&conn).unwrap();
+
+        // Insert a project
+        conn.execute(
+            "INSERT INTO projects (name, path, framework) VALUES (?, ?, ?)",
+            params!["proj", "/tmp/proj", Option::<String>::None],
+        ).unwrap();
+        let project_id = conn.last_insert_rowid();
+
+        // Insert two scans, both initially marked as regex_only
+        conn.execute(
+            "INSERT INTO scans (project_id, status, scan_mode) VALUES (?, 'completed', 'regex_only')",
+            params![project_id],
+        ).unwrap();
+        let scan_no_llm = conn.last_insert_rowid();
+
+        conn.execute(
+            "INSERT INTO scans (project_id, status, scan_mode) VALUES (?, 'completed', 'regex_only')",
+            params![project_id],
+        ).unwrap();
+        let scan_with_llm = conn.last_insert_rowid();
+
+        // Insert a scan_costs row only for the second scan to indicate LLM usage
+        conn.execute(
+            "INSERT INTO scan_costs (scan_id, files_analyzed_with_llm, total_cost_usd) VALUES (?, ?, ?)",
+            params![scan_with_llm, 5_i64, 1.23_f64],
+        ).unwrap();
+
+        // Run backfill
+        backfill_scan_modes(&conn).unwrap();
+
+        // Scan without costs should remain regex_only
+        let mode_no_llm: String = conn
+            .query_row(
+                "SELECT scan_mode FROM scans WHERE id = ?",
+                params![scan_no_llm],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(mode_no_llm, "regex_only");
+
+        // Scan with costs should be updated to smart
+        let mode_with_llm: String = conn
+            .query_row(
+                "SELECT scan_mode FROM scans WHERE id = ?",
+                params![scan_with_llm],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(mode_with_llm, "smart");
     }
 }

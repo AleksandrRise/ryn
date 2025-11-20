@@ -61,6 +61,22 @@ pub async fn get_scan_costs(time_range: TimeRange) -> Result<Vec<ScanCost>, Stri
     Ok(scan_costs)
 }
 
+/// Get cost details for a specific scan
+///
+/// # Arguments
+/// * `scan_id` - ID of the scan to fetch cost for
+///
+/// Returns: ScanCost record if it exists, or None
+#[tauri::command]
+pub async fn get_scan_cost(scan_id: i64) -> Result<Option<ScanCost>, String> {
+    let conn = db::get_connection();
+
+    let scan_cost = queries::select_scan_cost_by_scan_id(&conn, scan_id)
+        .map_err(|e| format!("Failed to fetch scan cost for scan {}: {}", scan_id, e))?;
+
+    Ok(scan_cost)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

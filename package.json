@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev --turbo -p 3000",
+    "tauri": "tauri",
+    "dev:static": "next build && node dev-static-server.mjs",
+    "dev": "next dev --webpack -p 3000",
     "lint": "eslint .",
     "start": "next start",
     "test": "vitest",

@@ -1,4 +1,10 @@
-export type AuditEventType = "scan" | "violation" | "fix" | "project_selected"
+export type AuditEventType =
+  | "scan_completed"
+  | "fix_applied"
+  | "violation_detected"
+  | "violation_dismissed"
+  | "project_selected"
+  | string
 
 export interface AuditEvent {
   id: number
@@ -7,6 +13,6 @@ export interface AuditEvent {
   violationId?: number
   fixId?: number
   description: string
-  metadata: Record<string, any>
+  metadata?: string | Record<string, any>
   createdAt: string
 }

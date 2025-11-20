@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "tauri": {
+      "command": "node",
+      "args": [
+        "/Users/seane/Documents/Github/taurimcp/tauri-mcp-server/dist/index.js"
+      ]
+    }
+  }
+}

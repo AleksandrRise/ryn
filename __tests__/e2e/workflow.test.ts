@@ -144,7 +144,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
       const result = await commands.scan_project(testProjectId)
 
       expect(mockInvoke).toHaveBeenCalledWith("scan_project", {
-        project_id: testProjectId,
+        projectId: testProjectId,
       })
       expect(result.violations_found).toBe(5)
       expect(result.critical_count).toBe(1)
@@ -251,7 +251,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
       const result = await commands.get_violations(testScanId)
 
       expect(mockInvoke).toHaveBeenCalledWith("get_violations", {
-        scan_id: testScanId,
+        scanId: testScanId,
         filters: undefined,
       })
       expect(result).toHaveLength(2)
@@ -319,7 +319,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
       const result = await commands.get_violation(1)
 
       expect(mockInvoke).toHaveBeenCalledWith("get_violation", {
-        violation_id: 1,
+        violationId: 1,
       })
       expect(result.violation.id).toBe(1)
       expect(result.violation.control_id).toBe("CC6.1")
@@ -332,7 +332,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
       await commands.dismiss_violation(1)
 
       expect(mockInvoke).toHaveBeenCalledWith("dismiss_violation", {
-        violation_id: 1,
+        violationId: 1,
       })
     })
   })
@@ -357,7 +357,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
       const result = await commands.generate_fix(1)
 
       expect(mockInvoke).toHaveBeenCalledWith("generate_fix", {
-        violation_id: 1,
+        violationId: 1,
       })
       expect(result.original_code).toContain("admin_panel")
       expect(result.fixed_code).toContain("@login_required")
@@ -369,7 +369,7 @@ describe("E2E Workflow - Complete Compliance Scanning Pipeline", () => {
 
       await commands.apply_fix(1)
 
-      expect(mockInvoke).toHaveBeenCalledWith("apply_fix", { fix_id: 1 })
+      expect(mockInvoke).toHaveBeenCalledWith("apply_fix", { fixId: 1 })
     })
   })
 
