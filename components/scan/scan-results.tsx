@@ -364,31 +364,26 @@ export function ScanResults() {
                 <div className="rounded-lg border border-white/10 bg-[#0b0b0b] p-3 font-mono text-xs text-white/85 overflow-auto">
                   {selectedViolation.codeSnippet ? (
                     <div className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
-                      {(() => {
-                        const lines = selectedViolation.codeSnippet.split("
-")
+                      {selectedViolation.codeSnippet.split("\\n").map((line, idx, arr) => {
                         const anchor = selectedViolation.lineNumber || 0
-                        const startLine = Math.max(1, anchor - Math.floor(lines.length / 2))
-
-                        return lines.map((line, idx) => {
-                          const lineNumber = startLine + idx
-                          const isTarget = lineNumber === anchor
-                          return (
-                            <div key={`${selectedViolation.id}-line-${idx}`} className="contents">
-                              <span className="text-white/30 text-right select-none">
-                                {lineNumber > 0 ? lineNumber : ""}
-                              </span>
-                              <pre
-                                className={`whitespace-pre-wrap font-mono leading-relaxed ${
-                                  isTarget ? "bg-white/5 text-white px-2 rounded" : ""
-                                }`}
-                              >
-                                {line || " "}
-                              </pre>
-                            </div>
-                          )
-                        })
-                      })()}
+                        const startLine = Math.max(1, anchor - Math.floor(arr.length / 2))
+                        const lineNumber = startLine + idx
+                        const isTarget = lineNumber === anchor
+                        return (
+                          <div key={`${selectedViolation.id}-line-${idx}`} className="contents">
+                            <span className="text-white/30 text-right select-none">
+                              {lineNumber > 0 ? lineNumber : ""}
+                            </span>
+                            <pre
+                              className={`whitespace-pre-wrap font-mono leading-relaxed ${
+                                isTarget ? "bg-white/5 text-white px-2 rounded" : ""
+                              }`}
+                            >
+                              {line || "\u00a0"}
+                            </pre>
+                          </div>
+                        )
+                      })}
                     </div>
                   ) : (
                     <div className="text-white/50">No code snippet available for this violation.</div>
