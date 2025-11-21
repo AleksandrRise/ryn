@@ -221,7 +221,7 @@ function OnboardingContent() {
   if (checkingStatus) return null
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-slate-900 to-black text-white">
+    <div className="min-h-screen bg-[#050505] text-white">
       <div className="max-w-6xl mx-auto px-6 py-12 space-y-8">
         <div className="flex items-center justify-between">
           <div>
