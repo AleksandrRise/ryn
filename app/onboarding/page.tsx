@@ -25,53 +25,7 @@ import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handl
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification"
 import { useScanRunner } from "@/components/scan/hooks/use-scan-runner"
 import { ScanProgressCard } from "@/components/scan/scan-progress-card"
-
-const frameworkIcons: Record<string, { path: string; viewBox?: string; color?: string; label?: string }> = {
-  express: {
-    path: "M11.87 0c-6.56 0-11.87 5.31-11.87 11.87s5.31 11.87 11.87 11.87 11.87-5.31 11.87-11.87S18.43 0 11.87 0zm4.98 17.21L14.4 13l-2.53 4.21H9.74L13 11.72 9.89 6.53h2.12L14.53 11l2.53-4.47h2.12l-3.11 5.19 3.26 5.49z",
-    viewBox: "0 0 24 24",
-    color: "#fafafa",
-    label: "Express",
-  },
-  react: {
-    path: "M14.977 14.811c-.156.28-.319.556-.487.83l2.747 4.77c.278-.488.521-.994.733-1.52zM9.024 14.81 6.074 18.887c.212.526.455 1.032.733 1.52l2.747-4.769a15.13 15.13 0 0 1-.53-.828zm7.33-4.499c.094.297.18.595.257.896l3.897-.003a11.87 11.87 0 0 0-.706-2.341l-2.829 1.448a12.84 12.84 0 0 1 .62 1.156zm-10.687 0a12.88 12.88 0 0 1 .62-1.156L3.458 8.863a11.865 11.865 0 0 0-.706 2.341h3.897c.077-.3.163-.599.258-.896zM12 .207c-.69 0-1.373.044-2.047.128l1.044 3.758c.328-.022.656-.033.984-.033.327 0 .655.011.983.033L14.047.335A12.15 12.15 0 0 0 12 .207zm-2.085 5.4L8.21 1.51a11.905 11.905 0 0 0-3.238 1.871l2.85 2.847a12.954 12.954 0 0 1 2.093-.619zm4.17 0c.717.148 1.42.36 2.092.619l2.85-2.847A11.904 11.904 0 0 0 15.79 1.51l-1.125 4.097zm-5.2 1.782-2.85-2.847A11.92 11.92 0 0 0 3.793 7.52l3.356 1.232c.186-.4.385-.793.597-1.183zm6.226 0c.212.39.41.783.596 1.183l3.356-1.232a11.92 11.92 0 0 0-1.264-2.978zm-4.493 1.38-3.356-1.232a11.93 11.93 0 0 0-.704 3.163l3.917-.003c.025-.314.061-.628.112-.942zm2.76 0c.052.314.088.628.112.942l3.917.003a11.93 11.93 0 0 0-.704-3.163zm-3.53 2.93-3.918.002a11.93 11.93 0 0 0 .705 3.164l3.355-1.233a11.558 11.558 0 0 1-.112-.934zm4.3 0c-.025.314-.061.627-.112.934l3.355 1.233a11.93 11.93 0 0 0 .705-3.164zM9.91 14.0a10.82 10.82 0 0 1-.596 1.182l-3.356 1.232a11.92 11.92 0 0 0 1.264 2.979l2.85-2.848a12.87 12.87 0 0 1-.162-.255zm4.18 0c-.053.087-.107.172-.162.256l2.85 2.847a11.92 11.92 0 0 0 1.264-2.979l-3.356-1.232zM11 15.3c-.328.022-.656.033-.983.033-.327 0-.655-.011-.983-.033L9.953 19.1c.674.084 1.357.128 2.047.128.689 0 1.372-.044 2.046-.128L13.037 15.3c-.328.022-.656.033-.984.033zm1-3.3a1 1 0 1 1-2 0a1 1 0 0 1 2 0z",
-    viewBox: "0 0 24 24",
-    color: "#61dafb",
-    label: "React",
-  },
-}
-
-function FrameworkBadge({ framework }: { framework?: string | null }) {
-  const key = framework ? framework.toLowerCase() : undefined
-  const icon = key ? frameworkIcons[key] : undefined
-  if (!framework) return null
-
-  return (
-    <motion.span
-      layout
-      className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white/10 border border-white/15"
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.97 }}
-    >
-      {icon ? (
-        <svg
-          width={14}
-          height={14}
-          viewBox={icon.viewBox || "0 0 24 24"}
-          fill={icon.color || "currentColor"}
-          aria-hidden
-          focusable="false"
-          className="shrink-0"
-        >
-          <path d={icon.path} />
-        </svg>
-      ) : (
-        <span className="inline-block h-2 w-2 rounded-full bg-emerald-300" />
-      )}
-      <span className="text-xs capitalize text-white/80">{icon?.label || framework}</span>
-    </motion.span>
-  )
-}
+import { FrameworkBadge } from "@/components/ui/framework-badge"
 
 type ScanMode = "regex_only" | "smart" | "analyze_all"
 
@@ -421,12 +375,9 @@ function OnboardingContent() {
               {currentStep.id === "scan" && (
                 <motion.div key="step-scan" variants={stepVariants} initial="initial" animate="animate" exit="exit">
               <div className="space-y-5">
-                <div className="flex items-center gap-3">
-                  <ZapIcon className="w-5 h-5 text-yellow-300" />
-                  <div>
-                    <h2 className="text-xl font-semibold">Pick how deep to scan</h2>
-                    <p className="text-white/60 text-sm">Choose a mode and set a cost limit for AI scans.</p>
-                  </div>
+                <div>
+                  <h2 className="text-xl font-semibold">Pick how deep to scan</h2>
+                  <p className="text-white/60 text-sm">Choose a mode and set a cost limit for AI scans.</p>
                 </div>
 
                 <RadioGroup value={selectedMode} onValueChange={(v) => setSelectedMode(v as ScanMode)} className="space-y-3">
