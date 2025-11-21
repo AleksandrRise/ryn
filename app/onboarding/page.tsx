@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { RadioGroup } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { WaterBackground } from "@/components/ui/water-background"
 import {
   Folder,
   ZapIcon,
@@ -64,6 +63,7 @@ function OnboardingContent() {
   const [notificationStatus, setNotificationStatus] = useState<"unknown" | "granted" | "denied">("unknown")
   const [isRequestingPermission, setIsRequestingPermission] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [showStartPrompt, setShowStartPrompt] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -200,6 +200,11 @@ function OnboardingContent() {
     const parsedCost = validateCost()
     if (parsedCost === null) return
 
+    if (!showStartPrompt) {
+      setShowStartPrompt(true)
+      return
+    }
+
     setIsSaving(true)
     try {
       if (isTauri) {
@@ -223,7 +228,6 @@ function OnboardingContent() {
 
   return (
     <div className="min-h-screen text-white relative overflow-hidden">
-      <WaterBackground className="opacity-70" />
       <div className="relative z-10 max-w-6xl mx-auto px-6 py-12 space-y-8">
         <div className="flex items-center justify-between">
           <div>
@@ -464,6 +468,41 @@ function OnboardingContent() {
                     }
                   />
                 </div>
+
+                {showStartPrompt && (
+                  <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
+                    <div className="text-sm font-semibold text-white/80">Choose a scan type to start</div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <button
+                        onClick={() => { setSelectedMode("regex_only"); void handleFinish(); }}
+                        className="rounded-lg border border-white/10 bg-black/40 p-3 text-left hover:border-white/20 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 text-sm font-semibold">
+                          <ZapIcon className="w-4 h-4 text-yellow-300" /> Pattern-only
+                        </div>
+                        <div className="text-xs text-white/60 mt-1">Fast, zero-cost regex pass.</div>
+                      </button>
+                      <button
+                        onClick={() => { setSelectedMode("smart"); void handleFinish(); }}
+                        className="rounded-lg border border-white/10 bg-black/40 p-3 text-left hover:border-white/20 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 text-sm font-semibold">
+                          <BrainCircuitIcon className="w-4 h-4 text-blue-300" /> Smart
+                        </div>
+                        <div className="text-xs text-white/60 mt-1">Balanced coverage with AI on key files.</div>
+                      </button>
+                      <button
+                        onClick={() => { setSelectedMode("analyze_all"); void handleFinish(); }}
+                        className="rounded-lg border border-white/10 bg-black/40 p-3 text-left hover:border-white/20 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 text-sm font-semibold">
+                          <ScanSearchIcon className="w-4 h-4 text-purple-300" /> Analyze all
+                        </div>
+                        <div className="text-xs text-white/60 mt-1">AI on every file for maximum depth.</div>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

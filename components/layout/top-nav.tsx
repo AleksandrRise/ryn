@@ -98,6 +98,10 @@ export function TopNav() {
 
   const currentProjectId = selectedProject ? String(selectedProject.id) : undefined
 
+  if (pathname?.startsWith("/onboarding")) {
+    return null
+  }
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-black border-b border-white/10">
       <div className="flex items-center h-10 px-6">
