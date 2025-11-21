@@ -9,7 +9,7 @@
     "dev": "next dev --webpack -p 3000",
     "lint": "eslint .",
     "start": "next start",
-    "test": "vitest",
+    "test": "vitest --exclude \"e2e-tests/*.mjs\"",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
