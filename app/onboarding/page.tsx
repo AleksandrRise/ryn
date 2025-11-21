@@ -22,6 +22,8 @@ import { create_project, detect_framework, get_settings, complete_onboarding } f
 import { useProjectStore } from "@/lib/stores/project-store"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
 import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification"
+import { useScanRunner } from "@/components/scan/hooks/use-scan-runner"
+import { ScanProgressCard } from "@/components/scan/scan-progress-card"
 
 type ScanMode = "regex_only" | "smart" | "analyze_all"
 
@@ -44,6 +46,14 @@ function OnboardingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { selectedProject, setSelectedProject } = useProjectStore()
+  const {
+    isScanning,
+    startScan,
+    progress,
+  } = useScanRunner(selectedProject?.id, {
+    onScanCompleted: () => router.replace("/scan"),
+    onScanStopped: () => router.replace("/scan"),
+  })
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [selectedMode, setSelectedMode] = useState<ScanMode>("smart")
@@ -194,6 +204,11 @@ function OnboardingContent() {
       if (isTauri) {
         await complete_onboarding(selectedMode, parsedCost)
         showSuccess("Onboarding saved. You’re ready to scan.")
+        if (selectedProject) {
+          showInfo("Starting your first scan...")
+          await startScan()
+          return
+        }
       }
       router.replace("/scan")
     } catch (err) {
@@ -466,12 +481,18 @@ function OnboardingContent() {
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               ) : (
-                <Button onClick={handleFinish} className="gap-2" disabled={isSaving}>
-                  Start using Ryn
+                <Button onClick={handleFinish} className="gap-2" disabled={isSaving || isScanning}>
+                  {isScanning ? "Starting first scan..." : "Start using Ryn"}
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               )}
             </div>
+
+            {isScanning && (
+              <div className="pt-4 border-t border-white/10">
+                <ScanProgressCard progress={progress} onCancel={() => undefined} />
+              </div>
+            )}
           </section>
         </div>
       </div>
