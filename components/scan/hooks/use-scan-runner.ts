@@ -73,6 +73,14 @@ export function useScanRunner(
     await options.onScanStopped?.(currentScanId)
   }, [currentScanId, options])
 
+  const cancelScan = useCallback(() => {
+    setIsScanning(false)
+    setProgress(initialProgress)
+    if (currentScanId) {
+      void options.onScanStopped?.(currentScanId)
+    }
+  }, [currentScanId, options])
+
   // Listen for scan progress events when a scan is running
   useEffect(() => {
     if (!isScanning) return
@@ -150,6 +158,7 @@ export function useScanRunner(
     progress,
     costLimitPrompt,
     startScan,
+    cancelScan,
     continueAfterCostLimit,
     stopAfterCostLimit,
   }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Play, RefreshCw, Clock3, Zap, Search, FolderTree, ChevronDown } from "lucide-react"
+import { Play, RefreshCw, Clock3, Zap, Search, FolderTree, ChevronDown, Sparkles, Check } from "lucide-react"
 import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
 import { ScanControls } from "@/components/scan/scan-controls"
 import { ScanProgressCard } from "@/components/scan/scan-progress-card"
@@ -13,6 +13,8 @@ import { useProjectStore } from "@/lib/stores/project-store"
 import type { Severity } from "@/lib/types/violation"
 import { formatDateTime, formatRelativeTime } from "@/lib/utils/date"
 import { handleTauriError, showInfo, showSuccess } from "@/lib/utils/error-handler"
+import { generate_fix } from "@/lib/tauri/commands"
+import { readTextFile } from "@tauri-apps/plugin-fs"
 
 export function ScanResults() {
   const { selectedProject } = useProjectStore()
@@ -38,6 +40,7 @@ export function ScanResults() {
     progress,
     costLimitPrompt,
     startScan,
+    cancelScan,
     continueAfterCostLimit,
     stopAfterCostLimit,
   } = useScanRunner(selectedProject?.id, {
@@ -65,6 +68,11 @@ export function ScanResults() {
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
   const [selectedViolationId, setSelectedViolationId] = useState<number | null>(null)
   const [fileSearch, setFileSearch] = useState("")
+  const [isGeneratingFix, setIsGeneratingFix] = useState(false)
+  const [generatedFix, setGeneratedFix] = useState<string | null>(null)
+  const [isCodeExpanded, setIsCodeExpanded] = useState(false)
+  const [fullFileContent, setFullFileContent] = useState<string | null>(null)
+  const [isLoadingFile, setIsLoadingFile] = useState(false)
 
   const lastCostDisplay = lastScanCost ? `$${lastScanCost.totalCostUsd.toFixed(3)}` : "–"
   const lastCompletedDisplay = lastScanStats.completedAt
@@ -141,6 +149,13 @@ export function ScanResults() {
     }
   }, [visibleViolations, selectedViolationId])
 
+  // Reset fix and expanded state when violation changes
+  useEffect(() => {
+    setGeneratedFix(null)
+    setIsCodeExpanded(false)
+    setFullFileContent(null)
+  }, [selectedViolationId])
+
   const selectedViolation = selectedViolationId
     ? visibleViolations.find((v) => v.id === selectedViolationId) ?? visibleViolations[0]
     : visibleViolations[0]
@@ -157,6 +172,46 @@ export function ScanResults() {
       showSuccess(`Scan completed! Found ${scan.violationsFound} violations`)
     } catch (error) {
       handleTauriError(error, "Failed to start scan")
+    }
+  }
+
+  const handleSuggestFix = async () => {
+    if (!selectedViolation) return
+
+    setIsGeneratingFix(true)
+    setGeneratedFix(null)
+
+    try {
+      showInfo("Generating fix with Grok...")
+      const fix = await generate_fix(selectedViolation.id)
+      setGeneratedFix(fix.fixed_code)
+      showSuccess("Fix generated successfully!")
+    } catch (error) {
+      handleTauriError(error, "Failed to generate fix")
+    } finally {
+      setIsGeneratingFix(false)
+    }
+  }
+
+  const handleExpandCode = async () => {
+    if (!selectedViolation || !selectedProject) return
+
+    if (isCodeExpanded) {
+      setIsCodeExpanded(false)
+      return
+    }
+
+    setIsLoadingFile(true)
+
+    try {
+      const fullPath = `${selectedProject.path}/${selectedViolation.filePath}`
+      const content = await readTextFile(fullPath)
+      setFullFileContent(content)
+      setIsCodeExpanded(true)
+    } catch (error) {
+      handleTauriError(error, "Failed to read full file content")
+    } finally {
+      setIsLoadingFile(false)
     }
   }
 
@@ -231,7 +286,7 @@ export function ScanResults() {
         </div>
       </div>
 
-      {isScanning && <ScanProgressCard progress={progress} />}
+      {isScanning && <ScanProgressCard progress={progress} onCancel={cancelScan} />}
 
       <div className="rounded-xl border border-white/10 bg-black/25 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] grid gap-5 xl:grid-cols-[260px_360px_1fr] items-start min-h-[520px]">
         {/* Files */}
@@ -358,7 +413,7 @@ export function ScanResults() {
                   <span className="text-white/60 text-[11px]">{selectedViolation.detectionMethod}</span>
                   <span className="font-mono text-[11px] text-white/70">{selectedViolation.controlId}</span>
                   {selectedViolation.confidenceScore !== undefined && (
-                    <span className="text-white/60">Confidence {Math.round(selectedViolation.confidenceScore * 100)}%</span>
+                    <span className="text-white/60">Confidence {Math.round(selectedViolation.confidenceScore)}%</span>
                   )}
                 </>
               ) : (
@@ -374,37 +429,83 @@ export function ScanResults() {
             <div className="space-y-3">
               <p className="text-base text-white/90 leading-snug">{selectedViolation.description}</p>
 
-              <div className="rounded-lg border border-white/10 bg-[#0c0c0c] p-3 font-mono text-xs text-white/85 overflow-auto shadow-inner">
-                {selectedViolation.codeSnippet ? (() => {
-                  const codeLines = selectedViolation.codeSnippet.split(/\r?\n/)
-                  const anchor = selectedViolation.lineNumber || 0
-                  const startLine = Math.max(1, anchor - Math.floor(codeLines.length / 2))
-                  return (
-                    <div className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
-                      {codeLines.map((line, idx) => {
-                        const lineNumber = startLine + idx
-                        const isTarget = lineNumber === anchor
-                        return (
-                          <div key={`${selectedViolation.id}-line-${idx}`} className="contents">
-                            <span className="text-white/30 text-right select-none">
-                              {lineNumber > 0 ? lineNumber : ""}
-                            </span>
-                            <pre
-                              className={`whitespace-pre-wrap font-mono leading-relaxed ${
-                                isTarget ? "bg-white/10 text-white px-2 rounded" : ""
-                              }`}
-                            >
-                              {line || "\u00a0"}
-                            </pre>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })() : (
-                  <div className="text-white/50">No code snippet available for this violation.</div>
-                )}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-white/70">Code Snippet</span>
+                  <button
+                    onClick={handleExpandCode}
+                    disabled={isLoadingFile}
+                    className="text-xs text-white/60 hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    {isLoadingFile ? "Loading..." : isCodeExpanded ? "Show snippet only" : "Expand full file"}
+                  </button>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-[#0c0c0c] p-3 font-mono text-xs text-white/85 overflow-auto shadow-inner max-h-[400px]">
+                  {isCodeExpanded && fullFileContent ? (() => {
+                    const codeLines = fullFileContent.split(/\r?\n/)
+                    return (
+                      <div className="grid grid-cols-[auto,1fr] gap-x-3">
+                        {codeLines.map((line, idx) => {
+                          const lineNumber = idx + 1
+                          const isTarget = lineNumber === selectedViolation.lineNumber
+                          return (
+                            <div key={`${selectedViolation.id}-fullline-${idx}`} className="contents">
+                              <span className="text-white/30 text-right select-none">
+                                {lineNumber}
+                              </span>
+                              <pre
+                                className={`whitespace-pre-wrap font-mono leading-snug ${
+                                  isTarget ? "bg-white/10 text-white px-2 rounded" : ""
+                                }`}
+                              >
+                                {line || "\u00a0"}
+                              </pre>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })() : selectedViolation.codeSnippet ? (() => {
+                    const codeLines = selectedViolation.codeSnippet.split(/\r?\n/)
+                    const anchor = selectedViolation.lineNumber || 0
+                    const startLine = Math.max(1, anchor - Math.floor(codeLines.length / 2))
+                    return (
+                      <div className="grid grid-cols-[auto,1fr] gap-x-3">
+                        {codeLines.map((line, idx) => {
+                          const lineNumber = startLine + idx
+                          const isTarget = lineNumber === anchor
+                          return (
+                            <div key={`${selectedViolation.id}-line-${idx}`} className="contents">
+                              <span className="text-white/30 text-right select-none">
+                                {lineNumber > 0 ? lineNumber : ""}
+                              </span>
+                              <pre
+                                className={`whitespace-pre-wrap font-mono leading-relaxed ${
+                                  isTarget ? "bg-white/10 text-white px-2 rounded" : ""
+                                }`}
+                              >
+                                {line || "\u00a0"}
+                              </pre>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })() : (
+                    <div className="text-white/50">No code snippet available for this violation.</div>
+                  )}
+                </div>
               </div>
+
+              {generatedFix && (
+                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-400/90 mb-2">Suggested Fix</div>
+                  <div className="rounded bg-[#0c0c0c] p-3 font-mono text-xs text-white/85 overflow-auto max-h-[300px]">
+                    <pre className="whitespace-pre-wrap">{generatedFix}</pre>
+                  </div>
+                </div>
+              )}
 
               {(selectedViolation.llmReasoning || selectedViolation.regexReasoning) && (
                 <div className="rounded-lg border border-white/10 bg-white/5 p-3">
@@ -415,9 +516,26 @@ export function ScanResults() {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center gap-3 text-[12px] text-white/60">
-                <span className="px-2 py-1 rounded border border-white/10 bg-white/5">Detected {formatRelativeTime(selectedViolation.detectedAt)}</span>
-                <span className="px-2 py-1 rounded border border-white/10 bg-white/5">Scan #{selectedViolation.scanId}</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  onClick={handleSuggestFix}
+                  disabled={isGeneratingFix}
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  {isGeneratingFix ? "Generating..." : "Suggest Fix"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled
+                  className="gap-2 opacity-50"
+                >
+                  <Check className="w-4 h-4" />
+                  Apply Fix
+                </Button>
               </div>
             </div>
           )}
