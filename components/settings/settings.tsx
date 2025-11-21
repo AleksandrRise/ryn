@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Save, Download, BarChart3, Sparkles, Eye } from "lucide-react"
+import { Save, Download, BarChart3, Sparkles, Eye, Compass } from "lucide-react"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { useFileWatcher } from "@/lib/hooks/useFileWatcher"
 import {
@@ -202,6 +202,15 @@ export function Settings() {
             <BarChart3 className="w-4 h-4" />
             View Cost Analytics →
           </Link>
+          <div className="mt-2">
+            <Link
+              href="/onboarding"
+              className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors"
+            >
+              <Compass className="w-4 h-4" />
+              Re-run onboarding
+            </Link>
+          </div>
         </div>
         <div className="flex gap-3">
           <Button onClick={handleExport} size="lg" variant="outline" className="gap-2" disabled={isSaving}>
