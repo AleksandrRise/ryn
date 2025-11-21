@@ -275,10 +275,7 @@ export function ScanResults() {
         <span className="text-white/60">·</span>
         <span>Cost: {lastCostDisplay}</span>
         <div className="ml-auto flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-white/55">Controls</span>
-            <ScanControls selectedControls={selectedControls} onToggle={toggleControl} />
-          </div>
+          <ScanControls selectedControls={selectedControls} onToggle={toggleControl} />
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-white/55">Severity</span>
             <SeverityFilter selected={selectedSeverity} onSelect={setSelectedSeverity} violations={violations} />
