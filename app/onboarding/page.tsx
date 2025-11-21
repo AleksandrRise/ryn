@@ -3,7 +3,7 @@
 import React, { Suspense, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, easeOut, easeIn } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { RadioGroup } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Shield,
+  Sparkles,
 } from "lucide-react"
 import { open } from "@tauri-apps/plugin-dialog"
 import { create_project, detect_framework, get_settings, complete_onboarding } from "@/lib/tauri/commands"
@@ -235,13 +236,13 @@ function OnboardingContent() {
 
   const stepVariants = {
     initial: { opacity: 0, y: 10 },
-    animate: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
-    exit: { opacity: 0, y: -8, transition: { duration: 0.25, ease: "easeIn" } },
+    animate: { opacity: 1, y: 0, transition: { duration: 0.35, ease: easeOut } },
+    exit: { opacity: 0, y: -8, transition: { duration: 0.25, ease: easeIn } },
   }
 
   const cardVariants = {
     initial: { opacity: 0, scale: 0.98 },
-    animate: { opacity: 1, scale: 1, transition: { duration: 0.25, ease: "easeOut" } },
+    animate: { opacity: 1, scale: 1, transition: { duration: 0.25, ease: easeOut } },
     whileHover: { scale: 1.01 },
     whileTap: { scale: 0.99 },
   }
@@ -350,9 +351,15 @@ function OnboardingContent() {
                           Choose folder
                         </Button>
                         {selectedProject && (
-                          <span className="px-3 py-1 text-xs rounded-full bg-white/10 border border-white/15">
-                            {selectedProject.framework || "Detected project"}
-                          </span>
+                          <motion.span
+                            layout
+                            className="px-3 py-1 text-xs rounded-full bg-white/10 border border-white/15 inline-flex items-center gap-1"
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.97 }}
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                            <span className="capitalize">{selectedProject.framework || "Detected"}</span>
+                          </motion.span>
                         )}
                       </div>
                     </div>
