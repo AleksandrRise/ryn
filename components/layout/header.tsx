@@ -8,6 +8,7 @@ import { create_project, detect_framework } from "@/lib/tauri/commands"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { handleTauriError, showSuccess } from "@/lib/utils/error-handler"
 import { useState } from "react"
+import { FrameworkBadge } from "@/components/ui/framework-badge"
 
 export function Header() {
   const router = useRouter()
@@ -70,9 +71,7 @@ export function Header() {
 
         {/* Framework Badge */}
         {selectedProject?.framework && (
-          <div className="px-3 py-1 rounded-full bg-primary-bg border border-primary/20">
-            <span className="text-xs font-medium text-primary">{selectedProject.framework}</span>
-          </div>
+          <FrameworkBadge framework={selectedProject.framework} />
         )}
       </div>
 

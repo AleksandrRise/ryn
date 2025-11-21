@@ -75,6 +75,8 @@ export function FrameworkSettings() {
             <option value="fastapi">FastAPI</option>
             <option value="rails">Ruby on Rails</option>
             <option value="spring">Spring Boot</option>
+            <option value="nextjs">Next.js</option>
+            <option value="react">React</option>
           </select>
           {isSaving && (
             <p className="text-xs text-muted-foreground mt-2">Saving...</p>

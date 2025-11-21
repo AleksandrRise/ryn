@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { FrameworkBadge } from "@/components/ui/framework-badge"
 
 export function TopNav() {
   const pathname = usePathname()
@@ -148,10 +149,13 @@ export function TopNav() {
               {projects.length > 0 ? (
                 projects.map((project) => (
                   <SelectItem key={project.id} value={String(project.id)} className="rounded-lg px-3 py-2 hover:bg-white/5 focus:bg-white/8">
-                    <span className="flex flex-col items-start">
+                    <span className="flex flex-col items-start gap-1">
                       <span className="text-sm font-medium">{project.name}</span>
-                      <span className="text-[11px] text-muted-foreground">
-                        {project.framework || project.path}
+                      <span className="flex items-center gap-1.5">
+                        <FrameworkBadge framework={project.framework} showLabel={false} className="!bg-transparent !border-0 !p-0" />
+                        <span className="text-[11px] text-muted-foreground truncate max-w-[180px]">
+                          {project.framework || project.path}
+                        </span>
                       </span>
                     </span>
                   </SelectItem>
