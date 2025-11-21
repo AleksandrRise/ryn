@@ -37,8 +37,23 @@
             "dialog:allow-save",
             "dialog:default",
             "notification:default",
-            "mcp-bridge:allow-js-callback"
-          ]
+            "fs:allow-read-text-file",
+            "fs:allow-home-read-recursive",
+            "fs:read-all",
+            "fs:default"
+          ],
+          "scopes": {
+            "fs:allow-read-text-file": [
+              {
+                "path": "/**"
+              }
+            ],
+            "fs:default": [
+              {
+                "path": "/**"
+              }
+            ]
+          }
         }
       ]
     },
