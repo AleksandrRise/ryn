@@ -409,9 +409,6 @@ export function ScanResults() {
                   </span>
                   <span className="text-white/60 text-[11px]">{selectedViolation.detectionMethod}</span>
                   <span className="font-mono text-[11px] text-white/70">{selectedViolation.controlId}</span>
-                  {selectedViolation.confidenceScore !== undefined && (
-                    <span className="text-white/60">Confidence {Math.round(selectedViolation.confidenceScore)}%</span>
-                  )}
                 </>
               ) : (
                 <span className="text-white/60">No violation selected.</span>
