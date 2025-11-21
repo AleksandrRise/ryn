@@ -233,9 +233,9 @@ export function ScanResults() {
 
       {isScanning && <ScanProgressCard progress={progress} />}
 
-      <div className="grid gap-4 lg:grid-cols-[240px_1fr] items-start">
+      <div className="grid gap-3 lg:grid-cols-[240px_1fr] items-start">
         {/* File tree / grouping */}
-        <div className="rounded-md border border-white/10 bg-black/25 p-3">
+        <div className="rounded-md border border-white/10 bg-black/20 p-3">
           <div className="flex items-center gap-2 mb-3 text-white/70 text-sm">
             <FolderTree className="w-4 h-4" />
             <span className="font-semibold">Files</span>
@@ -301,8 +301,8 @@ export function ScanResults() {
         </div>
 
         {/* Violations + detail */}
-        <div className="grid gap-4 lg:grid-cols-[320px_1fr] items-start">
-          <div className="rounded-md border border-white/10 bg-black/25 p-3">
+        <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr] items-start rounded-md border border-white/10 bg-black/15 p-3">
+          <div className="rounded-sm border border-white/10 bg-black/25 p-3">
             <div className="flex items-center justify-between mb-2 text-white/70 text-sm">
               <div className="font-semibold">Violations</div>
               <div className="text-[11px] text-white/60">{visibleViolations.length} shown</div>
@@ -341,7 +341,7 @@ export function ScanResults() {
             </div>
           </div>
 
-          <div className="rounded-md border border-white/10 bg-black/30 p-4 min-h-[420px]">
+          <div className="rounded-sm border border-white/10 bg-black/25 p-4 min-h-[420px]">
             {selectedViolation ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2 text-[12px] text-white/70">
