@@ -233,30 +233,35 @@ export function ScanResults() {
 
       {isScanning && <ScanProgressCard progress={progress} />}
 
-      <div className="grid gap-3 lg:grid-cols-[240px_1fr] items-start">
-        {/* File tree / grouping */}
-        <div className="rounded-md border border-white/10 bg-black/20 p-3">
-          <div className="flex items-center gap-2 mb-3 text-white/70 text-sm">
-            <FolderTree className="w-4 h-4" />
-            <span className="font-semibold">Files</span>
+      <div className="rounded-xl border border-white/10 bg-black/25 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] grid gap-5 xl:grid-cols-[260px_360px_1fr] items-start min-h-[520px]">
+        {/* Files */}
+        <div className="flex flex-col gap-3 xl:border-r xl:border-white/10 xl:pr-4">
+          <div className="flex items-center justify-between text-sm text-white/75">
+            <div className="flex items-center gap-2 font-semibold">
+              <FolderTree className="w-4 h-4" />
+              Files
+            </div>
+            <span className="text-[11px] text-white/50">
+              {visibleFileGroups.length || filteredViolations.length} files
+            </span>
           </div>
 
-          <div className="relative mb-3">
+          <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
             <input
               value={fileSearch}
               onChange={(e) => setFileSearch(e.target.value)}
               placeholder="Filter files"
-              className="w-full rounded-sm bg-black/50 border border-white/15 px-9 py-2 text-xs text-white/85 placeholder:text-white/45 focus:outline-none focus:border-white/30"
+              className="w-full rounded-md bg-white/5 border border-white/10 px-9 py-2 text-xs text-white/85 placeholder:text-white/45 focus:outline-none focus:border-white/30"
             />
           </div>
 
-          <div className="space-y-1 max-h-[620px] overflow-auto pr-1">
+          <div className="space-y-1 max-h-[640px] overflow-auto pr-1">
             <button
-              className={`w-full text-left rounded-sm px-3 py-2 text-xs font-semibold transition-colors border-l-2 border ${
+              className={`w-full text-left rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
                 selectedFilePath === null
-                  ? "bg-white/5 border-l-white text-white"
-                  : "bg-transparent border-white/5 text-white/70 hover:border-white/25 hover:border-l-white/40 hover:text-white"
+                  ? "bg-white/10 text-white"
+                  : "bg-transparent text-white/75 hover:bg-white/5 hover:text-white"
               }`}
               onClick={() => setSelectedFilePath(null)}
             >
@@ -274,10 +279,10 @@ export function ScanResults() {
               return (
                 <button
                   key={group.filePath}
-                  className={`w-full text-left rounded-sm px-3 py-2 text-xs transition-colors border-l-2 border flex flex-col gap-1 ${
+                  className={`w-full text-left rounded-md px-3 py-2 text-xs transition-colors flex flex-col gap-1 ${
                     isActive
-                      ? "bg-white/5 border-l-white text-white"
-                      : "bg-transparent border-l-transparent text-white/75 hover-border-l-white/30 hover:text-white"
+                      ? "bg-white/10 text-white"
+                      : "bg-transparent text-white/80 hover:bg-white/5 hover:text-white"
                   }`}
                   onClick={() => setSelectedFilePath(group.filePath)}
                 >
@@ -300,73 +305,83 @@ export function ScanResults() {
           </div>
         </div>
 
-        {/* Violations + detail */}
-        <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr] items-start rounded-md border border-white/10 bg-black/15 p-3">
-          <div className="rounded-sm border border-white/10 bg-black/25 p-3">
-            <div className="flex items-center justify-between mb-2 text-white/70 text-sm">
-              <div className="font-semibold">Violations</div>
-              <div className="text-[11px] text-white/60">{visibleViolations.length} shown</div>
-            </div>
-            <div className="max-h-[620px] overflow-auto divide-y divide-white/5">
-              {visibleViolations.length === 0 && (
-                <div className="text-[12px] text-white/50 px-2 py-6 text-center">No violations match these filters.</div>
-              )}
-              {visibleViolations.map((v) => {
-                const isActive = v.id === selectedViolation?.id
-                return (
-                  <button
-                    key={v.id}
-                    onClick={() => setSelectedViolationId(v.id)}
-                    className={`w-full text-left px-3 py-2 transition-colors ${
-                      isActive
-                        ? "bg-white/5 text-white"
-                        : "bg-transparent text-white/80 hover:bg-white/5"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 text-[12px]">
-                        <span className={`inline-flex items-center gap-1 font-semibold ${severityTone(v.severity)}`}>
-                          <span className="h-2 w-2 rounded-full bg-current" />
-                          {v.severity}
-                        </span>
-                        <span className="text-white/60 text-[11px]">{v.detectionMethod}</span>
-                        <span className="font-mono text-[11px] text-white/65">{v.controlId}</span>
-                      </div>
-                      <span className="text-[11px] text-white/60 font-mono shrink-0">{v.filePath}:{v.lineNumber}</span>
+        {/* Violations */}
+        <div className="flex flex-col gap-3 xl:border-r xl:border-white/10 xl:pr-4">
+          <div className="flex items-center justify-between text-sm text-white/75">
+            <div className="font-semibold">Violations</div>
+            <div className="text-[11px] text-white/60">{visibleViolations.length} shown</div>
+          </div>
+          <div className="max-h-[640px] overflow-auto rounded-md bg-white/5 divide-y divide-white/5 border border-white/10">
+            {visibleViolations.length === 0 && (
+              <div className="text-[12px] text-white/60 px-3 py-6 text-center">No violations match these filters.</div>
+            )}
+            {visibleViolations.map((v) => {
+              const isActive = v.id === selectedViolation?.id
+              return (
+                <button
+                  key={v.id}
+                  onClick={() => setSelectedViolationId(v.id)}
+                  className={`w-full text-left px-3 py-3 transition-colors ${
+                    isActive
+                      ? "bg-white/10 text-white"
+                      : "bg-transparent text-white/85 hover:bg-white/5"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2 text-[12px]">
+                      <span className={`inline-flex items-center gap-1 font-semibold ${severityTone(v.severity)}`}>
+                        <span className="h-2 w-2 rounded-full bg-current" />
+                        {v.severity}
+                      </span>
+                      <span className="text-white/60 text-[11px]">{v.detectionMethod}</span>
+                      <span className="font-mono text-[11px] text-white/70">{v.controlId}</span>
                     </div>
-                    <p className="text-sm text-white/90 leading-snug line-clamp-2 mt-1">{v.description}</p>
-                  </button>
-                )
-              })}
+                    <span className="text-[11px] text-white/60 font-mono shrink-0">{v.filePath}:{v.lineNumber}</span>
+                  </div>
+                  <p className="text-sm text-white/90 leading-snug line-clamp-2 mt-1">{v.description}</p>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Detail */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between text-[12px] text-white/70">
+            <div className="flex items-center gap-3">
+              {selectedViolation ? (
+                <>
+                  <span className={`inline-flex items-center gap-1 font-semibold ${severityTone(selectedViolation.severity)}`}>
+                    <span className="h-2 w-2 rounded-full bg-current" />
+                    {selectedViolation.severity}
+                  </span>
+                  <span className="text-white/60 text-[11px]">{selectedViolation.detectionMethod}</span>
+                  <span className="font-mono text-[11px] text-white/70">{selectedViolation.controlId}</span>
+                  {selectedViolation.confidenceScore !== undefined && (
+                    <span className="text-white/60">Confidence {Math.round(selectedViolation.confidenceScore * 100)}%</span>
+                  )}
+                </>
+              ) : (
+                <span className="text-white/60">No violation selected.</span>
+              )}
             </div>
+            {selectedViolation && (
+              <span className="text-[11px] text-white/60 font-mono">{selectedViolation.filePath}:{selectedViolation.lineNumber}</span>
+            )}
           </div>
 
-          <div className="rounded-sm border border-white/10 bg-black/25 p-4 min-h-[420px]">
-            {selectedViolation ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-2 text-[12px] text-white/70">
-                  <div className="flex items-center gap-3">
-                    <span className={`inline-flex items-center gap-1 font-semibold ${severityTone(selectedViolation.severity)}`}>
-                      <span className="h-2 w-2 rounded-full bg-current" />
-                      {selectedViolation.severity}
-                    </span>
-                    <span className="text-white/60 text-[11px]">{selectedViolation.detectionMethod}</span>
-                    <span className="font-mono text-[11px] text-white/70">{selectedViolation.controlId}</span>
-                    {selectedViolation.confidenceScore !== undefined && (
-                      <span className="text-white/60">Confidence {Math.round(selectedViolation.confidenceScore * 100)}%</span>
-                    )}
-                  </div>
-                  <span className="text-[11px] text-white/60 font-mono">{selectedViolation.filePath}:{selectedViolation.lineNumber}</span>
-                </div>
+          {selectedViolation && (
+            <div className="space-y-3">
+              <p className="text-base text-white/90 leading-snug">{selectedViolation.description}</p>
 
-                <p className="text-base text-white/90 leading-snug">{selectedViolation.description}</p>
-
-                <div className="rounded-lg border border-white/10 bg-[#0b0b0b] p-3 font-mono text-xs text-white/85 overflow-auto">
-                  {selectedViolation.codeSnippet ? (
+              <div className="rounded-lg border border-white/10 bg-[#0c0c0c] p-3 font-mono text-xs text-white/85 overflow-auto shadow-inner">
+                {selectedViolation.codeSnippet ? (() => {
+                  const codeLines = selectedViolation.codeSnippet.split(/\r?\n/)
+                  const anchor = selectedViolation.lineNumber || 0
+                  const startLine = Math.max(1, anchor - Math.floor(codeLines.length / 2))
+                  return (
                     <div className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
-                      {selectedViolation.codeSnippet.split("\\n").map((line, idx, arr) => {
-                        const anchor = selectedViolation.lineNumber || 0
-                        const startLine = Math.max(1, anchor - Math.floor(arr.length / 2))
+                      {codeLines.map((line, idx) => {
                         const lineNumber = startLine + idx
                         const isTarget = lineNumber === anchor
                         return (
@@ -376,7 +391,7 @@ export function ScanResults() {
                             </span>
                             <pre
                               className={`whitespace-pre-wrap font-mono leading-relaxed ${
-                                isTarget ? "bg-white/5 text-white px-2 rounded" : ""
+                                isTarget ? "bg-white/10 text-white px-2 rounded" : ""
                               }`}
                             >
                               {line || "\u00a0"}
@@ -385,29 +400,27 @@ export function ScanResults() {
                         )
                       })}
                     </div>
-                  ) : (
-                    <div className="text-white/50">No code snippet available for this violation.</div>
-                  )}
-                </div>
-
-                {(selectedViolation.llmReasoning || selectedViolation.regexReasoning) && (
-                  <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                    <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60 mb-1">Why this is flagged</div>
-                    <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">
-                      {selectedViolation.llmReasoning || selectedViolation.regexReasoning}
-                    </p>
-                  </div>
+                  )
+                })() : (
+                  <div className="text-white/50">No code snippet available for this violation.</div>
                 )}
-
-                <div className="flex items-center gap-3 text-[12px] text-white/60">
-                  <span className="px-2 py-1 rounded border border-white/10 bg-white/5">Detected {formatRelativeTime(selectedViolation.detectedAt)}</span>
-                  <span className="px-2 py-1 rounded border border-white/10 bg-white/5">Scan #{selectedViolation.scanId}</span>
-                </div>
               </div>
-            ) : (
-              <div className="text-sm text-white/60">No violation selected.</div>
-            )}
-          </div>
+
+              {(selectedViolation.llmReasoning || selectedViolation.regexReasoning) && (
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60 mb-1">Why this is flagged</div>
+                  <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">
+                    {selectedViolation.llmReasoning || selectedViolation.regexReasoning}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3 text-[12px] text-white/60">
+                <span className="px-2 py-1 rounded border border-white/10 bg-white/5">Detected {formatRelativeTime(selectedViolation.detectedAt)}</span>
+                <span className="px-2 py-1 rounded border border-white/10 bg-white/5">Scan #{selectedViolation.scanId}</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       {costLimitPrompt.open && costLimitPrompt.data && (
