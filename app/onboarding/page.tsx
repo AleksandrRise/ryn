@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { RadioGroup } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { WaterBackground } from "@/components/ui/water-background"
 import {
   Folder,
   ZapIcon,
@@ -221,8 +222,9 @@ function OnboardingContent() {
   if (checkingStatus) return null
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
-      <div className="max-w-6xl mx-auto px-6 py-12 space-y-8">
+    <div className="min-h-screen bg-[#050505] text-white relative overflow-hidden">
+      <WaterBackground className="opacity-70" />
+      <div className="relative z-10 max-w-6xl mx-auto px-6 py-12 space-y-8">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-white/60 text-sm">Welcome to Ryn</p>
