@@ -49,6 +49,8 @@ export function FrameworkBadge({ framework, className = "", showLabel = true }: 
   const key = normalize(framework)
   const entry = frameworkIcons.find((f) => f.match(key))
   const isExpress = key === "express"
+  const iconSize = isExpress ? 18 : 16
+  const shouldShowLabel = showLabel && !isExpress
 
   return (
     <motion.div
@@ -57,17 +59,13 @@ export function FrameworkBadge({ framework, className = "", showLabel = true }: 
       whileHover={{ scale: 1.03 }}
       whileTap={{ scale: 0.97 }}
     >
-      {isExpress ? (
-        <span className="text-[11px] font-semibold tracking-tight lowercase text-white/85 leading-none">express</span>
-      ) : entry ? (
-        <entry.Icon size={16} className="shrink-0 text-white" />
+      {entry ? (
+        <entry.Icon size={iconSize} className="shrink-0 text-white" />
       ) : (
         <span className="inline-block h-2 w-2 rounded-full bg-emerald-300" />
       )}
-      {showLabel && (
-        <span className="text-[10px] font-medium capitalize text-white/80">
-          {isExpress ? "Express" : entry?.label || framework}
-        </span>
+      {shouldShowLabel && (
+        <span className="text-[10px] font-medium capitalize text-white/80">{entry?.label || framework}</span>
       )}
     </motion.div>
   )
