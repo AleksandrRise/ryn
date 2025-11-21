@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Play, RefreshCw, Clock3, Zap, Search, FolderTree } from "lucide-react"
+import { Play, RefreshCw, Clock3, Zap, Search, FolderTree, ChevronDown } from "lucide-react"
 import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
 import { ScanControls } from "@/components/scan/scan-controls"
 import { ScanProgressCard } from "@/components/scan/scan-progress-card"
@@ -175,13 +175,13 @@ export function ScanResults() {
   }
 
   return (
-    <div className="px-6 py-6 max-w-[1400px] mx-auto">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div className="px-6 py-6 max-w-[1400px] mx-auto space-y-4">
+      {/* Top bar: title + primary actions */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-3xl font-semibold tracking-tight">Scan Results</h1>
-          <p className="text-sm text-white/60">Project: {selectedProject.name}</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Scan Results</h1>
+          <p className="text-xs text-white/50">Project: {selectedProject.name}</p>
         </div>
-
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -204,42 +204,41 @@ export function ScanResults() {
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-white/70">
-        <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+      {/* Meta line + filters */}
+      <div className="flex flex-wrap items-center gap-3 text-xs text-white/65">
+        <span className="flex items-center gap-1">
           <Clock3 className="w-3.5 h-3.5" />
-          <span className="flex items-center gap-1">
-            {lastCompletedDisplay}
-            {lastCompletedRelative && <span className="text-white/50">({lastCompletedRelative})</span>}
-          </span>
+          {lastCompletedDisplay}
+          {lastCompletedRelative && <span className="text-white/45">({lastCompletedRelative})</span>}
+        </span>
+        <span className="text-white/60">·</span>
+        <span>Mode: {lastMode === "regex_only" ? "Pattern only" : lastMode === "smart" ? "Smart" : "Analyze all"}</span>
+        <span className="text-white/60">·</span>
+        <span>Files: {lastScanStats.filesScanned || 0}</span>
+        <span className="text-white/60">·</span>
+        <span>Violations: {lastScanStats.violationsFound || 0}</span>
+        <span className="text-white/60">·</span>
+        <span>Cost: {lastCostDisplay}</span>
+        <div className="ml-auto flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-white/55">Controls</span>
+            <ScanControls selectedControls={selectedControls} onToggle={toggleControl} />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-white/55">Severity</span>
+            <SeverityFilter selected={selectedSeverity} onSelect={setSelectedSeverity} violations={violations} />
+          </div>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-          <Zap className="w-3.5 h-3.5" />
-          Mode: {lastMode === "regex_only" ? "Pattern Only" : lastMode === "smart" ? "Smart" : "Analyze All"}
-        </div>
-        <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-          Files: {lastScanStats.filesScanned || 0}
-        </div>
-        <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-          Violations: {lastScanStats.violationsFound || 0}
-        </div>
-        <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-          Cost: {lastCostDisplay}
-        </div>
-      </div>
-
-      <div className="mb-6 flex flex-wrap items-start gap-4">
-        <ScanControls selectedControls={selectedControls} onToggle={toggleControl} />
-        <SeverityFilter selected={selectedSeverity} onSelect={setSelectedSeverity} violations={violations} />
       </div>
 
       {isScanning && <ScanProgressCard progress={progress} />}
 
-      <div className="grid gap-4 lg:grid-cols-[240px_280px_1fr] items-start">
+      <div className="grid gap-4 lg:grid-cols-[240px_1fr] items-start">
         {/* File tree / grouping */}
         <div className="rounded-md border border-white/10 bg-black/25 p-3">
-          <div className="flex items-center gap-2 mb-3">
-            <FolderTree className="w-4 h-4 text-white/70" />
-            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Files</span>
+          <div className="flex items-center gap-2 mb-3 text-white/70 text-sm">
+            <FolderTree className="w-4 h-4" />
+            <span className="font-semibold">Files</span>
           </div>
 
           <div className="relative mb-3">
@@ -248,7 +247,7 @@ export function ScanResults() {
               value={fileSearch}
               onChange={(e) => setFileSearch(e.target.value)}
               placeholder="Filter files"
-              className="w-full rounded-xl bg-black/40 border border-white/10 px-9 py-2 text-xs text-white/80 placeholder:text-white/40 focus:outline-none focus:border-white/25"
+              className="w-full rounded-sm bg-black/50 border border-white/15 px-9 py-2 text-xs text-white/85 placeholder:text-white/45 focus:outline-none focus:border-white/30"
             />
           </div>
 
@@ -271,14 +270,14 @@ export function ScanResults() {
             {visibleFileGroups.map((group) => {
               const isActive = selectedFilePath === group.filePath
               const name = group.filePath.split("/").pop() || group.filePath
-              const dir = group.filePath.includes("/") ? group.filePath.slice(0, group.filePath.lastIndexOf("/")) : "";
+              const dir = group.filePath.includes("/") ? group.filePath.slice(0, group.filePath.lastIndexOf("/")) : ""
               return (
                 <button
                   key={group.filePath}
-                  className={`w-full text-left rounded-lg px-3 py-2 text-xs transition-colors border flex flex-col gap-1 ${
+                  className={`w-full text-left rounded-sm px-3 py-2 text-xs transition-colors border-l-2 border flex flex-col gap-1 ${
                     isActive
-                      ? "bg-white/10 border-white/25 text-white"
-                      : "bg-transparent border-white/5 text-white/70 hover:border-white/20 hover:text-white"
+                      ? "bg-white/5 border-l-white text-white"
+                      : "bg-transparent border-l-transparent text-white/75 hover-border-l-white/30 hover:text-white"
                   }`}
                   onClick={() => setSelectedFilePath(group.filePath)}
                 >
@@ -286,30 +285,14 @@ export function ScanResults() {
                     <span className="font-semibold">{name}</span>
                     <span className="text-[11px] text-white/50">{group.violations.length}</span>
                   </div>
-                  {dir && <span className="text-[10px] text-white/40 truncate">{dir}</span>}
-                  <div className="flex items-center gap-1 mt-1">
-                    {(["critical", "high", "medium", "low"] as Severity[]).map((sev) => {
-                      const count = group.counts[sev] || 0
-                      const tone =
-                        sev === "critical"
-                          ? "text-red-300"
-                          : sev === "high"
-                            ? "text-orange-300"
-                            : sev === "medium"
-                              ? "text-yellow-200"
-                              : "text-white/60"
-
-                      const bg = count > 0 ? "bg-white/10 border-white/25" : "bg-white/0 border-transparent"
-
-                      return (
-                        <span
-                          key={sev}
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border ${bg} ${tone}`}
-                        >
-                          {count}
-                        </span>
-                      )
-                    })}
+                  {dir && <span className="text-[10px] text-white/45 truncate">{dir}</span>}
+                  <div className="flex items-center gap-3 mt-1 text-[11px] text-white/60">
+                    {(["critical", "high", "medium", "low"] as Severity[]).map((sev) => (
+                      <span key={sev} className={`inline-flex items-center gap-1 ${severityTone(sev)}`}>
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
+                        {group.counts[sev] || 0}
+                      </span>
+                    ))}
                   </div>
                 </button>
               )
@@ -317,14 +300,14 @@ export function ScanResults() {
           </div>
         </div>
 
-        {/* Violations list + detail */}
-        <div className="grid gap-4 lg:grid-cols-[280px_1fr] items-start">
-          <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60">Violations</div>
-              <div className="text-[11px] text-white/50">{visibleViolations.length} shown</div>
+        {/* Violations + detail */}
+        <div className="grid gap-4 lg:grid-cols-[320px_1fr] items-start">
+          <div className="rounded-md border border-white/10 bg-black/25 p-3">
+            <div className="flex items-center justify-between mb-2 text-white/70 text-sm">
+              <div className="font-semibold">Violations</div>
+              <div className="text-[11px] text-white/60">{visibleViolations.length} shown</div>
             </div>
-            <div className="space-y-1 max-h-[600px] overflow-auto pr-1">
+            <div className="max-h-[620px] overflow-auto divide-y divide-white/5">
               {visibleViolations.length === 0 && (
                 <div className="text-[12px] text-white/50 px-2 py-6 text-center">No violations match these filters.</div>
               )}
@@ -334,26 +317,24 @@ export function ScanResults() {
                   <button
                     key={v.id}
                     onClick={() => setSelectedViolationId(v.id)}
-                    className={`w-full text-left rounded-sm border-l-2 px-3 py-2 transition-colors ${
+                    className={`w-full text-left px-3 py-2 transition-colors ${
                       isActive
-                        ? "bg-white/5 border-l-white text-white"
-                        : "bg-transparent border-l-transparent text-white/75 hover:border-l-white/30 hover:bg-white/5"
+                        ? "bg-white/5 text-white"
+                        : "bg-transparent text-white/80 hover:bg-white/5"
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2 mb-1 text-[12px] text-white/70">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 text-[12px]">
                         <span className={`inline-flex items-center gap-1 font-semibold ${severityTone(v.severity)}`}>
                           <span className="h-2 w-2 rounded-full bg-current" />
                           {v.severity}
                         </span>
                         <span className="text-white/60 text-[11px]">{v.detectionMethod}</span>
+                        <span className="font-mono text-[11px] text-white/65">{v.controlId}</span>
                       </div>
-                      <span className="text-[11px] text-white/60 font-mono">{v.filePath}:{v.lineNumber}</span>
+                      <span className="text-[11px] text-white/60 font-mono shrink-0">{v.filePath}:{v.lineNumber}</span>
                     </div>
-                    <p className="text-sm text-white/90 leading-snug line-clamp-2">{v.description}</p>
-                    <div className="mt-1 flex items-center gap-2 text-[11px] text-white/60 font-mono">
-                      {v.controlId}
-                    </div>
+                    <p className="text-sm text-white/90 leading-snug line-clamp-2 mt-1">{v.description}</p>
                   </button>
                 )
               })}
@@ -384,7 +365,8 @@ export function ScanResults() {
                   {selectedViolation.codeSnippet ? (
                     <div className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-1">
                       {(() => {
-                        const lines = selectedViolation.codeSnippet.split("\n")
+                        const lines = selectedViolation.codeSnippet.split("
+")
                         const anchor = selectedViolation.lineNumber || 0
                         const startLine = Math.max(1, anchor - Math.floor(lines.length / 2))
 
@@ -401,7 +383,7 @@ export function ScanResults() {
                                   isTarget ? "bg-white/5 text-white px-2 rounded" : ""
                                 }`}
                               >
-                                {line || "\u00a0"}
+                                {line || " "}
                               </pre>
                             </div>
                           )
@@ -433,7 +415,6 @@ export function ScanResults() {
           </div>
         </div>
       </div>
-
       {costLimitPrompt.open && costLimitPrompt.data && (
         <CostLimitDialog
           currentCost={costLimitPrompt.data.currentCost}
