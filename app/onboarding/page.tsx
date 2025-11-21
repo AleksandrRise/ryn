@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { RadioGroup } from "@/components/ui/radio-group"
@@ -41,6 +42,7 @@ const steps: Step[] = [
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { selectedProject, setSelectedProject } = useProjectStore()
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
@@ -62,7 +64,8 @@ export default function OnboardingPage() {
       try {
         const settings = await get_settings()
         const onboardingCompleted = settings.find((s) => s.key === "onboarding_completed")
-        if (onboardingCompleted?.value === "true") {
+        const force = searchParams?.get("force") === "1"
+        if (onboardingCompleted?.value === "true" && !force) {
           router.replace("/")
           return
         }
@@ -76,7 +79,7 @@ export default function OnboardingPage() {
     return () => {
       mounted = false
     }
-  }, [router])
+  }, [router, searchParams])
 
   useEffect(() => {
     const checkPermission = async () => {
