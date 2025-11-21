@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
+import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { RadioGroup } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
@@ -64,6 +65,7 @@ function OnboardingContent() {
   const [isRequestingPermission, setIsRequestingPermission] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showStartPrompt, setShowStartPrompt] = useState(false)
+  const [showIntro, setShowIntro] = useState(true)
 
   useEffect(() => {
     let mounted = true
@@ -91,6 +93,11 @@ function OnboardingContent() {
       mounted = false
     }
   }, [router, searchParams])
+
+  useEffect(() => {
+    const t = setTimeout(() => setShowIntro(false), 1200)
+    return () => clearTimeout(t)
+  }, [])
 
   useEffect(() => {
     const checkPermission = async () => {
@@ -226,8 +233,40 @@ function OnboardingContent() {
 
   if (checkingStatus) return null
 
+  const stepVariants = {
+    initial: { opacity: 0, y: 10 },
+    animate: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" } },
+    exit: { opacity: 0, y: -8, transition: { duration: 0.25, ease: "easeIn" } },
+  }
+
+  const cardVariants = {
+    initial: { opacity: 0, scale: 0.98 },
+    animate: { opacity: 1, scale: 1, transition: { duration: 0.25, ease: "easeOut" } },
+    whileHover: { scale: 1.01 },
+    whileTap: { scale: 0.99 },
+  }
+
   return (
     <div className="min-h-screen text-white relative overflow-hidden">
+      <AnimatePresence>{showIntro && (
+        <motion.div
+          key="intro"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black"
+          initial={{ opacity: 1 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 0.5 } }}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0, transition: { duration: 0.45 } }}
+            exit={{ opacity: 0, y: -8, transition: { duration: 0.35 } }}
+            className="flex flex-col items-center gap-3"
+          >
+            <div className="text-4xl font-bold tracking-tight">ryn</div>
+            <div className="text-sm text-white/60">Welcome. Let’s set you up.</div>
+          </motion.div>
+        </motion.div>
+      )}</AnimatePresence>
       <div className="relative z-10 max-w-6xl mx-auto px-6 py-12 space-y-8">
         <div className="flex items-center justify-between">
           <div>
@@ -246,35 +285,44 @@ function OnboardingContent() {
         <div className="grid gap-6 lg:grid-cols-[240px,1fr]">
           <aside className="rounded-xl border border-white/10 bg-white/5 p-4">
             <div className="space-y-4">
-              {steps.map((step, index) => {
-                const isActive = index === currentStepIndex
-                const isDone = index < currentStepIndex
-                return (
-                  <div
-                    key={step.id}
-                    className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${
-                      isActive ? "bg-white/10 border border-white/15" : "bg-transparent"
-                    }`}
-                  >
-                    <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
-                        isDone ? "bg-emerald-500/30 text-emerald-200" : isActive ? "bg-white/20" : "bg-white/5 text-white/50"
+              <AnimatePresence initial={false}>
+                {steps.map((step, index) => {
+                  const isActive = index === currentStepIndex
+                  const isDone = index < currentStepIndex
+                  return (
+                    <motion.div
+                      key={step.id}
+                      layout
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.25 }}
+                      className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${
+                        isActive ? "bg-white/10 border border-white/15" : "bg-transparent"
                       }`}
                     >
-                      {isDone ? "✓" : index + 1}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-sm">{step.title}</div>
-                      <div className="text-xs text-white/60">{step.description}</div>
-                    </div>
-                  </div>
-                )
-              })}
+                      <div
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+                          isDone ? "bg-emerald-500/30 text-emerald-200" : isActive ? "bg-white/20" : "bg-white/5 text-white/50"
+                        }`}
+                      >
+                        {isDone ? "✓" : index + 1}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-sm">{step.title}</div>
+                        <div className="text-xs text-white/60">{step.description}</div>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </AnimatePresence>
             </div>
           </aside>
 
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-6 space-y-6">
-            {currentStep.id === "project" && (
+          <section className="rounded-2xl border border-white/10 bg-white/5 p-6 space-y-6 overflow-hidden">
+            <AnimatePresence mode="wait">
+              {currentStep.id === "project" && (
+                <motion.div key="step-project" variants={stepVariants} initial="initial" animate="animate" exit="exit">
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Folder className="w-5 h-5 text-blue-300" />
@@ -324,9 +372,11 @@ function OnboardingContent() {
 
                 {error && <div className="text-sm text-red-300">{error}</div>}
               </div>
-            )}
+                </motion.div>
+              )}
 
-            {currentStep.id === "scan" && (
+              {currentStep.id === "scan" && (
+                <motion.div key="step-scan" variants={stepVariants} initial="initial" animate="animate" exit="exit">
               <div className="space-y-5">
                 <div className="flex items-center gap-3">
                   <ZapIcon className="w-5 h-5 text-yellow-300" />
@@ -394,9 +444,11 @@ function OnboardingContent() {
                   </div>
                 )}
               </div>
-            )}
+                </motion.div>
+              )}
 
-            {currentStep.id === "notify" && (
+              {currentStep.id === "notify" && (
+                <motion.div key="step-notify" variants={stepVariants} initial="initial" animate="animate" exit="exit">
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <Bell className="w-5 h-5 text-emerald-300" />
@@ -432,9 +484,11 @@ function OnboardingContent() {
                   )}
                 </div>
               </div>
-            )}
+                </motion.div>
+              )}
 
-            {currentStep.id === "finish" && (
+              {currentStep.id === "finish" && (
+                <motion.div key="step-finish" variants={stepVariants} initial="initial" animate="animate" exit="exit">
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <CheckCircle2 className="w-5 h-5 text-emerald-300" />
@@ -473,38 +527,56 @@ function OnboardingContent() {
                   <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-4">
                     <div className="text-sm font-semibold text-white/80">Choose a scan type to start</div>
                     <div className="grid gap-2 sm:grid-cols-3">
-                      <button
+                      <motion.button
                         onClick={() => { setSelectedMode("regex_only"); void handleFinish(); }}
-                        className="rounded-lg border border-white/10 bg-black/40 p-3 text-left hover:border-white/20 transition-colors"
+                        variants={cardVariants}
+                        initial="initial"
+                        animate="animate"
+                        whileHover="whileHover"
+                        whileTap="whileTap"
+                        className="rounded-lg border border-white/10 bg-black/40 p-3 text-left"
                       >
                         <div className="flex items-center gap-2 text-sm font-semibold">
                           <ZapIcon className="w-4 h-4 text-yellow-300" /> Pattern-only
                         </div>
                         <div className="text-xs text-white/60 mt-1">Fast, zero-cost regex pass.</div>
-                      </button>
-                      <button
+                      </motion.button>
+                      <motion.button
                         onClick={() => { setSelectedMode("smart"); void handleFinish(); }}
-                        className="rounded-lg border border-white/10 bg-black/40 p-3 text-left hover:border-white/20 transition-colors"
+                        variants={cardVariants}
+                        initial="initial"
+                        animate="animate"
+                        whileHover="whileHover"
+                        whileTap="whileTap"
+                        className="rounded-lg border border-white/10 bg-black/40 p-3 text-left"
                       >
                         <div className="flex items-center gap-2 text-sm font-semibold">
                           <BrainCircuitIcon className="w-4 h-4 text-blue-300" /> Smart
                         </div>
                         <div className="text-xs text-white/60 mt-1">Balanced coverage with AI on key files.</div>
-                      </button>
-                      <button
+                      </motion.button>
+                      <motion.button
                         onClick={() => { setSelectedMode("analyze_all"); void handleFinish(); }}
-                        className="rounded-lg border border-white/10 bg-black/40 p-3 text-left hover:border-white/20 transition-colors"
+                        variants={cardVariants}
+                        initial="initial"
+                        animate="animate"
+                        whileHover="whileHover"
+                        whileTap="whileTap"
+                        className="rounded-lg border border-white/10 bg-black/40 p-3 text-left"
                       >
                         <div className="flex items-center gap-2 text-sm font-semibold">
                           <ScanSearchIcon className="w-4 h-4 text-purple-300" /> Analyze all
                         </div>
                         <div className="text-xs text-white/60 mt-1">AI on every file for maximum depth.</div>
-                      </button>
+                      </motion.button>
                     </div>
                   </div>
                 )}
               </div>
-            )}
+                </motion.div>
+              )}
+
+            </AnimatePresence>
 
             <div className="flex items-center justify-between pt-4 border-t border-white/10">
               <Button
