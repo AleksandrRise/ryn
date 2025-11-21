@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from "react"
+import React, { Suspense, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -40,7 +40,7 @@ const steps: Step[] = [
   { id: "finish", title: "Launch", description: "Review choices and start your first scan." },
 ]
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { selectedProject, setSelectedProject } = useProjectStore()
@@ -476,6 +476,14 @@ export default function OnboardingPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={null}>
+      <OnboardingContent />
+    </Suspense>
   )
 }
 
