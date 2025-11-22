@@ -17,7 +17,7 @@ tauri-plugin-fs = "2.0"
 tauri-plugin-dialog = "2.0"
 tauri-plugin-notification = "2.0"
 # tauri-plugin-mcp-bridge = { path = "../../taurimcp/tauri-plugin-mcp-bridge" }
-tauri-plugin-mcp-bridge = { path = "./plugins/tauri-plugin-mcp-bridge" }
+tauri-plugin-mcp-bridge = { path = "./plugins/tauri-plugin-mcp-bridge", features = ["macos-window-capture"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
