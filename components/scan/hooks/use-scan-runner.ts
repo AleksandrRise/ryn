@@ -1,8 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { listen } from "@tauri-apps/api/event"
-import { respond_to_cost_limit, scan_project } from "@/lib/tauri/commands"
+import { cancel_scan, respond_to_cost_limit, scan_project } from "@/lib/tauri/commands"
 import { toScanSummary } from "@/lib/tauri/transformers"
 import type { ScanProgress, ScanSummary } from "@/lib/types/scan"
 
@@ -39,12 +39,31 @@ export function useScanRunner(
     open: false,
     data: null,
   })
+  // Ref to track scan ID for cleanup effects (avoids stale closure issues)
+  const scanIdRef = useRef<number | null>(null)
+
+  // Cancel scan when project changes
+  useEffect(() => {
+    return () => {
+      // Cleanup runs before effect runs again with new projectId
+      if (scanIdRef.current) {
+        console.log("[useScanRunner] Project changed, cancelling scan:", scanIdRef.current)
+        cancel_scan(scanIdRef.current).catch((e) => {
+          console.error("[useScanRunner] Failed to cancel scan on project change:", e)
+        })
+        scanIdRef.current = null
+      }
+    }
+  }, [projectId])
 
   const startScan = useCallback(async () => {
     if (!projectId) {
       throw new Error("No project selected")
     }
 
+    // Reset state for new scan
+    scanIdRef.current = null
+    setCurrentScanId(null)
     setIsScanning(true)
     setProgress(initialProgress)
 
@@ -73,12 +92,19 @@ export function useScanRunner(
     await options.onScanStopped?.(currentScanId)
   }, [currentScanId, options])
 
-  const cancelScan = useCallback(() => {
-    setIsScanning(false)
-    setProgress(initialProgress)
+  const cancelScan = useCallback(async () => {
+    // Cancel on the backend first to stop AI processing
     if (currentScanId) {
+      try {
+        await cancel_scan(currentScanId)
+      } catch (e) {
+        console.error("[useScanRunner] Failed to cancel scan on backend:", e)
+      }
       void options.onScanStopped?.(currentScanId)
     }
+    setIsScanning(false)
+    setProgress(initialProgress)
+    setCostLimitPrompt({ open: false, data: null })
   }, [currentScanId, options])
 
   // Listen for scan progress events when a scan is running
@@ -96,6 +122,11 @@ export function useScanRunner(
         current_file: string
       }>("scan-progress", (event) => {
         const payload = event.payload
+        // Capture scan_id from progress events (emitted before scan_project returns)
+        if (payload.scan_id && !scanIdRef.current) {
+          scanIdRef.current = payload.scan_id
+          setCurrentScanId(payload.scan_id)
+        }
         setProgress({
           percentage: payload.total_files > 0
             ? Math.round((payload.files_scanned / payload.total_files) * 100)
@@ -153,10 +184,24 @@ export function useScanRunner(
     }
   }, [isScanning])
 
+  // Cleanup: Cancel scan on component unmount (page navigation, project switch)
+  useEffect(() => {
+    return () => {
+      // If scan is running when component unmounts, cancel it on the backend
+      if (scanIdRef.current) {
+        console.log("[useScanRunner] Component unmounting, cancelling scan:", scanIdRef.current)
+        cancel_scan(scanIdRef.current).catch((e) => {
+          console.error("[useScanRunner] Failed to cancel scan on unmount:", e)
+        })
+      }
+    }
+  }, [])
+
   return {
     isScanning,
     progress,
     costLimitPrompt,
+    currentScanId,
     startScan,
     cancelScan,
     continueAfterCostLimit,

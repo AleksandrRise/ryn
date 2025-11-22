@@ -364,3 +364,11 @@ export async function respond_to_cost_limit(
     shouldContinue,
   })
 }
+
+/**
+ * Cancel a running scan
+ * @param scanId - The ID of the scan to cancel
+ */
+export async function cancel_scan(scanId: number): Promise<void> {
+  await invoke<void>("cancel_scan", { scanId })
+}
