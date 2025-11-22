@@ -1,40 +1,44 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { useFileWatcher } from "@/lib/hooks/useFileWatcher"
-import { useProjectStore } from "@/lib/stores/project-store"
 import {
-  get_audit_events,
   get_projects,
   get_scans,
   get_violations,
-  get_settings,
 } from "@/lib/tauri/commands"
-import { toAuditEvent, toScanSummary, toViolation } from "@/lib/tauri/transformers"
-import type { AuditEvent } from "@/lib/types/audit"
-import type { ScanSummary, SeverityCounts } from "@/lib/types/scan"
+import type { Project } from "@/lib/tauri/commands"
+import { toScanSummary, toViolation } from "@/lib/tauri/transformers"
+import type { SeverityCounts } from "@/lib/types/scan"
 import { handleTauriError } from "@/lib/utils/error-handler"
 
-export interface ScanHistoryPoint {
-  scanNumber: number
+export interface ProjectHealth {
+  project: Project
+  lastScanDate: string | null
+  totalViolations: number
+  criticalCount: number
+  highCount: number
+  mediumCount: number
+  lowCount: number
+  scanCount: number
+  status: "healthy" | "warning" | "critical" | "no-scans"
+}
+
+export interface ScanTrendPoint {
   date: string
   violations: number
-  critical: number
-  high: number
-  medium: number
-  low: number
 }
 
 interface UseDashboardDataResult {
   isLoading: boolean
-  lastScan: ScanSummary | null
-  severityCounts: SeverityCounts
-  recentActivity: AuditEvent[]
-  totalScansCount: number
-  fixesAppliedCount: number
-  complianceScore: number
+  // Aggregate stats
+  totalProjects: number
   totalViolations: number
-  scanHistory: ScanHistoryPoint[]
+  totalScans: number
+  severityCounts: SeverityCounts
+  // Per-project data
+  projectHealthList: ProjectHealth[]
+  // Trend data
+  scanTrend: ScanTrendPoint[]
   refresh: () => Promise<void>
 }
 
@@ -45,138 +49,148 @@ const EMPTY_COUNTS: SeverityCounts = {
   low: 0,
 }
 
-export function useDashboardData(projectId?: number): UseDashboardDataResult {
-  const { clearProject } = useProjectStore.getState()
+export function useDashboardData(): UseDashboardDataResult {
   const [isLoading, setIsLoading] = useState(true)
-  const [lastScan, setLastScan] = useState<ScanSummary | null>(null)
-  const [severityCounts, setSeverityCounts] = useState<SeverityCounts>(EMPTY_COUNTS)
-  const [recentActivity, setRecentActivity] = useState<AuditEvent[]>([])
-  const [totalScansCount, setTotalScansCount] = useState(0)
-  const [fixesAppliedCount, setFixesAppliedCount] = useState(0)
-  const [complianceScore, setComplianceScore] = useState(0)
+  const [totalProjects, setTotalProjects] = useState(0)
   const [totalViolations, setTotalViolations] = useState(0)
-  const [scanHistory, setScanHistory] = useState<ScanHistoryPoint[]>([])
-  const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useState(true)
-
-  // Load notification preference once on mount
-  useEffect(() => {
-    const loadNotificationSetting = async () => {
-      try {
-        const settings = await get_settings()
-        const desktop = settings.find((s) => s.key === "desktop_notifications")
-        if (desktop) {
-          setDesktopNotificationsEnabled(desktop.value === "true")
-        }
-      } catch (error) {
-        console.error("[ryn] Failed to load desktop notification setting:", error)
-      }
-    }
-
-    void loadNotificationSetting()
-  }, [])
+  const [totalScans, setTotalScans] = useState(0)
+  const [severityCounts, setSeverityCounts] = useState<SeverityCounts>(EMPTY_COUNTS)
+  const [projectHealthList, setProjectHealthList] = useState<ProjectHealth[]>([])
+  const [scanTrend, setScanTrend] = useState<ScanTrendPoint[]>([])
 
   const refresh = useCallback(async () => {
-    if (!projectId) {
-      setLastScan(null)
-      setSeverityCounts({ ...EMPTY_COUNTS })
-      setRecentActivity([])
-      setTotalScansCount(0)
-      setFixesAppliedCount(0)
-      setComplianceScore(0)
-      setTotalViolations(0)
-      setScanHistory([])
-      setIsLoading(false)
-      return
-    }
-
     setIsLoading(true)
     try {
-      const scans = await get_scans(projectId)
-      // Filter to completed scans only
-      const completedScans = scans.filter(s => s.status === "completed")
-      setTotalScansCount(completedScans.length)
+      const projects = await get_projects()
+      setTotalProjects(projects.length)
 
-      const latest = completedScans[0] ? toScanSummary(completedScans[0]) : null
-      setLastScan(latest)
-
-      // Build scan history from last 10 scans (reversed for chart: oldest first)
-      const historyScans = completedScans.slice(0, 10).reverse()
-      const history: ScanHistoryPoint[] = historyScans.map((scan, idx) => ({
-        scanNumber: idx + 1,
-        date: new Date(scan.completed_at || scan.started_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        violations: scan.violations_found,
-        critical: scan.critical_count,
-        high: scan.high_count,
-        medium: scan.medium_count,
-        low: scan.low_count,
-      }))
-      setScanHistory(history)
-
-      if (latest) {
-        const violations = (await get_violations(latest.id, {})).map(toViolation)
-        const counts: SeverityCounts = { ...EMPTY_COUNTS }
-        violations.forEach((v) => {
-          counts[v.severity] = (counts[v.severity] ?? 0) + 1
-        })
-        const total = counts.critical + counts.high + counts.medium + counts.low
-        setSeverityCounts(counts)
-        setTotalViolations(total)
-
-        // Calculate compliance score based on severity-weighted violations
-        // Critical = 10pts, High = 5pts, Medium = 2pts, Low = 1pt
-        const maxPenalty = 100
-        const penalty = Math.min(maxPenalty, counts.critical * 10 + counts.high * 5 + counts.medium * 2 + counts.low)
-        const score = Math.max(0, 100 - penalty)
-        setComplianceScore(score)
-      } else {
-        setSeverityCounts({ ...EMPTY_COUNTS })
+      if (projects.length === 0) {
         setTotalViolations(0)
-        setComplianceScore(100) // No violations = 100%
+        setTotalScans(0)
+        setSeverityCounts({ ...EMPTY_COUNTS })
+        setProjectHealthList([])
+        setScanTrend([])
+        setIsLoading(false)
+        return
       }
 
-      const events = (await get_audit_events({ limit: 4 })).map(toAuditEvent)
-      setRecentActivity(events)
-      setFixesAppliedCount(events.filter((e) => e.eventType === "fix_applied").length)
-    } catch (error) {
-      try {
-        const projects = await get_projects()
-        const exists = projects.some((p) => p.id === projectId)
-        if (!exists) {
-          clearProject()
+      // Aggregate data across all projects
+      let aggViolations = 0
+      let aggScans = 0
+      const aggCounts: SeverityCounts = { ...EMPTY_COUNTS }
+      const healthList: ProjectHealth[] = []
+      const allScansForTrend: { date: Date; violations: number }[] = []
+
+      for (const project of projects) {
+        try {
+          const scans = await get_scans(project.id)
+          const completedScans = scans.filter(s => s.status === "completed")
+          aggScans += completedScans.length
+
+          // Get latest scan for this project
+          const latestScan = completedScans[0]
+          let projectViolations = 0
+          let projectCritical = 0
+          let projectHigh = 0
+          let projectMedium = 0
+          let projectLow = 0
+
+          if (latestScan) {
+            const violations = (await get_violations(latestScan.id, {})).map(toViolation)
+            projectViolations = violations.length
+
+            for (const v of violations) {
+              if (v.severity === "critical") projectCritical++
+              else if (v.severity === "high") projectHigh++
+              else if (v.severity === "medium") projectMedium++
+              else if (v.severity === "low") projectLow++
+            }
+
+            aggViolations += projectViolations
+            aggCounts.critical += projectCritical
+            aggCounts.high += projectHigh
+            aggCounts.medium += projectMedium
+            aggCounts.low += projectLow
+
+            // Collect scans for trend (last 10 scans across all projects)
+            for (const scan of completedScans.slice(0, 5)) {
+              allScansForTrend.push({
+                date: new Date(scan.completed_at || scan.started_at),
+                violations: scan.violations_found,
+              })
+            }
+          }
+
+          // Determine project health status
+          let status: ProjectHealth["status"] = "no-scans"
+          if (latestScan) {
+            if (projectCritical > 0) status = "critical"
+            else if (projectHigh > 0) status = "warning"
+            else status = "healthy"
+          }
+
+          healthList.push({
+            project,
+            lastScanDate: latestScan?.completed_at || latestScan?.started_at || null,
+            totalViolations: projectViolations,
+            criticalCount: projectCritical,
+            highCount: projectHigh,
+            mediumCount: projectMedium,
+            lowCount: projectLow,
+            scanCount: completedScans.length,
+            status,
+          })
+        } catch (err) {
+          // If a project fails, still include it with no-scans status
+          healthList.push({
+            project,
+            lastScanDate: null,
+            totalViolations: 0,
+            criticalCount: 0,
+            highCount: 0,
+            mediumCount: 0,
+            lowCount: 0,
+            scanCount: 0,
+            status: "no-scans",
+          })
         }
-      } catch {
-        // if we can't verify, fall back to bubbling the original error
       }
+
+      // Sort projects: critical first, then warning, then healthy, then no-scans
+      const statusOrder = { critical: 0, warning: 1, healthy: 2, "no-scans": 3 }
+      healthList.sort((a, b) => statusOrder[a.status] - statusOrder[b.status])
+
+      // Build trend data (last 10 scans sorted by date)
+      allScansForTrend.sort((a, b) => a.date.getTime() - b.date.getTime())
+      const trendData = allScansForTrend.slice(-10).map(s => ({
+        date: s.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        violations: s.violations,
+      }))
+
+      setTotalViolations(aggViolations)
+      setTotalScans(aggScans)
+      setSeverityCounts(aggCounts)
+      setProjectHealthList(healthList)
+      setScanTrend(trendData)
+    } catch (error) {
       handleTauriError(error, "Failed to load dashboard data")
     } finally {
       setIsLoading(false)
     }
-  }, [projectId, clearProject])
+  }, [])
 
-  // Refresh when project changes
   useEffect(() => {
     void refresh()
   }, [refresh])
 
-  // Refresh on file change
-  useFileWatcher(projectId, {
-    autoStart: !!projectId,
-    onFileChanged: () => {
-      void refresh()
-    },
-    showNotifications: desktopNotificationsEnabled,
-  })
-
   return {
     isLoading,
-    lastScan,
-    severityCounts,
-    recentActivity,
-    totalScansCount,
-    fixesAppliedCount,
-    complianceScore,
+    totalProjects,
     totalViolations,
-    scanHistory,
+    totalScans,
+    severityCounts,
+    projectHealthList,
+    scanTrend,
     refresh,
   }
 }
