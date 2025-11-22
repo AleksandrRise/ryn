@@ -29,6 +29,7 @@ export function ScanPreferences() {
             <p className="text-xs text-muted-foreground mt-1">Watch for file changes and scan automatically</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
+            <span className="sr-only">Toggle continuous monitoring</span>
             <input
               type="checkbox"
               checked={settings.continuousMonitoring}
@@ -45,6 +46,7 @@ export function ScanPreferences() {
             <p className="text-xs text-muted-foreground mt-1">Trigger scan whenever you save a file</p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
+            <span className="sr-only">Toggle scan on save</span>
             <input
               type="checkbox"
               checked={settings.scanOnSave}

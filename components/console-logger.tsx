@@ -9,7 +9,7 @@ export function ConsoleLogger() {
 
     // Capture console.error
     const originalError = console.error
-    console.error = (...args: any[]) => {
+    console.error = (...args: unknown[]) => {
       originalError(...args)
       const message = args.map(arg =>
         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -22,7 +22,7 @@ export function ConsoleLogger() {
 
     // Capture console.warn
     const originalWarn = console.warn
-    console.warn = (...args: any[]) => {
+    console.warn = (...args: unknown[]) => {
       originalWarn(...args)
       const message = args.map(arg =>
         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -35,7 +35,7 @@ export function ConsoleLogger() {
 
     // Capture console.log
     const originalLog = console.log
-    console.log = (...args: any[]) => {
+    console.log = (...args: unknown[]) => {
       originalLog(...args)
       const message = args.map(arg =>
         typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)

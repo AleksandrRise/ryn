@@ -1,6 +1,6 @@
 'use client'
 
-import React, { Suspense, useEffect, useMemo, useState } from "react"
+import React, { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence, easeOut, easeIn } from "framer-motion"
@@ -29,7 +29,7 @@ import { FrameworkBadge } from "@/components/ui/framework-badge"
 
 type ScanMode = "regex_only" | "smart" | "analyze_all"
 
-const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI__)
+const isTauri = typeof window !== "undefined" && Boolean((window as { __TAURI__?: unknown }).__TAURI__)
 
 interface Step {
   id: string
@@ -114,11 +114,6 @@ function OnboardingContent() {
   }, [])
 
   const currentStep = steps[currentStepIndex]
-
-  const canContinueProject = useMemo(() => {
-    if (!isTauri) return true
-    return Boolean(selectedProject)
-  }, [selectedProject])
 
   const handleSelectProject = async () => {
     if (!isTauri) {
@@ -628,9 +623,17 @@ interface ModeCardProps {
 
 function ModeCard({ selected, title, description, bullets, badge, icon, onSelect }: ModeCardProps) {
   return (
-    <div
+    <button
+      type="button"
       onClick={onSelect}
-      className={`border rounded-xl p-4 cursor-pointer transition-colors ${
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+      aria-pressed={selected}
+      className={`w-full text-left border rounded-xl p-4 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-white/30 ${
         selected ? "border-white/30 bg-white/10" : "border-white/10 bg-black/30 hover:border-white/20"
       }`}
     >
@@ -653,7 +656,7 @@ function ModeCard({ selected, title, description, bullets, badge, icon, onSelect
           <span key={b} className="px-2 py-1 rounded-full bg-white/5 border border-white/10">{b}</span>
         ))}
       </div>
-    </div>
+    </button>
   )
 }
 

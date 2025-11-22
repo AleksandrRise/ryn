@@ -3,7 +3,7 @@
 import { useState, memo, useMemo, useEffect } from "react"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
-import { get_violation, generate_fix, apply_fix, dismiss_violation, type ViolationDetail } from "@/lib/tauri/commands"
+import { get_violation, generate_fix, apply_fix, dismiss_violation, type ViolationDetail as ViolationDetailType } from "@/lib/tauri/commands"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
 import { DetectionBadge } from "@/components/scan/detection-badge"
 
@@ -98,7 +98,7 @@ const MemoizedDiffBlock = memo(function MemoizedDiffBlock({
 export function ViolationDetail({ violationId }: ViolationDetailProps) {
   const [showDiff, setShowDiff] = useState(false)
   const [showApplyConfirm, setShowApplyConfirm] = useState(false)
-  const [violationDetail, setViolationDetail] = useState<ViolationDetail | null>(null)
+  const [violationDetail, setViolationDetail] = useState<ViolationDetailType | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isGeneratingFix, setIsGeneratingFix] = useState(false)
   const [isApplying, setIsApplying] = useState(false)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip } from 'recharts'
@@ -18,11 +18,7 @@ export default function AnalyticsPage() {
     y: number
   } | null>(null)
 
-  useEffect(() => {
-    loadScanCosts()
-  }, [timeRange])
-
-  const loadScanCosts = async () => {
+  const loadScanCosts = useCallback(async () => {
     setIsLoading(true)
     setError('')
     try {
@@ -34,7 +30,11 @@ export default function AnalyticsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [timeRange])
+
+  useEffect(() => {
+    void loadScanCosts()
+  }, [loadScanCosts])
 
   const handleChartMouseMove = (state: CategoricalChartState) => {
     if (typeof state?.chartX !== 'number' || typeof state?.chartY !== 'number') {

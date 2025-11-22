@@ -21,7 +21,7 @@ export function ViolationFilters({
   return (
     <div className="flex items-center gap-4">
       <div className="flex items-center gap-2">
-        <label className="text-sm font-medium text-muted-foreground">Severity:</label>
+        <span className="text-sm font-medium text-muted-foreground">Severity:</span>
         <div className="flex gap-2">
           {severities.map((severity) => (
             <button
@@ -40,8 +40,9 @@ export function ViolationFilters({
       </div>
 
       <div className="flex items-center gap-2">
-        <label className="text-sm font-medium text-muted-foreground">Control:</label>
+        <label className="text-sm font-medium text-muted-foreground" htmlFor="control-filter">Control:</label>
         <select
+          id="control-filter"
           value={selectedControl}
           onChange={(e) => onControlChange(e.target.value)}
           className="px-3 py-1.5 text-sm rounded-lg bg-accent border border-border text-foreground"

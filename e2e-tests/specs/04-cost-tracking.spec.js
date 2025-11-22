@@ -257,3 +257,4 @@ describe('04 - Cost Tracking', () => {
     console.log('✓ Cost tracking tests completed');
   });
 });
+/* eslint-disable @typescript-eslint/no-unused-vars */

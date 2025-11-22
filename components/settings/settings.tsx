@@ -45,17 +45,14 @@ function settingsArrayToState(settings: SettingsType[]): SettingsState {
   settings.forEach((setting) => {
     // Find the state key that maps to this backend key
     const stateKey = Object.entries(settingsKeyMap).find(
-      ([_k, backendKey]) => backendKey === setting.key
+      ([_stateKey, backendKey]) => backendKey === setting.key
     )?.[0] as keyof SettingsState | undefined
 
     if (stateKey) {
       const value = setting.value
-      // Parse boolean strings
-      if (value === "true" || value === "false") {
-        (state as any)[stateKey] = value === "true"
-      } else {
-        (state as any)[stateKey] = value
-      }
+      const parsedValue: SettingsState[keyof SettingsState] =
+        value === "true" || value === "false" ? (value === "true") : value
+      state[stateKey] = parsedValue as SettingsState[keyof SettingsState]
     }
   })
 
@@ -236,10 +233,11 @@ export function Settings() {
           </div>
           <div className="space-y-5">
             <div>
-              <label className="block mb-3 text-sm font-medium">Scanning Mode</label>
+              <span className="block mb-3 text-sm font-medium">Scanning Mode</span>
               <div className="space-y-3">
-                <label className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+                <label htmlFor="scanModeRegex" className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
                   <input
+                    id="scanModeRegex"
                     type="radio"
                     name="scanMode"
                     value="regex_only"
@@ -252,8 +250,9 @@ export function Settings() {
                     <p className="text-xs text-white/50">Free, instant regex-based detection only</p>
                   </div>
                 </label>
-                <label className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+                <label htmlFor="scanModeSmart" className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
                   <input
+                    id="scanModeSmart"
                     type="radio"
                     name="scanMode"
                     value="smart"
@@ -268,8 +267,9 @@ export function Settings() {
                     </p>
                   </div>
                 </label>
-                <label className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+                <label htmlFor="scanModeAll" className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
                   <input
+                    id="scanModeAll"
                     type="radio"
                     name="scanMode"
                     value="analyze_all"
@@ -287,8 +287,9 @@ export function Settings() {
 
             {state.llmScanMode !== "regex_only" && (
               <div>
-                <label className="block mb-2 text-sm font-medium">Cost Limit Per Scan (USD)</label>
+                <label className="block mb-2 text-sm font-medium" htmlFor="cost_limit_setting">Cost Limit Per Scan (USD)</label>
                 <input
+                  id="cost_limit_setting"
                   type="number"
                   step="0.01"
                   min="0"

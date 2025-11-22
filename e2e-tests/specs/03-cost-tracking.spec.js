@@ -407,3 +407,4 @@ describe('Cost Tracking E2E Tests', () => {
     console.log('Cost tracking tests complete');
   });
 });
+/* eslint-disable @typescript-eslint/no-unused-vars */

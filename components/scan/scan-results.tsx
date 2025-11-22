@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Play, RefreshCw, Clock3, Zap, Search, FolderTree, ChevronDown, Sparkles, Check } from "lucide-react"
+import { Play, RefreshCw, Clock3, Search, FolderTree, Sparkles, Check } from "lucide-react"
 import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
 import { ScanControls } from "@/components/scan/scan-controls"
 import { ScanProgressCard } from "@/components/scan/scan-progress-card"
