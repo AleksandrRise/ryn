@@ -1,0 +1,43 @@
+[package]
+name = "tauri-plugin-mcp-bridge"
+version = "0.1.0"
+edition = "2021"
+authors = ["Tauri MCP Contributors"]
+description = "Tauri plugin providing MCP (Model Context Protocol) bridge for browser automation"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/yourusername/tauri-plugin-mcp-bridge"
+keywords = ["tauri", "mcp", "automation", "devtools"]
+categories = ["development-tools", "api-bindings"]
+links = "tauri-plugin-mcp-bridge"
+
+[dependencies]
+# Tauri plugin framework
+tauri = "2.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Async runtime and Unix socket support
+tokio = { version = "1.35", features = ["net", "sync", "time", "rt", "macros", "io-util"] }
+
+# Error handling
+thiserror = "1.0"
+
+# Logging
+log = "0.4"
+
+# UUID generation for request correlation
+uuid = { version = "1.0", features = ["v4"] }
+base64 = "0.21"
+
+# Screenshot capability
+screenshots = "0.8"
+image = "0.24" # For image processing if needed
+
+[build-dependencies]
+tauri-plugin = { version = "2.0", features = ["build"] }
+
+[features]
+default = []
+devtools = []
