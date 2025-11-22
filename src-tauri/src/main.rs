@@ -74,7 +74,7 @@ fn main() {
             project::select_project_folder,
             project::create_project,
             project::get_projects,
-            // Scan Commands (7) - added watch_project and stop_watching
+            // Scan Commands (8) - added watch_project, stop_watching, and cancel_scan
             scan::detect_framework,
             scan::scan_project,
             scan::watch_project,
@@ -82,6 +82,7 @@ fn main() {
             scan::get_scan_progress,
             scan::get_scans,
             scan::respond_to_cost_limit,
+            scan::cancel_scan,
             // Violation Commands (3)
             violation::get_violations,
             violation::get_violation,
