@@ -122,8 +122,8 @@ describe('Cost Tracking E2E Tests', () => {
     // Get token usage data from the UI
     const inputTokens = await browser.$('[data-testid="input-tokens"]');
     const outputTokens = await browser.$('[data-testid="output-tokens"]');
-    const cacheReadTokens = await browser.$('[data-testid="cache-read-tokens"]');
-    const cacheWriteTokens = await browser.$('[data-testid="cache-write-tokens"]');
+    const _cacheReadTokens = await browser.$('[data-testid="cache-read-tokens"]');
+    const _cacheWriteTokens = await browser.$('[data-testid="cache-write-tokens"]');
     const totalCost = await browser.$('[data-testid="total-cost-usd"]');
 
     // Verify all token counts are displayed and non-zero (LLM was used)
@@ -407,4 +407,3 @@ describe('Cost Tracking E2E Tests', () => {
     console.log('Cost tracking tests complete');
   });
 });
-/* eslint-disable @typescript-eslint/no-unused-vars */

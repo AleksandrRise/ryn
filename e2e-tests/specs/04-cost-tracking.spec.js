@@ -222,7 +222,7 @@ describe('04 - Cost Tracking', () => {
     const regexCosts = await browser.execute(async (scanId) => {
       // @ts-ignore - Tauri API available in app context
       const { invoke } = window.__TAURI__.core;
-      const allCosts = await invoke('get_scan_costs', { limit: 50 });
+      const _allCosts = await invoke('get_scan_costs', { limit: 50 });
       return allCosts.filter(c => c.scan_id === scanId);
     }, regexScan.scan_id);
 
@@ -257,4 +257,3 @@ describe('04 - Cost Tracking', () => {
     console.log('✓ Cost tracking tests completed');
   });
 });
-/* eslint-disable @typescript-eslint/no-unused-vars */

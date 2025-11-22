@@ -71,4 +71,11 @@ export default [
       "no-undef": "off",
     },
   },
+  {
+    files: ["e2e-tests/fixtures/**/*", "e2e-tests/specs/**/*"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
+      "no-unused-vars": "off",
+    },
+  },
 ]

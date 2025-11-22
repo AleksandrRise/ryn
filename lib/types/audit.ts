@@ -13,6 +13,6 @@ export interface AuditEvent {
   violationId?: number
   fixId?: number
   description: string
-  metadata?: string | Record<string, any>
+  metadata?: string | Record<string, unknown>
   createdAt: string
 }

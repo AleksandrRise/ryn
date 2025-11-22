@@ -606,7 +606,7 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<'div'> & {
   showIcon?: boolean
 }) {
-  const widthRef = React.useRef<string>('70%')
+  const width = '70%'
 
   return (
     <div
@@ -626,7 +626,7 @@ function SidebarMenuSkeleton({
           data-sidebar="menu-skeleton-text"
         style={
           {
-            '--skeleton-width': widthRef.current,
+            '--skeleton-width': width,
           } as React.CSSProperties
         }
       />

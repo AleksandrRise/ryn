@@ -12,7 +12,7 @@ interface ProjectStore {
 /**
  * Validates that a project has all required fields
  */
-function isValidProject(project: any): project is Project {
+function isValidProject(project: unknown): project is Project {
   if (!project || typeof project !== 'object') {
     return false
   }

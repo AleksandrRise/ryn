@@ -15,7 +15,7 @@ import { fileURLToPath } from 'url';
  * 4. Verify backup file created in .ryn-backups/
  * 5. Verify git commit created with proper message
  * 6. Verify violation status updated to "fixed"
- * 7. Verify fixes table stores fix data
+ * 7. Verify _fixes table stores fix data
  * 8. Test error handling for non-existent violations
  */
 
@@ -111,7 +111,7 @@ describe('03 - Fix Workflow', () => {
       const { invoke } = window.__TAURI__.core;
 
       // Get all violations to find the one with a fix
-      const scanData = await invoke('get_violations', { scanId: violationId });
+      const _scanData = await invoke('get_violations', { scanId: violationId });
       // This is a workaround - in real usage we'd store fix_id from previous test
       // For now, just verify the fix fields exist
       return [];
@@ -204,4 +204,3 @@ describe('03 - Fix Workflow', () => {
     console.log('✓ Fix workflow tests completed');
   });
 });
-/* eslint-disable @typescript-eslint/no-unused-vars */
