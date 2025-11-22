@@ -108,9 +108,18 @@ fn capture_macos_window<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Result<
 
     let window_id = ns_win.windowNumber() as u32;
 
-    // Use empty CGRect; CGWindowListCreateImage treats it as full window bounds when paired with IncludingWindow.
+    // Compute window rect in physical coords
+    let scale = window.scale_factor().map_err(|e| format!("Failed to get scale factor: {}", e))?;
+    let pos = window.outer_position().map_err(|e| format!("Failed to get window position: {}", e))?;
+    let size = window.outer_size().map_err(|e| format!("Failed to get window size: {}", e))?;
+    let rect = CGRect::new(
+        &CGPoint::new(pos.x as f64 * scale, pos.y as f64 * scale),
+        &CGSize::new(size.width as f64 * scale, size.height as f64 * scale),
+    );
+
+    // Capture just this window (CG will render only the specified window id)
     let cg_image = create_image(
-        CGRect::new(&CGPoint::new(0.0, 0.0), &CGSize::new(0.0, 0.0)),
+        rect,
         kCGWindowListOptionIncludingWindow,
         window_id,
         kCGWindowImageBoundsIgnoreFraming | kCGWindowImageNominalResolution,
