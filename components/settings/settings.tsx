@@ -49,9 +49,14 @@ function settingsArrayToState(settings: SettingsType[]): SettingsState {
     if (!stateKey) return
 
     const value = setting.value
-    const parsedValue: SettingsState[keyof SettingsState] =
-      value === "true" || value === "false" ? (value === "true") : value
-    state[stateKey] = parsedValue
+    const parsedValue = value === "true" || value === "false" ? (value === "true") : value
+    if (stateKey === "desktopNotifications") {
+      state.desktopNotifications = Boolean(parsedValue)
+    } else if (stateKey === "llmScanMode") {
+      state.llmScanMode = parsedValue as SettingsState["llmScanMode"]
+    } else if (stateKey === "costLimitPerScan") {
+      state.costLimitPerScan = String(parsedValue)
+    }
   })
 
   return state

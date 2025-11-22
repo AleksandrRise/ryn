@@ -18,9 +18,10 @@ function isValidProject(project: unknown): project is Project {
   }
 
   // Check required fields exist and are the right type
-  const hasId = typeof project.id === 'number' && project.id > 0
-  const hasPath = typeof project.path === 'string' && project.path.length > 0
-  const hasName = typeof project.name === 'string' && project.name.length > 0
+  const p = project as Partial<Project>
+  const hasId = typeof p.id === 'number' && p.id > 0
+  const hasPath = typeof p.path === 'string' && p.path.length > 0
+  const hasName = typeof p.name === 'string' && p.name.length > 0
 
   return hasId && hasPath && hasName
 }
