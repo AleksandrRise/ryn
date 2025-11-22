@@ -25,6 +25,8 @@ pub async fn capture<R: Runtime>(app: &AppHandle<R>, params: &Value) -> Result<V
     let label = params.get("label").and_then(|v| v.as_str());
     let custom_path = params.get("path").and_then(|v| v.as_str());
 
+    log::info!("[MCP] screenshot requested label={:?} path={:?}", label, custom_path);
+
     let window = super::get_window(app, label)?;
 
     // Try macOS window-based capture first (captures even if overlapped)
@@ -107,6 +109,7 @@ fn capture_macos_window<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Result<
         .ok_or("ns_window pointer null")?;
 
     let window_id = ns_win.windowNumber() as u32;
+    log::info!("[MCP] macOS window capture for id={}", window_id);
 
     // Compute window rect in physical coords
     let scale = window.scale_factor().map_err(|e| format!("Failed to get scale factor: {}", e))?;
@@ -151,6 +154,7 @@ fn capture_macos_window<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Result<
     };
 
     let base64_data = STANDARD.encode(&buffer);
+    log::info!("[MCP] macOS window capture success: {}x{}, {} bytes", width, height, buffer.len());
 
     Ok(json!({
         "data": base64_data,
