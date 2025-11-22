@@ -53,14 +53,15 @@ export function useScanData(projectId?: number): UseScanDataResult {
     setIsLoading(true)
     try {
       const scans = await get_scans(projectId)
-      const latest = scans[0]
+      // Find the most recent completed scan (skip in_progress/cancelled scans)
+      const completedScan = scans.find(s => s.status === "completed")
 
-      if (!latest) {
+      if (!completedScan) {
         reset()
         return
       }
 
-      const mappedScan = toScanSummary(latest)
+      const mappedScan = toScanSummary(completedScan)
       setLastScan(mappedScan)
 
       try {

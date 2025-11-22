@@ -171,6 +171,12 @@ export function ScanResults() {
       const scan = await startScan()
       showSuccess(`Scan completed! Found ${scan.violationsFound} violations`)
     } catch (error) {
+      // Silently ignore cancellation - it's intentional, not an error
+      const errorMessage = String(error).toLowerCase()
+      if (errorMessage.includes("cancelled") || errorMessage.includes("canceled")) {
+        console.log("[ScanResults] Scan was cancelled")
+        return
+      }
       handleTauriError(error, "Failed to start scan")
     }
   }

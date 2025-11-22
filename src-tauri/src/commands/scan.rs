@@ -643,6 +643,13 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
 
     // Process files in batches, checking cost limit every 10 files
     for (batch_idx, chunk) in files.chunks(10).enumerate() {
+        // Check for cancellation at start of each batch
+        if channels.is_cancelled(scan_id) {
+            println!("[ryn] LLM analysis cancelled by user at batch {}", batch_idx);
+            channels.clear_cancel(scan_id);
+            break;
+        }
+
         let mut tasks = Vec::new();
 
         // Spawn tasks for this batch of up to 10 files
