@@ -299,6 +299,9 @@ impl CC67SecretsRule {
     fn detect_insecure_http(code: &str, file_path: &str, scan_id: i64) -> Result<Vec<Violation>> {
         let mut violations = Vec::new();
 
+        // Track block comments so we don't flag doc headers or licenses.
+        let mut in_block_comment = false;
+
         // Pattern: http:// (we'll manually exclude safe addresses)
         let http_pattern = Regex::new(r"http://").context("Failed to compile HTTP pattern")?;
 
@@ -328,8 +331,21 @@ impl CC67SecretsRule {
         ];
 
         for (idx, line) in code.lines().enumerate() {
-            // Skip comments
-            if line.trim().starts_with("#") || line.trim().starts_with("//") {
+            let trimmed = line.trim();
+
+            // Handle block comments (/* ... */)
+            if trimmed.contains("/*") {
+                in_block_comment = true;
+            }
+            if in_block_comment {
+                if trimmed.contains("*/") {
+                    in_block_comment = false;
+                }
+                continue; // skip anything inside block comments
+            }
+
+            // Skip single-line comments
+            if trimmed.starts_with('#') || trimmed.starts_with("//") {
                 continue;
             }
 

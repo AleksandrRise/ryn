@@ -1033,7 +1033,39 @@ fn run_all_rules(code: &str, file_path: &str, scan_id: i64) -> Vec<Violation> {
         violations.extend(a12_violations);
     }
 
+    // Reduce severity noise in test/spec files without hiding issues entirely
+    adjust_test_severity(&mut violations, file_path);
+
     violations
+}
+
+/// Downgrade severity by one level for violations in test/spec files to reduce false positives
+fn adjust_test_severity(violations: &mut [Violation], file_path: &str) {
+    let path = file_path.to_lowercase();
+    let is_test = path.contains("/test")
+        || path.contains("test/")
+        || path.contains("__tests__")
+        || path.contains("cypress")
+        || path.ends_with(".spec.ts")
+        || path.ends_with(".spec.js")
+        || path.ends_with(".test.ts")
+        || path.ends_with(".test.js");
+
+    if !is_test {
+        return;
+    }
+
+    for v in violations.iter_mut() {
+        if let Some(sev) = Severity::from_str(&v.severity) {
+            let downgraded = match sev {
+                Severity::Critical => Severity::High,
+                Severity::High => Severity::Medium,
+                Severity::Medium => Severity::Low,
+                Severity::Low => Severity::Low,
+            };
+            v.severity = downgraded.as_str().to_string();
+        }
+    }
 }
 
 /// Enrich violations with tree-sitter context (function_name, class_name)

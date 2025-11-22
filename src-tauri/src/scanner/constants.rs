@@ -12,6 +12,11 @@ pub const SKIP_DIRECTORIES: &[&str] = &[
     "node_modules",
     "vendor",
 
+    // Bundled/static assets
+    "assets",
+    "public",
+    "static",
+
     // Version control
     ".git",
 

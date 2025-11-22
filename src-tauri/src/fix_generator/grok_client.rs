@@ -480,19 +480,37 @@ impl GrokClient {
         scan_id: i64,
         file_path: &str,
     ) -> Result<Vec<Violation>> {
-        let json_text = response_text
+        // Allow for markdown fences and minor format drift.
+        let cleaned = response_text
             .trim()
             .trim_start_matches("```json")
             .trim_start_matches("```")
             .trim_end_matches("```")
             .trim();
 
-        if json_text.is_empty() || json_text == "[]" {
+        if cleaned.is_empty() || cleaned == "[]" {
             return Ok(Vec::new());
         }
 
-        let detections: Vec<ViolationDetection> = serde_json::from_str(json_text)
-            .context("Failed to parse LLM response as JSON")?;
+        // Retry once with a permissive JSON fix (common trailing commas / top-level object).
+        let detections: Vec<ViolationDetection> = match serde_json::from_str(cleaned) {
+            Ok(v) => v,
+            Err(e) => {
+                // Try extracting array from a top-level object {"violations": [...]}
+                #[derive(Deserialize)]
+                struct Wrapper { violations: Option<Vec<ViolationDetection>> }
+
+                if let Ok(wrapper) = serde_json::from_str::<Wrapper>(cleaned) {
+                    if let Some(v) = wrapper.violations {
+                        v
+                    } else {
+                        return Err(e).context("Failed to parse LLM response as JSON (empty wrapper)");
+                    }
+                } else {
+                    return Err(e).context("Failed to parse LLM response as JSON");
+                }
+            }
+        };
 
         let violations: Vec<Violation> = detections
             .into_iter()
