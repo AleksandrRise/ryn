@@ -27,7 +27,7 @@
 - For UI-driven flows, prefer deterministic data and avoid networked calls; mock Tauri invokes where possible.
 
 ## Commit & Pull Request Guidelines
-- Commits: short, imperative summaries (e.g., “Refactor scan UI and dashboard structure”). Group related changes; avoid formatting-only commits.
+- Commits: short, imperative summaries (e.g., “Refactor scan UI and dashboard structure”). Group related changes; avoid formatting-only commits. Commit very often.
 - PRs: include a clear summary, screenshots for UI changes, linked issues/tasks, and test evidence (`pnpm test`, `pnpm build`, or tauri dev/build logs). Call out any signing/codesign constraints on macOS.
 
 ## Security & Configuration Tips
