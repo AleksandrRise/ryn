@@ -15,6 +15,16 @@ import type { AuditEvent } from "@/lib/types/audit"
 import type { ScanSummary, SeverityCounts } from "@/lib/types/scan"
 import { handleTauriError } from "@/lib/utils/error-handler"
 
+export interface ScanHistoryPoint {
+  scanNumber: number
+  date: string
+  violations: number
+  critical: number
+  high: number
+  medium: number
+  low: number
+}
+
 interface UseDashboardDataResult {
   isLoading: boolean
   lastScan: ScanSummary | null
@@ -24,6 +34,7 @@ interface UseDashboardDataResult {
   fixesAppliedCount: number
   complianceScore: number
   totalViolations: number
+  scanHistory: ScanHistoryPoint[]
   refresh: () => Promise<void>
 }
 
@@ -44,6 +55,7 @@ export function useDashboardData(projectId?: number): UseDashboardDataResult {
   const [fixesAppliedCount, setFixesAppliedCount] = useState(0)
   const [complianceScore, setComplianceScore] = useState(0)
   const [totalViolations, setTotalViolations] = useState(0)
+  const [scanHistory, setScanHistory] = useState<ScanHistoryPoint[]>([])
   const [desktopNotificationsEnabled, setDesktopNotificationsEnabled] = useState(true)
 
   // Load notification preference once on mount
@@ -72,6 +84,7 @@ export function useDashboardData(projectId?: number): UseDashboardDataResult {
       setFixesAppliedCount(0)
       setComplianceScore(0)
       setTotalViolations(0)
+      setScanHistory([])
       setIsLoading(false)
       return
     }
@@ -79,10 +92,25 @@ export function useDashboardData(projectId?: number): UseDashboardDataResult {
     setIsLoading(true)
     try {
       const scans = await get_scans(projectId)
-      setTotalScansCount(scans.length)
+      // Filter to completed scans only
+      const completedScans = scans.filter(s => s.status === "completed")
+      setTotalScansCount(completedScans.length)
 
-      const latest = scans[0] ? toScanSummary(scans[0]) : null
+      const latest = completedScans[0] ? toScanSummary(completedScans[0]) : null
       setLastScan(latest)
+
+      // Build scan history from last 10 scans (reversed for chart: oldest first)
+      const historyScans = completedScans.slice(0, 10).reverse()
+      const history: ScanHistoryPoint[] = historyScans.map((scan, idx) => ({
+        scanNumber: idx + 1,
+        date: new Date(scan.completed_at || scan.started_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        violations: scan.violations_found,
+        critical: scan.critical_count,
+        high: scan.high_count,
+        medium: scan.medium_count,
+        low: scan.low_count,
+      }))
+      setScanHistory(history)
 
       if (latest) {
         const violations = (await get_violations(latest.id, {})).map(toViolation)
@@ -94,23 +122,16 @@ export function useDashboardData(projectId?: number): UseDashboardDataResult {
         setSeverityCounts(counts)
         setTotalViolations(total)
 
-        const score = Math.max(
-          0,
-          Math.min(
-            100,
-            Math.round(
-              (1 -
-                total /
-                  Math.max(1, latest.violationsFound || total || 1)) *
-                100,
-            ),
-          ),
-        )
+        // Calculate compliance score based on severity-weighted violations
+        // Critical = 10pts, High = 5pts, Medium = 2pts, Low = 1pt
+        const maxPenalty = 100
+        const penalty = Math.min(maxPenalty, counts.critical * 10 + counts.high * 5 + counts.medium * 2 + counts.low)
+        const score = Math.max(0, 100 - penalty)
         setComplianceScore(score)
       } else {
         setSeverityCounts({ ...EMPTY_COUNTS })
         setTotalViolations(0)
-        setComplianceScore(0)
+        setComplianceScore(100) // No violations = 100%
       }
 
       const events = (await get_audit_events({ limit: 4 })).map(toAuditEvent)
@@ -155,6 +176,7 @@ export function useDashboardData(projectId?: number): UseDashboardDataResult {
     fixesAppliedCount,
     complianceScore,
     totalViolations,
+    scanHistory,
     refresh,
   }
 }

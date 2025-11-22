@@ -2,9 +2,15 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import {
+  Area,
+  AreaChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts"
 import { useDashboardData } from "@/components/dashboard/use-dashboard-data"
-import { RecentActivityList } from "@/components/dashboard/recent-activity-list"
-import { ViolationsGrid } from "@/components/dashboard/violations-grid"
 import { Button } from "@/components/ui/button"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { formatRelativeTime } from "@/lib/utils/date"
@@ -16,23 +22,21 @@ export function Dashboard() {
     isLoading,
     lastScan,
     severityCounts,
-    recentActivity,
     totalScansCount,
-    fixesAppliedCount,
     complianceScore,
     totalViolations,
+    scanHistory,
   } = useDashboardData(selectedProject?.id)
 
   const handleRunScan = () => router.push("/scan")
-  const handleViewReport = () => router.push("/audit")
 
   if (isLoading) {
     return (
-      <div className="px-8 py-8 max-w-[1800px] mx-auto flex items-center justify-center min-h-[60vh]">
+      <div className="px-6 py-6 max-w-6xl mx-auto flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 rounded-lg border border-white/10">
             <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-            <span className="text-sm text-white/70">Loading dashboard data...</span>
+            <span className="text-sm text-white/70">Loading...</span>
           </div>
         </div>
       </div>
@@ -41,13 +45,14 @@ export function Dashboard() {
 
   if (!selectedProject) {
     return (
-      <div className="px-8 py-8 max-w-[1800px] mx-auto flex items-center justify-center min-h-[60vh]">
+      <div className="px-6 py-6 max-w-6xl mx-auto flex items-center justify-center min-h-[60vh]">
         <div className="text-center max-w-md">
-          <i className="las la-folder-open text-6xl text-white/20 mb-4"></i>
-          <h2 className="text-2xl font-bold mb-2">No Project Selected</h2>
-          <p className="text-white/60 mb-6">Select a project from the header to view compliance metrics</p>
-          <Button onClick={() => router.push("/scan")} className="gap-2">
-            <i className="las la-folder text-base"></i>
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+            <i className="las la-folder-open text-3xl text-white/30"></i>
+          </div>
+          <h2 className="text-xl font-semibold mb-2">No Project Selected</h2>
+          <p className="text-sm text-white/50 mb-6">Select a project to view compliance metrics</p>
+          <Button onClick={() => router.push("/scan")} size="sm">
             Select Project
           </Button>
         </div>
@@ -57,15 +62,16 @@ export function Dashboard() {
 
   if (!lastScan && totalScansCount === 0) {
     return (
-      <div className="px-8 py-8 max-w-[1800px] mx-auto flex items-center justify-center min-h-[60vh]">
+      <div className="px-6 py-6 max-w-6xl mx-auto flex items-center justify-center min-h-[60vh]">
         <div className="text-center max-w-md">
-          <i className="las la-search text-6xl text-white/20 mb-4"></i>
-          <h2 className="text-2xl font-bold mb-2">No Scans Yet</h2>
-          <p className="text-white/60 mb-6">
-            Run your first scan on <span className="text-white font-medium">{selectedProject.name}</span> to start monitoring SOC 2 compliance
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+            <i className="las la-search text-3xl text-white/30"></i>
+          </div>
+          <h2 className="text-xl font-semibold mb-2">No Scans Yet</h2>
+          <p className="text-sm text-white/50 mb-6">
+            Run your first scan on <span className="text-white/80">{selectedProject.name}</span>
           </p>
-          <Button onClick={handleRunScan} size="lg" className="gap-2">
-            <i className="las la-play text-base"></i>
+          <Button onClick={handleRunScan} size="sm">
             Run First Scan
           </Button>
         </div>
@@ -74,117 +80,174 @@ export function Dashboard() {
   }
 
   const lastScanTimestamp = lastScan?.createdAt || lastScan?.startedAt
-  const isStale = lastScanTimestamp
-    ? Math.floor((Date.now() - new Date(lastScanTimestamp).getTime()) / 3600000) >= 1
-    : false
+  const trend = scanHistory.length >= 2
+    ? scanHistory[scanHistory.length - 1].violations - scanHistory[scanHistory.length - 2].violations
+    : 0
 
   return (
-    <div className="px-8 py-8 max-w-[1800px] mx-auto">
-      <div className="mb-8 animate-fade-in-up">
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h1 className="text-7xl font-bold leading-none tracking-tight mb-3 text-glow">
-              {complianceScore}%
-            </h1>
-            <p className="text-lg text-white/60">SOC 2 Compliance Score</p>
-            <p className="mt-1 text-xs text-white/50">
-              Viewing project <span className="font-semibold">{selectedProject.name}</span>
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Button onClick={handleRunScan} size="lg" className="gap-2">
-              <i className="las la-play text-base"></i>
-              Run Scan
-            </Button>
-            <Button onClick={handleViewReport} size="lg" variant="outline" className="gap-2">
-              <i className="las la-search text-base"></i>
-              View Report
-            </Button>
-          </div>
-        </div>
-
-        <div className="relative h-3 bg-white/5 rounded-full overflow-hidden backdrop-blur-sm border border-white/10">
-          <div
-            className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-500 via-green-500 to-yellow-500 rounded-full transition-all duration-1000"
-            style={{ width: `${complianceScore}%` }}
-          />
-        </div>
-
-        <div className="flex items-center gap-3 mt-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-            <span className="text-sm font-medium text-white/70">{totalViolations} violations</span>
-          </div>
+    <div className="px-6 py-6 max-w-6xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold">{selectedProject.name}</h1>
           {lastScanTimestamp && (
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg border border-white/10">
-              <i className="las la-clock text-sm text-white/50"></i>
-              <span className="text-sm font-medium text-white/50">{formatRelativeTime(lastScanTimestamp)}</span>
+            <p className="text-xs text-white/40 mt-0.5">
+              Last scan {formatRelativeTime(lastScanTimestamp)}
+            </p>
+          )}
+        </div>
+        <Button onClick={handleRunScan} size="sm">
+          <i className="las la-play mr-1.5"></i>
+          Run Scan
+        </Button>
+      </div>
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-4 gap-4">
+        {/* Compliance Score */}
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <div className="text-xs text-white/40 mb-1">Compliance</div>
+          <div className="text-3xl font-bold tabular-nums">{complianceScore}%</div>
+        </div>
+
+        {/* Total Violations */}
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <div className="text-xs text-white/40 mb-1">Violations</div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold tabular-nums">{totalViolations}</span>
+            {trend !== 0 && (
+              <span className={`text-xs ${trend > 0 ? "text-red-400" : "text-green-400"}`}>
+                {trend > 0 ? "+" : ""}{trend}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Critical + High */}
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <div className="text-xs text-white/40 mb-1">Critical & High</div>
+          <div className="text-3xl font-bold tabular-nums text-red-400">
+            {severityCounts.critical + severityCounts.high}
+          </div>
+        </div>
+
+        {/* Total Scans */}
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <div className="text-xs text-white/40 mb-1">Total Scans</div>
+          <div className="text-3xl font-bold tabular-nums">{totalScansCount}</div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="grid grid-cols-3 gap-4">
+        {/* Chart */}
+        <div className="col-span-2 bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <div className="text-xs text-white/40 mb-4">Violation Trend</div>
+          {scanHistory.length > 1 ? (
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={scanHistory} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
+                  <defs>
+                    <linearGradient id="violationGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="rgb(239 68 68)" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="rgb(239 68 68)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="date"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: "rgba(255,255,255,0.3)", fontSize: 10 }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "rgba(0,0,0,0.9)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                    }}
+                    labelStyle={{ color: "rgba(255,255,255,0.5)" }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="violations"
+                    stroke="rgb(239 68 68)"
+                    strokeWidth={2}
+                    fill="url(#violationGradient)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-48 flex items-center justify-center text-white/30 text-sm">
+              Run more scans to see trends
             </div>
           )}
         </div>
-      </div>
 
-      <div className="grid grid-cols-12 gap-6">
-        <ViolationsGrid counts={severityCounts} />
-
-        <div className="col-span-4 space-y-6 animate-fade-in-right delay-200">
-          <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-            <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-6">Performance</h3>
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-white/70">Total Scans</span>
-                <span className="text-xl font-bold tabular-nums">{totalScansCount}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-white/70">Fixes Applied</span>
-                <span className="text-xl font-bold tabular-nums">{fixesAppliedCount}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-white/70">Open Violations</span>
-                <span className="text-xl font-bold tabular-nums">{totalViolations}</span>
-              </div>
-            </div>
+        {/* Severity Breakdown */}
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <div className="text-xs text-white/40 mb-4">By Severity</div>
+          <div className="space-y-3">
+            <SeverityRow label="Critical" count={severityCounts.critical} color="bg-red-500" href="/scan?severity=critical" />
+            <SeverityRow label="High" count={severityCounts.high} color="bg-orange-500" href="/scan?severity=high" />
+            <SeverityRow label="Medium" count={severityCounts.medium} color="bg-yellow-500" href="/scan?severity=medium" />
+            <SeverityRow label="Low" count={severityCounts.low} color="bg-gray-500" href="/scan?severity=low" />
           </div>
-
-          <RecentActivityList events={recentActivity} />
         </div>
       </div>
 
-      {isStale && (
+      {/* Quick Actions */}
+      {(severityCounts.critical > 0 || severityCounts.high > 0) && (
         <Link
           href="/scan"
-          className="mt-8 flex items-center justify-between p-6 bg-yellow-500/10 backdrop-blur-sm border border-yellow-500/30 rounded-2xl animate-fade-in-up delay-300 hover:bg-yellow-500/15 hover:border-yellow-500/50 transition-all duration-300 cursor-pointer group"
+          className="flex items-center justify-between p-4 bg-red-500/5 border border-red-500/20 rounded-xl hover:bg-red-500/10 hover:border-red-500/30 transition-colors group"
         >
-          <div>
-            <p className="font-semibold mb-1 text-yellow-400 group-hover:text-yellow-300 transition-colors">
-              Scan data is out of date
-            </p>
-            <p className="text-sm text-yellow-400/70 group-hover:text-yellow-400/90 transition-colors">
-              Run a fresh scan to get the latest compliance data
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <i className="las la-exclamation-triangle text-red-400"></i>
+            </div>
+            <div>
+              <div className="text-sm font-medium">
+                {severityCounts.critical + severityCounts.high} high-priority issues need attention
+              </div>
+              <div className="text-xs text-white/40">AI-powered fixes available</div>
+            </div>
           </div>
-          <div className="flex items-center gap-2 text-sm font-medium text-yellow-400 group-hover:translate-x-1 transition-transform">
-            <span>Rescan Now</span>
-            <i className="las la-arrow-right text-base"></i>
-          </div>
+          <i className="las la-arrow-right text-white/40 group-hover:text-white/60 group-hover:translate-x-0.5 transition-all"></i>
         </Link>
       )}
-
-      <Link
-        href="/scan"
-        className="mt-8 flex items-center justify-between p-6 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl animate-fade-in-up delay-300 hover:bg-white/10 hover:border-white/20 transition-all duration-300 cursor-pointer group"
-      >
-        <div>
-          <p className="font-semibold mb-1 group-hover:text-white transition-colors">Need help fixing violations?</p>
-          <p className="text-sm text-white/60 group-hover:text-white/80 transition-colors">
-            AI-powered fixes available for {severityCounts.critical + severityCounts.high} high-priority issues
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-sm font-medium group-hover:translate-x-1 transition-transform">
-          <span>View All Violations</span>
-          <i className="las la-arrow-right text-base"></i>
-        </div>
-      </Link>
     </div>
+  )
+}
+
+function SeverityRow({
+  label,
+  count,
+  color,
+  href,
+}: {
+  label: string
+  count: number
+  color: string
+  href: string
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between py-2 px-3 -mx-3 rounded-lg hover:bg-white/[0.03] transition-colors group"
+    >
+      <div className="flex items-center gap-2">
+        <div className={`w-2 h-2 rounded-full ${color}`} />
+        <span className="text-sm text-white/70 group-hover:text-white/90">{label}</span>
+      </div>
+      <span className="text-sm font-medium tabular-nums">{count}</span>
+    </Link>
   )
 }
