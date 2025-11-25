@@ -379,15 +379,17 @@ pub async fn scan_github_repo<R: tauri::Runtime>(
             .find(|r| r.id == tracked_repo_id)
             .ok_or_else(|| format!("Tracked repo {} not found", tracked_repo_id))?;
 
+        let tracked_repo_clone = tracked_repo.clone();
+
         let connection = queries::select_github_connection(&conn)
             .map_err(|e| format!("Failed to get GitHub connection: {}", e))?
             .ok_or_else(|| "Not connected to GitHub".to_string())?;
 
         (
             tracked_repo,
-            tracked_repo.github_repo.owner.clone(),
-            tracked_repo.github_repo.name.clone(),
-            tracked_repo.github_repo.default_branch.clone(),
+            tracked_repo_clone.github_repo.owner.clone(),
+            tracked_repo_clone.github_repo.name.clone(),
+            tracked_repo_clone.github_repo.default_branch.clone(),
             connection.access_token.clone(),
         )
     };
