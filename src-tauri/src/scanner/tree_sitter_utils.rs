@@ -225,12 +225,16 @@ pub fn find_context_at_line(
     let target_row = (line_number - 1) as usize; // Convert to 0-indexed
 
     // Find containing function
-    let function_name = parse_result.functions.iter()
+    let function_name = parse_result
+        .functions
+        .iter()
         .find(|node| node.start_row <= target_row && target_row <= node.end_row)
         .and_then(|node| extract_name_from_definition(&node.text));
 
     // Find containing class
-    let class_name = parse_result.classes.iter()
+    let class_name = parse_result
+        .classes
+        .iter()
         .find(|node| node.start_row <= target_row && target_row <= node.end_row)
         .and_then(|node| extract_name_from_definition(&node.text));
 
@@ -453,9 +457,15 @@ def function_{}():
         let js_code = "function bar() {}";
         let ts_code = "function baz(): void {}";
 
-        let py_result = parser.parse_python(py_code).expect("Failed to parse Python");
-        let js_result = parser.parse_javascript(js_code).expect("Failed to parse JavaScript");
-        let ts_result = parser.parse_typescript(ts_code).expect("Failed to parse TypeScript");
+        let py_result = parser
+            .parse_python(py_code)
+            .expect("Failed to parse Python");
+        let js_result = parser
+            .parse_javascript(js_code)
+            .expect("Failed to parse JavaScript");
+        let ts_result = parser
+            .parse_typescript(ts_code)
+            .expect("Failed to parse TypeScript");
 
         assert_eq!(py_result.language, "python");
         assert_eq!(js_result.language, "javascript");

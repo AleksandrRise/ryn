@@ -1,8 +1,8 @@
+use anyhow::{Context, Result};
+use once_cell::sync::Lazy;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use anyhow::{Result, Context};
-use once_cell::sync::Lazy;
 
 pub mod migrations;
 pub mod queries;
@@ -16,8 +16,7 @@ pub use queries::*;
 /// Singleton database connection
 /// Initialized once on first access, then reused for all subsequent calls
 static DB_CONNECTION: Lazy<Mutex<Connection>> = Lazy::new(|| {
-    let conn = create_connection()
-        .expect("Failed to initialize database connection");
+    let conn = create_connection().expect("Failed to initialize database connection");
     Mutex::new(conn)
 });
 
@@ -42,8 +41,8 @@ pub fn get_db_path() -> Result<PathBuf> {
 /// Called once by the singleton initialization
 fn create_connection() -> Result<Connection> {
     let db_path = get_db_path()?;
-    let conn = Connection::open(&db_path)
-        .context(format!("Failed to open database at {:?}", db_path))?;
+    let conn =
+        Connection::open(&db_path).context(format!("Failed to open database at {:?}", db_path))?;
 
     // Enable foreign key support
     conn.execute("PRAGMA foreign_keys = ON", [])
@@ -74,8 +73,8 @@ pub fn get_connection() -> std::sync::MutexGuard<'static, Connection> {
 /// early initialization with explicit error handling.
 pub fn init_db() -> Result<Connection> {
     let db_path = get_db_path()?;
-    let conn = Connection::open(&db_path)
-        .context(format!("Failed to open database at {:?}", db_path))?;
+    let conn =
+        Connection::open(&db_path).context(format!("Failed to open database at {:?}", db_path))?;
 
     // Enable foreign key support
     conn.execute("PRAGMA foreign_keys = ON", [])

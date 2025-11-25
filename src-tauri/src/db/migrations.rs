@@ -1,6 +1,6 @@
-use rusqlite::Connection;
-use anyhow::{Result, Context};
 use crate::models::Control;
+use anyhow::{Context, Result};
+use rusqlite::Connection;
 
 const SCHEMA_SQL: &str = include_str!("schema.sql");
 
@@ -62,26 +62,24 @@ fn migrate_to_v2(conn: &Connection) -> Result<()> {
         "ALTER TABLE violations ADD COLUMN detection_method TEXT NOT NULL DEFAULT 'regex'
          CHECK(detection_method IN ('regex', 'llm', 'hybrid'))",
         [],
-    ).context("Failed to add violations.detection_method column")?;
+    )
+    .context("Failed to add violations.detection_method column")?;
 
     // confidence_score: LLM confidence (0-100, NULL for regex-only)
     conn.execute(
         "ALTER TABLE violations ADD COLUMN confidence_score INTEGER
          CHECK(confidence_score IS NULL OR (confidence_score >= 0 AND confidence_score <= 100))",
         [],
-    ).context("Failed to add violations.confidence_score column")?;
+    )
+    .context("Failed to add violations.confidence_score column")?;
 
     // llm_reasoning: AI explanation of why this is a violation
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN llm_reasoning TEXT",
-        [],
-    ).context("Failed to add violations.llm_reasoning column")?;
+    conn.execute("ALTER TABLE violations ADD COLUMN llm_reasoning TEXT", [])
+        .context("Failed to add violations.llm_reasoning column")?;
 
     // regex_reasoning: Pattern-based explanation (for hybrid detections)
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN regex_reasoning TEXT",
-        [],
-    ).context("Failed to add violations.regex_reasoning column")?;
+    conn.execute("ALTER TABLE violations ADD COLUMN regex_reasoning TEXT", [])
+        .context("Failed to add violations.regex_reasoning column")?;
 
     // ============================================================
     // SCAN_COSTS TABLE: Track API usage and costs per scan
@@ -101,19 +99,22 @@ fn migrate_to_v2(conn: &Connection) -> Result<()> {
             FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
         )",
         [],
-    ).context("Failed to create scan_costs table")?;
+    )
+    .context("Failed to create scan_costs table")?;
 
     // Add index for cost analytics queries (time-based filtering)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_scan_costs_created_at ON scan_costs(created_at)",
         [],
-    ).context("Failed to create idx_scan_costs_created_at index")?;
+    )
+    .context("Failed to create idx_scan_costs_created_at index")?;
 
     // Add index for per-scan cost lookups
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_scan_costs_scan_id ON scan_costs(scan_id)",
         [],
-    ).context("Failed to create idx_scan_costs_scan_id index")?;
+    )
+    .context("Failed to create idx_scan_costs_scan_id index")?;
 
     // ============================================================
     // AUDIT EVENTS: Add new event types for hybrid scanning
@@ -150,16 +151,12 @@ fn migrate_to_v3(conn: &Connection) -> Result<()> {
     // ============================================================
 
     // function_name: Extracted via tree-sitter for better fix context
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN function_name TEXT",
-        [],
-    ).context("Failed to add violations.function_name column")?;
+    conn.execute("ALTER TABLE violations ADD COLUMN function_name TEXT", [])
+        .context("Failed to add violations.function_name column")?;
 
     // class_name: The class where violation was found (NULL if not in a class)
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN class_name TEXT",
-        [],
-    ).context("Failed to add violations.class_name column")?;
+    conn.execute("ALTER TABLE violations ADD COLUMN class_name TEXT", [])
+        .context("Failed to add violations.class_name column")?;
 
     Ok(())
 }
@@ -176,7 +173,123 @@ fn migrate_to_v4(conn: &Connection) -> Result<()> {
     conn.execute(
         "ALTER TABLE scans ADD COLUMN scan_mode TEXT NOT NULL DEFAULT 'regex_only'",
         [],
-    ).context("Failed to add scans.scan_mode column")?;
+    )
+    .context("Failed to add scans.scan_mode column")?;
+
+    Ok(())
+}
+
+/// Migrate from v4 to v5 (GitHub integration)
+/// Adds tables for GitHub OAuth and repository tracking:
+/// - github_connections: Store OAuth tokens and user info
+/// - github_repos: Cache of user's GitHub repositories
+/// - tracked_repos: Which repos are being tracked for compliance scanning
+fn migrate_to_v5(conn: &Connection) -> Result<()> {
+    // ============================================================
+    // GITHUB_CONNECTIONS TABLE: OAuth tokens and user info
+    // ============================================================
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS github_connections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            access_token TEXT NOT NULL,
+            refresh_token TEXT,
+            token_expires_at TEXT,
+            github_user_id INTEGER NOT NULL UNIQUE,
+            github_username TEXT NOT NULL,
+            github_avatar_url TEXT,
+            github_email TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )",
+        [],
+    )
+    .context("Failed to create github_connections table")?;
+
+    // ============================================================
+    // GITHUB_REPOS TABLE: Cached repository data from GitHub API
+    // ============================================================
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS github_repos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            github_id INTEGER NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            full_name TEXT NOT NULL,
+            owner TEXT NOT NULL,
+            html_url TEXT NOT NULL,
+            clone_url TEXT NOT NULL,
+            description TEXT,
+            private INTEGER NOT NULL DEFAULT 0,
+            language TEXT,
+            stargazers_count INTEGER DEFAULT 0,
+            default_branch TEXT DEFAULT 'main',
+            fetched_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )",
+        [],
+    )
+    .context("Failed to create github_repos table")?;
+
+    // ============================================================
+    // TRACKED_REPOS TABLE: Repos user wants to monitor
+    // ============================================================
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS tracked_repos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            github_repo_id INTEGER NOT NULL,
+            local_path TEXT,
+            last_scanned_at TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            added_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (github_repo_id) REFERENCES github_repos(id) ON DELETE CASCADE
+        )",
+        [],
+    )
+    .context("Failed to create tracked_repos table")?;
+
+    // ============================================================
+    // INDEXES for GitHub tables
+    // ============================================================
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_github_repos_github_id ON github_repos(github_id)",
+        [],
+    )
+    .context("Failed to create idx_github_repos_github_id index")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tracked_repos_github_repo_id ON tracked_repos(github_repo_id)",
+        [],
+    ).context("Failed to create idx_tracked_repos_github_repo_id index")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_tracked_repos_is_active ON tracked_repos(is_active)",
+        [],
+    )
+    .context("Failed to create idx_tracked_repos_is_active index")?;
+
+    Ok(())
+}
+
+/// Migrate from v5 to v6 (Smart polling for GitHub repos)
+/// Adds commit tracking fields to tracked_repos:
+/// - last_commit_sha: SHA of last commit we checked
+/// - last_checked_at: When we last polled GitHub API for changes
+fn migrate_to_v6(conn: &Connection) -> Result<()> {
+    // ============================================================
+    // TRACKED_REPOS TABLE: Add commit tracking columns
+    // ============================================================
+
+    // last_commit_sha: SHA of the latest commit we've seen
+    conn.execute(
+        "ALTER TABLE tracked_repos ADD COLUMN last_commit_sha TEXT",
+        [],
+    )
+    .context("Failed to add tracked_repos.last_commit_sha column")?;
+
+    // last_checked_at: Timestamp of last API poll for commit changes
+    conn.execute(
+        "ALTER TABLE tracked_repos ADD COLUMN last_checked_at TEXT",
+        [],
+    )
+    .context("Failed to add tracked_repos.last_checked_at column")?;
 
     Ok(())
 }
@@ -197,7 +310,8 @@ fn backfill_scan_modes(conn: &Connection) -> Result<()> {
           AND id IN (SELECT DISTINCT scan_id FROM scan_costs)
         ",
         [],
-    ).context("Failed to backfill scan_mode for historical scans")?;
+    )
+    .context("Failed to backfill scan_mode for historical scans")?;
 
     Ok(())
 }
@@ -215,17 +329,20 @@ pub fn seed_settings(conn: &Connection) -> Result<()> {
     conn.execute(
         "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
         ["llm_scan_mode", "regex_only"],
-    ).context("Failed to insert llm_scan_mode setting")?;
+    )
+    .context("Failed to insert llm_scan_mode setting")?;
 
     conn.execute(
         "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
         ["cost_limit_per_scan", "1.0"],
-    ).context("Failed to insert cost_limit_per_scan setting")?;
+    )
+    .context("Failed to insert cost_limit_per_scan setting")?;
 
     conn.execute(
         "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
         ["onboarding_completed", "false"],
-    ).context("Failed to insert onboarding_completed setting")?;
+    )
+    .context("Failed to insert onboarding_completed setting")?;
 
     Ok(())
 }
@@ -237,6 +354,8 @@ pub fn seed_settings(conn: &Connection) -> Result<()> {
 /// - v2: Hybrid scanning schema (detection_method, scan_costs, etc.)
 /// - v3: Tree-sitter context fields (function_name, class_name)
 /// - v4: Scan mode tracking (scan_mode column in scans table)
+/// - v5: GitHub integration (github_connections, github_repos, tracked_repos)
+/// - v6: Smart polling (last_commit_sha, last_checked_at in tracked_repos)
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     let current_version = get_schema_version(conn)?;
 
@@ -259,6 +378,16 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 4 {
         migrate_to_v4(conn)?;
         set_schema_version(conn, 4)?;
+    }
+
+    if current_version < 5 {
+        migrate_to_v5(conn)?;
+        set_schema_version(conn, 5)?;
+    }
+
+    if current_version < 6 {
+        migrate_to_v6(conn)?;
+        set_schema_version(conn, 6)?;
     }
 
     // Seed default settings (idempotent - won't overwrite existing values)
@@ -368,7 +497,13 @@ mod tests {
             .collect();
 
         let expected_tables = vec![
-            "audit_events", "controls", "fixes", "projects", "scans", "settings", "violations",
+            "audit_events",
+            "controls",
+            "fixes",
+            "projects",
+            "scans",
+            "settings",
+            "violations",
         ];
         for expected in expected_tables {
             assert!(
@@ -408,7 +543,13 @@ mod tests {
             .collect();
 
         let expected_tables = vec![
-            "audit_events", "controls", "fixes", "projects", "scans", "settings", "violations",
+            "audit_events",
+            "controls",
+            "fixes",
+            "projects",
+            "scans",
+            "settings",
+            "violations",
         ];
         for expected in expected_tables {
             assert!(
@@ -420,7 +561,10 @@ mod tests {
 
         // Verify schema version is set to 3 (latest)
         let version = get_schema_version(&conn).unwrap();
-        assert_eq!(version, 3, "Schema version should be 3 after all migrations");
+        assert_eq!(
+            version, 3,
+            "Schema version should be 3 after all migrations"
+        );
     }
 
     #[test]
@@ -441,11 +585,17 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(table_count, 8, "Should have exactly 8 tables (7 original + scan_costs)");
+        assert_eq!(
+            table_count, 8,
+            "Should have exactly 8 tables (7 original + scan_costs)"
+        );
 
         // Verify schema version stays at 3
         let version = get_schema_version(&conn).unwrap();
-        assert_eq!(version, 3, "Schema version should remain 3 after multiple runs");
+        assert_eq!(
+            version, 3,
+            "Schema version should remain 3 after multiple runs"
+        );
     }
 
     #[test]
@@ -475,7 +625,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(table_count, 8, "Should have 8 tables after v2 (7 original + scan_costs)");
+        assert_eq!(
+            table_count, 8,
+            "Should have 8 tables after v2 (7 original + scan_costs)"
+        );
     }
 
     #[test]
@@ -502,7 +655,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(table_count, 8, "Should have 8 tables after v2 migration (7 original + scan_costs)");
+        assert_eq!(
+            table_count, 8,
+            "Should have 8 tables after v2 migration (7 original + scan_costs)"
+        );
     }
 
     #[test]
@@ -518,9 +674,7 @@ mod tests {
         migrate_to_v2(&conn).unwrap();
 
         // Verify new columns exist in violations table
-        let mut stmt = conn
-            .prepare("PRAGMA table_info(violations)")
-            .unwrap();
+        let mut stmt = conn.prepare("PRAGMA table_info(violations)").unwrap();
 
         let column_names: Vec<String> = stmt
             .query_map([], |row| row.get::<_, String>(1))
@@ -555,12 +709,13 @@ mod tests {
             )
             .unwrap();
 
-        assert!(table_exists, "scan_costs table should exist after v2 migration");
+        assert!(
+            table_exists,
+            "scan_costs table should exist after v2 migration"
+        );
 
         // Verify scan_costs has correct columns
-        let mut stmt = conn
-            .prepare("PRAGMA table_info(scan_costs)")
-            .unwrap();
+        let mut stmt = conn.prepare("PRAGMA table_info(scan_costs)").unwrap();
 
         let column_names: Vec<String> = stmt
             .query_map([], |row| row.get::<_, String>(1))
@@ -569,10 +724,15 @@ mod tests {
             .collect();
 
         let expected_columns = vec![
-            "id", "scan_id", "files_analyzed_with_llm",
-            "input_tokens", "output_tokens",
-            "cache_read_tokens", "cache_write_tokens",
-            "total_cost_usd", "created_at"
+            "id",
+            "scan_id",
+            "files_analyzed_with_llm",
+            "input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+            "total_cost_usd",
+            "created_at",
         ];
 
         for expected in expected_columns {
@@ -654,14 +814,16 @@ mod tests {
         conn.execute(
             "INSERT INTO projects (name, path) VALUES (?, ?)",
             rusqlite::params!["test-project", "/tmp/test"],
-        ).unwrap();
+        )
+        .unwrap();
 
         let project_id: i64 = conn.last_insert_rowid();
 
         conn.execute(
             "INSERT INTO scans (project_id, status) VALUES (?, ?)",
             rusqlite::params![project_id, "completed"],
-        ).unwrap();
+        )
+        .unwrap();
 
         let scan_id: i64 = conn.last_insert_rowid();
 
@@ -684,7 +846,10 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(detection_method, "regex", "Default detection_method should be 'regex'");
+        assert_eq!(
+            detection_method, "regex",
+            "Default detection_method should be 'regex'"
+        );
     }
 
     #[test]
@@ -735,9 +900,7 @@ mod tests {
         seed_controls(&conn).unwrap();
 
         // Verify specific control IDs
-        let mut stmt = conn
-            .prepare("SELECT id FROM controls ORDER BY id")
-            .unwrap();
+        let mut stmt = conn.prepare("SELECT id FROM controls ORDER BY id").unwrap();
 
         let ids: Vec<String> = stmt
             .query_map([], |row| row.get(0))
@@ -781,9 +944,7 @@ mod tests {
         migrate_to_v4(&conn).unwrap();
 
         // Verify new column exists in scans table
-        let mut stmt = conn
-            .prepare("PRAGMA table_info(scans)")
-            .unwrap();
+        let mut stmt = conn.prepare("PRAGMA table_info(scans)").unwrap();
 
         let column_names: Vec<String> = stmt
             .query_map([], |row| row.get::<_, String>(1))
@@ -807,7 +968,8 @@ mod tests {
         conn.execute(
             "INSERT INTO projects (name, path, framework) VALUES (?, ?, ?)",
             params!["proj", "/tmp/proj", Option::<String>::None],
-        ).unwrap();
+        )
+        .unwrap();
         let project_id = conn.last_insert_rowid();
 
         // Insert two scans, both initially marked as regex_only

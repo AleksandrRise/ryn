@@ -40,11 +40,9 @@ fn test_total_cost_all_scans() {
     // Calculate total cost
     let conn = project.connection();
     let total_cost: f64 = conn
-        .query_row(
-            "SELECT SUM(total_cost_usd) FROM scan_costs",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT SUM(total_cost_usd) FROM scan_costs", [], |row| {
+            row.get(0)
+        })
         .unwrap();
 
     let expected_total = 0.048 + 0.072 + 0.096 + 0.120 + 0.144;
@@ -70,7 +68,7 @@ fn test_average_cost_per_scan() {
 
     for cost in &costs {
         let scan_id = project.insert_scan(project_id, "completed").unwrap();
-        let files = (cost * 100.0) as i64;  // Proportional to cost
+        let files = (cost * 100.0) as i64; // Proportional to cost
         let input = files * 5_000;
         let output = files * 1_000;
 
@@ -82,11 +80,9 @@ fn test_average_cost_per_scan() {
     // Calculate average cost
     let conn = project.connection();
     let avg_cost: f64 = conn
-        .query_row(
-            "SELECT AVG(total_cost_usd) FROM scan_costs",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT AVG(total_cost_usd) FROM scan_costs", [], |row| {
+            row.get(0)
+        })
         .unwrap();
 
     let expected_avg = costs.iter().sum::<f64>() / costs.len() as f64;
@@ -145,9 +141,9 @@ fn test_average_cost_per_file() {
 
     // Create scans with consistent cost per file
     let scan_configs = vec![
-        (10, 0.100),  // $0.01 per file
-        (20, 0.200),  // $0.01 per file
-        (30, 0.300),  // $0.01 per file
+        (10, 0.100), // $0.01 per file
+        (20, 0.200), // $0.01 per file
+        (30, 0.300), // $0.01 per file
     ];
 
     for (files, cost) in scan_configs {
@@ -197,7 +193,12 @@ fn test_total_token_usage() {
 
     for (files, input, output, cache_read, cache_write) in scan_configs {
         let scan_id = project.insert_scan(project_id, "completed").unwrap();
-        let cost = ryn::models::scan_cost::ScanCost::calculate_cost(input, output, cache_read, cache_write);
+        let cost = ryn::models::scan_cost::ScanCost::calculate_cost(
+            input,
+            output,
+            cache_read,
+            cache_write,
+        );
 
         project
             .insert_scan_cost(scan_id, files, input, output, cache_read, cache_write, cost)
@@ -217,11 +218,19 @@ fn test_total_token_usage() {
 
     assert_eq!(total_input, 450_000, "Total input tokens should be 450k");
     assert_eq!(total_output, 90_000, "Total output tokens should be 90k");
-    assert_eq!(total_cache_read, 150_000, "Total cache read tokens should be 150k");
-    assert_eq!(total_cache_write, 30_000, "Total cache write tokens should be 30k");
+    assert_eq!(
+        total_cache_read, 150_000,
+        "Total cache read tokens should be 150k"
+    );
+    assert_eq!(
+        total_cache_write, 30_000,
+        "Total cache write tokens should be 30k"
+    );
 
-    println!("✓ Token usage: {}i / {}o / {}cr / {}cw",
-             total_input, total_output, total_cache_read, total_cache_write);
+    println!(
+        "✓ Token usage: {}i / {}o / {}cr / {}cw",
+        total_input, total_output, total_cache_read, total_cache_write
+    );
 }
 
 /// Test 6: Cost breakdown by project
@@ -266,7 +275,7 @@ fn test_cost_breakdown_by_project() {
              JOIN scans s ON s.project_id = p.id
              JOIN scan_costs sc ON sc.scan_id = s.id
              GROUP BY p.id
-             ORDER BY total_cost DESC"
+             ORDER BY total_cost DESC",
         )
         .unwrap()
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
@@ -275,13 +284,18 @@ fn test_cost_breakdown_by_project() {
         .collect();
 
     assert_eq!(project_costs.len(), 3, "Should have 3 projects");
-    assert_eq!(project_costs[0].0, "Project B");  // Highest cost
+    assert_eq!(project_costs[0].0, "Project B"); // Highest cost
     assert!((project_costs[0].1 - 0.250).abs() < 0.001);
 
-    println!("✓ Cost breakdown: {} = ${:.3}, {} = ${:.3}, {} = ${:.3}",
-             project_costs[0].0, project_costs[0].1,
-             project_costs[1].0, project_costs[1].1,
-             project_costs[2].0, project_costs[2].1);
+    println!(
+        "✓ Cost breakdown: {} = ${:.3}, {} = ${:.3}, {} = ${:.3}",
+        project_costs[0].0,
+        project_costs[0].1,
+        project_costs[1].0,
+        project_costs[1].1,
+        project_costs[2].0,
+        project_costs[2].1
+    );
 }
 
 /// Test 7: Most expensive scans query
@@ -313,7 +327,7 @@ fn test_most_expensive_scans() {
             "SELECT scan_id, total_cost_usd
              FROM scan_costs
              ORDER BY total_cost_usd DESC
-             LIMIT 3"
+             LIMIT 3",
         )
         .unwrap()
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
@@ -322,16 +336,33 @@ fn test_most_expensive_scans() {
         .collect();
 
     assert_eq!(top_scans.len(), 3, "Should return top 3 scans");
-    assert!((top_scans[0].1 - 0.50).abs() < 0.001, "Highest cost should be $0.50");
-    assert!((top_scans[1].1 - 0.40).abs() < 0.001, "Second highest should be $0.40");
-    assert!((top_scans[2].1 - 0.30).abs() < 0.001, "Third highest should be $0.30");
+    assert!(
+        (top_scans[0].1 - 0.50).abs() < 0.001,
+        "Highest cost should be $0.50"
+    );
+    assert!(
+        (top_scans[1].1 - 0.40).abs() < 0.001,
+        "Second highest should be $0.40"
+    );
+    assert!(
+        (top_scans[2].1 - 0.30).abs() < 0.001,
+        "Third highest should be $0.30"
+    );
 
     // Verify they're in descending order
-    assert!(top_scans[0].1 > top_scans[1].1, "Should be in descending order");
-    assert!(top_scans[1].1 > top_scans[2].1, "Should be in descending order");
+    assert!(
+        top_scans[0].1 > top_scans[1].1,
+        "Should be in descending order"
+    );
+    assert!(
+        top_scans[1].1 > top_scans[2].1,
+        "Should be in descending order"
+    );
 
-    println!("✓ Top 3 expensive scans: ${:.2}, ${:.2}, ${:.2}",
-             top_scans[0].1, top_scans[1].1, top_scans[2].1);
+    println!(
+        "✓ Top 3 expensive scans: ${:.2}, ${:.2}, ${:.2}",
+        top_scans[0].1, top_scans[1].1, top_scans[2].1
+    );
 }
 
 /// Test 8: Cost efficiency ranking (cost per file)
@@ -343,9 +374,9 @@ fn test_cost_efficiency_ranking() {
 
     // Create scans with different cost efficiencies
     let scan_configs = vec![
-        (100, 0.50),  // $0.005 per file (most efficient)
-        (50, 0.50),   // $0.010 per file
-        (25, 0.50),   // $0.020 per file (least efficient)
+        (100, 0.50), // $0.005 per file (most efficient)
+        (50, 0.50),  // $0.010 per file
+        (25, 0.50),  // $0.020 per file (least efficient)
     ];
 
     for (files, cost) in scan_configs {
@@ -367,10 +398,12 @@ fn test_cost_efficiency_ranking() {
                     total_cost_usd / files_analyzed_with_llm as cost_per_file
              FROM scan_costs
              WHERE files_analyzed_with_llm > 0
-             ORDER BY cost_per_file ASC"
+             ORDER BY cost_per_file ASC",
         )
         .unwrap()
-        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
         .unwrap()
         .filter_map(|r| r.ok())
         .collect();
@@ -378,15 +411,29 @@ fn test_cost_efficiency_ranking() {
     assert_eq!(efficiency.len(), 3, "Should have 3 scans");
 
     // Best efficiency (most files per dollar)
-    assert_eq!(efficiency[0].1, 100, "Most efficient scan should have 100 files");
-    assert!((efficiency[0].3 - 0.005).abs() < 0.001, "Best efficiency: $0.005 per file");
+    assert_eq!(
+        efficiency[0].1, 100,
+        "Most efficient scan should have 100 files"
+    );
+    assert!(
+        (efficiency[0].3 - 0.005).abs() < 0.001,
+        "Best efficiency: $0.005 per file"
+    );
 
     // Worst efficiency
-    assert_eq!(efficiency[2].1, 25, "Least efficient scan should have 25 files");
-    assert!((efficiency[2].3 - 0.020).abs() < 0.001, "Worst efficiency: $0.020 per file");
+    assert_eq!(
+        efficiency[2].1, 25,
+        "Least efficient scan should have 25 files"
+    );
+    assert!(
+        (efficiency[2].3 - 0.020).abs() < 0.001,
+        "Worst efficiency: $0.020 per file"
+    );
 
-    println!("✓ Efficiency range: ${:.4}/file (best) to ${:.4}/file (worst)",
-             efficiency[0].3, efficiency[2].3);
+    println!(
+        "✓ Efficiency range: ${:.4}/file (best) to ${:.4}/file (worst)",
+        efficiency[0].3, efficiency[2].3
+    );
 }
 
 /// Test 9: Count scans by date (daily aggregation)
@@ -412,7 +459,7 @@ fn test_daily_scan_count() {
             "SELECT DATE(sc.created_at) as scan_date, COUNT(*) as scan_count
              FROM scan_costs sc
              GROUP BY scan_date
-             ORDER BY scan_date DESC"
+             ORDER BY scan_date DESC",
         )
         .unwrap()
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
@@ -420,10 +467,17 @@ fn test_daily_scan_count() {
         .filter_map(|r| r.ok())
         .collect();
 
-    assert_eq!(daily_scans.len(), 1, "All scans created on same day in test");
+    assert_eq!(
+        daily_scans.len(),
+        1,
+        "All scans created on same day in test"
+    );
     assert_eq!(daily_scans[0].1, 5, "Should have 5 scans on that day");
 
-    println!("✓ Daily aggregation: {} scans on {}", daily_scans[0].1, daily_scans[0].0);
+    println!(
+        "✓ Daily aggregation: {} scans on {}",
+        daily_scans[0].1, daily_scans[0].0
+    );
 }
 
 /// Test 10: Cumulative cost over time
@@ -450,11 +504,9 @@ fn test_cumulative_cost_trend() {
     let conn = project.connection();
 
     let total_cumulative: f64 = conn
-        .query_row(
-            "SELECT SUM(total_cost_usd) FROM scan_costs",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT SUM(total_cost_usd) FROM scan_costs", [], |row| {
+            row.get(0)
+        })
         .unwrap();
 
     assert!(
@@ -476,11 +528,9 @@ fn test_empty_database_analytics() {
 
     // Query empty database
     let total_cost: Option<f64> = conn
-        .query_row(
-            "SELECT SUM(total_cost_usd) FROM scan_costs",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT SUM(total_cost_usd) FROM scan_costs", [], |row| {
+            row.get(0)
+        })
         .unwrap();
 
     let total_files: Option<i64> = conn
@@ -492,8 +542,14 @@ fn test_empty_database_analytics() {
         .unwrap();
 
     // SUM returns NULL for empty result set
-    assert!(total_cost.is_none(), "Empty database should return NULL for cost");
-    assert!(total_files.is_none(), "Empty database should return NULL for files");
+    assert!(
+        total_cost.is_none(),
+        "Empty database should return NULL for cost"
+    );
+    assert!(
+        total_files.is_none(),
+        "Empty database should return NULL for files"
+    );
 
     println!("✓ Empty database correctly returns NULL for aggregates");
 }
@@ -526,11 +582,9 @@ fn test_cost_trend_comparison() {
     let conn = project.connection();
 
     let avg_cost: f64 = conn
-        .query_row(
-            "SELECT AVG(total_cost_usd) FROM scan_costs",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT AVG(total_cost_usd) FROM scan_costs", [], |row| {
+            row.get(0)
+        })
         .unwrap();
 
     let expected_avg = (0.10 * 3.0 + 0.15 * 3.0) / 6.0;

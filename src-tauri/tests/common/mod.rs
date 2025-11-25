@@ -3,11 +3,11 @@
 //! This module provides utilities for setting up isolated test environments,
 //! creating test data, and asserting database state across all integration tests.
 
-use rusqlite::Connection;
-use tempfile::TempDir;
 use anyhow::Result;
-use std::path::{Path, PathBuf};
+use rusqlite::Connection;
 use std::fs;
+use std::path::{Path, PathBuf};
+use tempfile::TempDir;
 
 /// Test project with isolated temporary database
 ///
@@ -197,7 +197,13 @@ impl TestProject {
         self.conn.execute(
             "INSERT INTO fixes (violation_id, original_code, fixed_code, explanation, trust_level)
              VALUES (?, ?, ?, ?, ?)",
-            rusqlite::params![violation_id, original_code, fixed_code, explanation, trust_level],
+            rusqlite::params![
+                violation_id,
+                original_code,
+                fixed_code,
+                explanation,
+                trust_level
+            ],
         )?;
 
         Ok(self.conn.last_insert_rowid())
@@ -269,7 +275,9 @@ impl TestProject {
 
     /// Get schema version
     pub fn get_schema_version(&self) -> Result<i64> {
-        let version: i64 = self.conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+        let version: i64 = self
+            .conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))?;
         Ok(version)
     }
 
@@ -286,7 +294,9 @@ impl TestProject {
 
     /// Check if a column exists in a table
     pub fn column_exists(&self, table_name: &str, column_name: &str) -> Result<bool> {
-        let mut stmt = self.conn.prepare(&format!("PRAGMA table_info({})", table_name))?;
+        let mut stmt = self
+            .conn
+            .prepare(&format!("PRAGMA table_info({})", table_name))?;
 
         let columns: Vec<String> = stmt
             .query_map([], |row| row.get::<_, String>(1))?
@@ -298,9 +308,9 @@ impl TestProject {
 
     /// Get list of all tables in the database
     pub fn list_tables(&self) -> Result<Vec<String>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")?;
 
         let tables: Vec<String> = stmt
             .query_map([], |row| row.get(0))?
@@ -313,7 +323,7 @@ impl TestProject {
     /// Get list of all indexes in the database
     pub fn list_indexes(&self) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare(
-            "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name"
+            "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%' ORDER BY name",
         )?;
 
         let indexes: Vec<String> = stmt
@@ -362,7 +372,8 @@ fn migrate_test_to_v1(conn: &Connection) -> Result<()> {
     conn.execute_batch(include_str!("../../src/db/schema.sql"))?;
 
     // Create indexes
-    conn.execute_batch("
+    conn.execute_batch(
+        "
         CREATE INDEX IF NOT EXISTS idx_violations_scan_id ON violations(scan_id);
         CREATE INDEX IF NOT EXISTS idx_violations_status ON violations(status);
         CREATE INDEX IF NOT EXISTS idx_fixes_violation_id ON fixes(violation_id);
@@ -371,7 +382,8 @@ fn migrate_test_to_v1(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_audit_events_project_id ON audit_events(project_id);
         CREATE INDEX IF NOT EXISTS idx_violations_file_path ON violations(file_path);
         CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at);
-    ")?;
+    ",
+    )?;
 
     Ok(())
 }
@@ -393,16 +405,10 @@ fn migrate_test_to_v2(conn: &Connection) -> Result<()> {
     )?;
 
     // Add llm_reasoning column
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN llm_reasoning TEXT",
-        [],
-    )?;
+    conn.execute("ALTER TABLE violations ADD COLUMN llm_reasoning TEXT", [])?;
 
     // Add regex_reasoning column
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN regex_reasoning TEXT",
-        [],
-    )?;
+    conn.execute("ALTER TABLE violations ADD COLUMN regex_reasoning TEXT", [])?;
 
     // Create scan_costs table
     conn.execute(
@@ -438,16 +444,10 @@ fn migrate_test_to_v2(conn: &Connection) -> Result<()> {
 /// Migrate to v3 (tree-sitter context fields)
 fn migrate_test_to_v3(conn: &Connection) -> Result<()> {
     // Add function_name column
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN function_name TEXT",
-        [],
-    )?;
+    conn.execute("ALTER TABLE violations ADD COLUMN function_name TEXT", [])?;
 
     // Add class_name column
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN class_name TEXT",
-        [],
-    )?;
+    conn.execute("ALTER TABLE violations ADD COLUMN class_name TEXT", [])?;
 
     Ok(())
 }
@@ -538,7 +538,8 @@ mod tests {
         assert!(project.project_dir().exists());
 
         // Verify connection works
-        let count: i64 = project.connection()
+        let count: i64 = project
+            .connection()
             .query_row("SELECT COUNT(*) FROM projects", [], |row| row.get(0))
             .unwrap();
 
@@ -562,8 +563,14 @@ mod tests {
 
         // Should have 8 tables (7 original + scan_costs)
         let expected_tables = vec![
-            "audit_events", "controls", "fixes", "projects",
-            "scan_costs", "scans", "settings", "violations",
+            "audit_events",
+            "controls",
+            "fixes",
+            "projects",
+            "scan_costs",
+            "scans",
+            "settings",
+            "violations",
         ];
 
         for expected in expected_tables {
@@ -602,11 +609,9 @@ mod tests {
     fn test_insert_project() {
         let project = TestProject::new("test_insert_project").unwrap();
 
-        let project_id = project.insert_project(
-            "Test Project",
-            "/tmp/test",
-            Some("django"),
-        ).unwrap();
+        let project_id = project
+            .insert_project("Test Project", "/tmp/test", Some("django"))
+            .unwrap();
 
         assert!(project_id > 0);
 
@@ -634,19 +639,21 @@ mod tests {
         let project_id = project.insert_project("Test", "/tmp/test", None).unwrap();
         let scan_id = project.insert_scan(project_id, "completed").unwrap();
 
-        let violation_id = project.insert_violation(
-            scan_id,
-            "CC6.1",
-            "high",
-            "Missing authentication",
-            "app.py",
-            42,
-            "def view(): pass",
-            Some("regex"),
-            None,
-            None,
-            Some("Missing @login_required decorator"),
-        ).unwrap();
+        let violation_id = project
+            .insert_violation(
+                scan_id,
+                "CC6.1",
+                "high",
+                "Missing authentication",
+                "app.py",
+                42,
+                "def view(): pass",
+                Some("regex"),
+                None,
+                None,
+                Some("Missing @login_required decorator"),
+            )
+            .unwrap();
 
         assert!(violation_id > 0);
 
@@ -660,18 +667,21 @@ mod tests {
 
         let project_id = project.insert_project("Test", "/tmp/test", None).unwrap();
         let scan_id = project.insert_scan(project_id, "completed").unwrap();
-        let violation_id = project.insert_violation(
-            scan_id, "CC6.1", "high", "Test", "app.py", 1, "code",
-            None, None, None, None,
-        ).unwrap();
+        let violation_id = project
+            .insert_violation(
+                scan_id, "CC6.1", "high", "Test", "app.py", 1, "code", None, None, None, None,
+            )
+            .unwrap();
 
-        let fix_id = project.insert_fix(
-            violation_id,
-            "def view(): pass",
-            "@login_required\ndef view(): pass",
-            "Added authentication decorator",
-            "review",
-        ).unwrap();
+        let fix_id = project
+            .insert_fix(
+                violation_id,
+                "def view(): pass",
+                "@login_required\ndef view(): pass",
+                "Added authentication decorator",
+                "review",
+            )
+            .unwrap();
 
         assert!(fix_id > 0);
 
@@ -686,15 +696,16 @@ mod tests {
         let project_id = project.insert_project("Test", "/tmp/test", None).unwrap();
         let scan_id = project.insert_scan(project_id, "completed").unwrap();
 
-        let cost_id = project.insert_scan_cost(
-            scan_id,
-            10,      // files_analyzed
-            5000,    // input_tokens
-            1000,    // output_tokens
-            2000,    // cache_read_tokens
-            500,     // cache_write_tokens
-            0.025,   // total_cost_usd
-        ).unwrap();
+        let cost_id = project
+            .insert_scan_cost(
+                scan_id, 10,    // files_analyzed
+                5000,  // input_tokens
+                1000,  // output_tokens
+                2000,  // cache_read_tokens
+                500,   // cache_write_tokens
+                0.025, // total_cost_usd
+            )
+            .unwrap();
 
         assert!(cost_id > 0);
 
@@ -706,10 +717,9 @@ mod tests {
     fn test_create_file() {
         let project = TestProject::new("test_create_file").unwrap();
 
-        let file_path = project.create_file(
-            "app.py",
-            "def hello(): return 'world'",
-        ).unwrap();
+        let file_path = project
+            .create_file("app.py", "def hello(): return 'world'")
+            .unwrap();
 
         assert!(file_path.exists());
         assert!(file_path.is_file());
@@ -722,10 +732,9 @@ mod tests {
     fn test_create_file_with_subdirs() {
         let project = TestProject::new("test_create_file_subdirs").unwrap();
 
-        let file_path = project.create_file(
-            "src/auth/login.py",
-            "# auth code",
-        ).unwrap();
+        let file_path = project
+            .create_file("src/auth/login.py", "# auth code")
+            .unwrap();
 
         assert!(file_path.exists());
         assert!(file_path.parent().unwrap().exists());
@@ -736,13 +745,23 @@ mod tests {
         let project = TestProject::new("test_column_exists").unwrap();
 
         // Test v2 migration columns
-        assert!(project.column_exists("violations", "detection_method").unwrap());
-        assert!(project.column_exists("violations", "confidence_score").unwrap());
-        assert!(project.column_exists("violations", "llm_reasoning").unwrap());
-        assert!(project.column_exists("violations", "regex_reasoning").unwrap());
+        assert!(project
+            .column_exists("violations", "detection_method")
+            .unwrap());
+        assert!(project
+            .column_exists("violations", "confidence_score")
+            .unwrap());
+        assert!(project
+            .column_exists("violations", "llm_reasoning")
+            .unwrap());
+        assert!(project
+            .column_exists("violations", "regex_reasoning")
+            .unwrap());
 
         // Test non-existent column
-        assert!(!project.column_exists("violations", "nonexistent_column").unwrap());
+        assert!(!project
+            .column_exists("violations", "nonexistent_column")
+            .unwrap());
     }
 
     #[test]
@@ -752,7 +771,11 @@ mod tests {
         let indexes = project.list_indexes().unwrap();
 
         // Should have at least 10 indexes (8 from v1 + 2 from v2)
-        assert!(indexes.len() >= 10, "Expected at least 10 indexes, got {}", indexes.len());
+        assert!(
+            indexes.len() >= 10,
+            "Expected at least 10 indexes, got {}",
+            indexes.len()
+        );
 
         // Verify v2 indexes exist
         assert!(indexes.contains(&"idx_scan_costs_created_at".to_string()));

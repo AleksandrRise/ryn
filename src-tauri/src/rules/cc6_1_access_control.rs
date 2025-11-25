@@ -9,8 +9,8 @@
 //! - Hardcoded user IDs instead of using request.user or current_user
 //! - Missing RBAC (role-based access control) checks
 
-use anyhow::{Context, Result};
 use crate::models::{Severity, Violation};
+use anyhow::{Context, Result};
 use regex::Regex;
 
 /// CC6.1 Access Control Rule Engine
@@ -33,19 +33,25 @@ impl CC61AccessControlRule {
         let mut violations = Vec::new();
 
         // Pattern 1: Django views without @login_required
-        violations.extend(Self::detect_missing_login_required(code, file_path, scan_id)?);
+        violations.extend(Self::detect_missing_login_required(
+            code, file_path, scan_id,
+        )?);
 
         // Pattern 2: Hardcoded user_id
         violations.extend(Self::detect_hardcoded_user_id(code, file_path, scan_id)?);
 
         // Pattern 3: Admin operations without permission checks
-        violations.extend(Self::detect_admin_without_permission(code, file_path, scan_id)?);
+        violations.extend(Self::detect_admin_without_permission(
+            code, file_path, scan_id,
+        )?);
 
         // Pattern 4: Express routes without auth middleware
         violations.extend(Self::detect_express_missing_auth(code, file_path, scan_id)?);
 
         // Pattern 5: FastAPI endpoints without Depends(check_permission)
-        violations.extend(Self::detect_fastapi_missing_dependency(code, file_path, scan_id)?);
+        violations.extend(Self::detect_fastapi_missing_dependency(
+            code, file_path, scan_id,
+        )?);
 
         // Pattern 6: Flask routes without @login_required
         violations.extend(Self::detect_flask_missing_auth(code, file_path, scan_id)?);
@@ -87,7 +93,8 @@ impl CC61AccessControlRule {
                         break;
                     }
                     // Stop if we hit a non-decorator line
-                    if !lines[prev_idx].trim().starts_with("@") && !lines[prev_idx].trim().is_empty()
+                    if !lines[prev_idx].trim().starts_with("@")
+                        && !lines[prev_idx].trim().is_empty()
                     {
                         break;
                     }
@@ -131,15 +138,18 @@ impl CC61AccessControlRule {
         let mut violations = Vec::new();
 
         // Pattern: user_id = 123 or userId = 456
-        let hardcoded_id_pattern = Regex::new(r#"(user_?id|account_?id)\s*=\s*(\d+|['"][\d]+['"])"#)
-            .context("Failed to compile hardcoded ID pattern")?;
+        let hardcoded_id_pattern =
+            Regex::new(r#"(user_?id|account_?id)\s*=\s*(\d+|['"][\d]+['"])"#)
+                .context("Failed to compile hardcoded ID pattern")?;
 
-        let is_test_pattern =
-            Regex::new(r"(test_|_test|spec_|mock|faker|fixture)").context("Failed to compile test pattern")?;
+        let is_test_pattern = Regex::new(r"(test_|_test|spec_|mock|faker|fixture)")
+            .context("Failed to compile test pattern")?;
 
         for (idx, line) in code.lines().enumerate() {
             // Skip comments and test files
-            if line.trim().starts_with("#") || line.trim().starts_with("//") || is_test_pattern.is_match(file_path)
+            if line.trim().starts_with("#")
+                || line.trim().starts_with("//")
+                || is_test_pattern.is_match(file_path)
             {
                 continue;
             }
@@ -183,7 +193,8 @@ impl CC61AccessControlRule {
             Regex::new(r"(is_staff|is_superuser|is_admin|permission|role|authorize|check_permission|require_role)")
                 .context("Failed to compile permission keywords pattern")?;
 
-        let is_test = Regex::new(r"(test_|_test|spec_)").context("Failed to compile test pattern")?;
+        let is_test =
+            Regex::new(r"(test_|_test|spec_)").context("Failed to compile test pattern")?;
 
         if is_test.is_match(file_path) {
             return Ok(violations);
@@ -296,7 +307,8 @@ impl CC61AccessControlRule {
                 .context("Failed to compile FastAPI route pattern")?;
 
         // Look for Depends() in the next line
-        let depends_pattern = Regex::new(r"Depends\(").context("Failed to compile Depends pattern")?;
+        let depends_pattern =
+            Regex::new(r"Depends\(").context("Failed to compile Depends pattern")?;
 
         // Protected endpoints
         let protected_endpoint =
@@ -342,8 +354,9 @@ impl CC61AccessControlRule {
         }
 
         // Flask route decorator pattern: @app.route or @blueprint.route
-        let flask_route = Regex::new(r#"@(?:app|blueprint|bp)\s*\.\s*route\s*\(\s*['"]([^'"]*)['"]\s*"#)
-            .context("Failed to compile Flask route pattern")?;
+        let flask_route =
+            Regex::new(r#"@(?:app|blueprint|bp)\s*\.\s*route\s*\(\s*['"]([^'"]*)['"]\s*"#)
+                .context("Failed to compile Flask route pattern")?;
 
         // Auth decorator patterns
         let auth_decorator = Regex::new(
@@ -352,8 +365,9 @@ impl CC61AccessControlRule {
         .context("Failed to compile auth decorator pattern")?;
 
         // Public routes that don't need authentication
-        let public_routes = Regex::new(r#"['"]/(login|register|signup|logout|public|health|ping|static)"#)
-            .context("Failed to compile public routes pattern")?;
+        let public_routes =
+            Regex::new(r#"['"]/(login|register|signup|logout|public|health|ping|static)"#)
+                .context("Failed to compile public routes pattern")?;
 
         // Inline auth check patterns
         let inline_auth = Regex::new(
@@ -382,7 +396,8 @@ impl CC61AccessControlRule {
                         break;
                     }
                     // Stop if we hit a non-decorator, non-empty line
-                    if !lines[prev_idx].trim().starts_with("@") && !lines[prev_idx].trim().is_empty()
+                    if !lines[prev_idx].trim().starts_with("@")
+                        && !lines[prev_idx].trim().is_empty()
                     {
                         break;
                     }
@@ -400,14 +415,13 @@ impl CC61AccessControlRule {
 
                 if !has_inline_auth {
                     // Determine severity based on HTTP method
-                    let severity = if line.contains("POST")
-                        || line.contains("PUT")
-                        || line.contains("DELETE")
-                    {
-                        Severity::Critical
-                    } else {
-                        Severity::High
-                    };
+                    let severity =
+                        if line.contains("POST") || line.contains("PUT") || line.contains("DELETE")
+                        {
+                            Severity::Critical
+                        } else {
+                            Severity::High
+                        };
 
                     violations.push(Violation::new(
                         scan_id,
@@ -437,7 +451,10 @@ mod tests {
     fn test_detect_missing_login_required() {
         let code = "def user_profile(request):\n    return render(request, 'profile.html')";
         let violations = CC61AccessControlRule::analyze(code, "views.py", 1).unwrap();
-        assert!(!violations.is_empty(), "Should detect missing login_required");
+        assert!(
+            !violations.is_empty(),
+            "Should detect missing login_required"
+        );
         assert_eq!(violations[0].control_id, "CC6.1");
         assert_eq!(violations[0].severity, "high");
     }
@@ -447,14 +464,20 @@ mod tests {
         let code =
             "@login_required\ndef user_profile(request):\n    return render(request, 'profile.html')";
         let violations = CC61AccessControlRule::analyze(code, "views.py", 1).unwrap();
-        assert!(violations.is_empty(), "Should not flag when @login_required present");
+        assert!(
+            violations.is_empty(),
+            "Should not flag when @login_required present"
+        );
     }
 
     #[test]
     fn test_with_permission_required_decorator() {
         let code = "@permission_required('view_profile')\ndef user_profile(request):\n    return render(request, 'profile.html')";
         let violations = CC61AccessControlRule::analyze(code, "views.py", 1).unwrap();
-        assert!(violations.is_empty(), "Should not flag when @permission_required present");
+        assert!(
+            violations.is_empty(),
+            "Should not flag when @permission_required present"
+        );
     }
 
     #[test]
@@ -525,7 +548,10 @@ mod tests {
         let code = "def delete_user(request, user_id):\n    if not request.user.is_staff:\n        raise PermissionDenied\n    User.objects.get(id=user_id).delete()";
         let violations = CC61AccessControlRule::analyze(code, "views.py", 1).unwrap();
         // Should have no violations or only the missing decorator (not the admin permission)
-        assert!(violations.is_empty(), "Should not flag when permission check present");
+        assert!(
+            violations.is_empty(),
+            "Should not flag when permission check present"
+        );
     }
 
     #[test]
@@ -566,7 +592,10 @@ mod tests {
     fn test_express_with_auth_middleware() {
         let code = "router.get('/admin/users', authMiddleware, (req, res) => {\n    res.json(User.all());\n});";
         let violations = CC61AccessControlRule::analyze(code, "routes.js", 1).unwrap();
-        assert!(violations.is_empty(), "Should not flag when authMiddleware present");
+        assert!(
+            violations.is_empty(),
+            "Should not flag when authMiddleware present"
+        );
     }
 
     #[test]
@@ -692,8 +721,13 @@ def fetch_customer():
 "#;
         let violations = CC61AccessControlRule::analyze(code, "app.py", 1).unwrap();
         // Should not flag - has inline auth check
-        let has_auth_violation = violations.iter().any(|v| v.description.contains("authentication"));
-        assert!(!has_auth_violation, "Should not flag Flask route with inline auth check");
+        let has_auth_violation = violations
+            .iter()
+            .any(|v| v.description.contains("authentication"));
+        assert!(
+            !has_auth_violation,
+            "Should not flag Flask route with inline auth check"
+        );
     }
 
     /// Test Flask route with @login_required decorator
@@ -706,8 +740,13 @@ def admin():
     return render_template('admin.html')
 "#;
         let violations = CC61AccessControlRule::analyze(code, "app.py", 1).unwrap();
-        let has_auth_violation = violations.iter().any(|v| v.description.contains("authentication"));
-        assert!(!has_auth_violation, "Should not flag Flask route with @login_required");
+        let has_auth_violation = violations
+            .iter()
+            .any(|v| v.description.contains("authentication"));
+        assert!(
+            !has_auth_violation,
+            "Should not flag Flask route with @login_required"
+        );
     }
 
     /// Test Flask public routes (login, register) are allowed
@@ -724,6 +763,9 @@ def register():
 "#;
         let violations = CC61AccessControlRule::analyze(code, "app.py", 1).unwrap();
         // Public routes like login/register shouldn't be flagged
-        assert!(violations.is_empty(), "Should not flag public routes like /login or /register");
+        assert!(
+            violations.is_empty(),
+            "Should not flag public routes like /login or /register"
+        );
     }
 }

@@ -102,7 +102,10 @@ mod tests {
     #[test]
     fn test_scan_status_from_str() {
         assert_eq!(ScanStatus::from_str("running"), Some(ScanStatus::Running));
-        assert_eq!(ScanStatus::from_str("completed"), Some(ScanStatus::Completed));
+        assert_eq!(
+            ScanStatus::from_str("completed"),
+            Some(ScanStatus::Completed)
+        );
         assert_eq!(ScanStatus::from_str("failed"), Some(ScanStatus::Failed));
         assert_eq!(ScanStatus::from_str("invalid"), None);
     }

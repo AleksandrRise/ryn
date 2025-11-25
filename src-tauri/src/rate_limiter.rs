@@ -23,9 +23,9 @@ pub struct RateLimiterConfig {
 impl Default for RateLimiterConfig {
     fn default() -> Self {
         Self {
-            max_requests_per_minute: 10,  // 10 fixes per minute max
-            max_requests_per_hour: 100,   // 100 fixes per hour max
-            max_requests_per_day: 500,    // 500 fixes per day max
+            max_requests_per_minute: 10, // 10 fixes per minute max
+            max_requests_per_hour: 100,  // 100 fixes per hour max
+            max_requests_per_day: 500,   // 500 fixes per day max
             enabled: true,
         }
     }
@@ -226,7 +226,9 @@ pub struct RateLimiterStats {
 /// Rate limit errors
 #[derive(Debug, thiserror::Error)]
 pub enum RateLimitError {
-    #[error("Rate limit exceeded for {limit_type}. Please wait {wait_seconds} seconds before retrying.")]
+    #[error(
+        "Rate limit exceeded for {limit_type}. Please wait {wait_seconds} seconds before retrying."
+    )]
     RateLimitExceeded {
         wait_seconds: u64,
         limit_type: String,

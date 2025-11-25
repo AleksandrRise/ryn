@@ -238,8 +238,14 @@ mod tests {
 
     #[test]
     fn test_violation_status_from_str() {
-        assert_eq!(ViolationStatus::from_str("open"), Some(ViolationStatus::Open));
-        assert_eq!(ViolationStatus::from_str("fixed"), Some(ViolationStatus::Fixed));
+        assert_eq!(
+            ViolationStatus::from_str("open"),
+            Some(ViolationStatus::Open)
+        );
+        assert_eq!(
+            ViolationStatus::from_str("fixed"),
+            Some(ViolationStatus::Fixed)
+        );
         assert_eq!(
             ViolationStatus::from_str("dismissed"),
             Some(ViolationStatus::Dismissed)
@@ -418,8 +424,7 @@ mod tests {
             "API key appears to be a production credential that should be externalized."
                 .to_string(),
         );
-        violation.regex_reasoning =
-            Some("Matched pattern: API_KEY = '[a-z0-9-]+'".to_string());
+        violation.regex_reasoning = Some("Matched pattern: API_KEY = '[a-z0-9-]+'".to_string());
 
         assert_eq!(violation.detection_method, "hybrid");
         assert_eq!(

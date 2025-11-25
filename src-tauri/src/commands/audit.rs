@@ -26,10 +26,7 @@ pub struct AuditFilters {
 pub async fn get_audit_events(filters: Option<AuditFilters>) -> Result<Vec<AuditEvent>, String> {
     let conn = db::get_connection();
 
-    let limit = filters
-        .as_ref()
-        .and_then(|f| f.limit)
-        .unwrap_or(1000);
+    let limit = filters.as_ref().and_then(|f| f.limit).unwrap_or(1000);
 
     // Get all audit events
     let mut events = queries::select_audit_events(&conn, limit)
@@ -91,7 +88,7 @@ mod tests {
             let existing_id: Result<i64, _> = conn.query_row(
                 "SELECT id FROM projects WHERE path = ?",
                 [&project_path],
-                |row| row.get(0)
+                |row| row.get(0),
             );
 
             if let Ok(id) = existing_id {
@@ -99,8 +96,13 @@ mod tests {
             }
 
             // Project doesn't exist, create it
-            queries::insert_project(&conn, &format!("test-project-{}", project_id), &project_path, None)
-                .expect("Failed to create test project")
+            queries::insert_project(
+                &conn,
+                &format!("test-project-{}", project_id),
+                &project_path,
+                None,
+            )
+            .expect("Failed to create test project")
         } // MutexGuard dropped here
     }
 
@@ -338,10 +340,7 @@ mod tests {
         let _e3 = create_test_audit_event("fix", Some(1));
 
         let filters = AuditFilters {
-            event_type: Some(vec![
-                "scan".to_string(),
-                "violation".to_string(),
-            ]),
+            event_type: Some(vec!["scan".to_string(), "violation".to_string()]),
             project_id: None,
             start_date: None,
             end_date: None,

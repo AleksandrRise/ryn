@@ -15,6 +15,7 @@
 //! - Real memory tracking - RSS measurement across platforms
 //! - Graceful degradation - Tests verify cleanup and shutdown
 
+use anyhow::{Context, Result};
 use ryn::scanner::file_watcher::{FileEvent, FileWatcher};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -24,7 +25,6 @@ use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use tokio::fs;
 use tokio::time::timeout;
-use anyhow::{Result, Context};
 
 // ============================================================================
 // HELPER STRUCTURES
@@ -168,7 +168,8 @@ impl BulkFileGenerator {
                 i, i
             );
 
-            fs::write(&path, content).await
+            fs::write(&path, content)
+                .await
                 .context(format!("Failed to write file: {:?}", path))?;
 
             paths.push(path);
@@ -178,7 +179,12 @@ impl BulkFileGenerator {
     }
 
     /// Generate files in batches with delays to avoid overwhelming the FS
-    async fn generate_in_batches(&self, count: usize, batch_size: usize, batch_delay_ms: u64) -> Result<Vec<PathBuf>> {
+    async fn generate_in_batches(
+        &self,
+        count: usize,
+        batch_size: usize,
+        batch_delay_ms: u64,
+    ) -> Result<Vec<PathBuf>> {
         let mut all_paths = Vec::with_capacity(count);
         let mut remaining = count;
         let mut offset = 0;
@@ -193,7 +199,8 @@ impl BulkFileGenerator {
 
                 let content = format!(
                     "# Auto-generated test file {}\n\ndef function_{}():\n    return 'test'\n",
-                    offset + i, offset + i
+                    offset + i,
+                    offset + i
                 );
 
                 fs::write(&path, content).await?;
@@ -216,7 +223,8 @@ impl BulkFileGenerator {
     async fn modify_files(&self, paths: &[PathBuf]) -> Result<()> {
         for path in paths {
             let content = format!("# Modified at {:?}\n", Instant::now());
-            fs::write(path, content).await
+            fs::write(path, content)
+                .await
                 .context(format!("Failed to modify file: {:?}", path))?;
         }
         Ok(())
@@ -226,7 +234,8 @@ impl BulkFileGenerator {
     async fn delete_files(&self, paths: &[PathBuf]) -> Result<()> {
         for path in paths {
             if path.exists() {
-                fs::remove_file(path).await
+                fs::remove_file(path)
+                    .await
                     .context(format!("Failed to delete file: {:?}", path))?;
             }
         }
@@ -261,14 +270,15 @@ fn get_rss_bytes() -> Result<u64> {
 fn get_rss_bytes() -> Result<u64> {
     use std::fs;
 
-    let status = fs::read_to_string("/proc/self/status")
-        .context("Failed to read /proc/self/status")?;
+    let status =
+        fs::read_to_string("/proc/self/status").context("Failed to read /proc/self/status")?;
 
     for line in status.lines() {
         if line.starts_with("VmRSS:") {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 2 {
-                let kb = parts[1].parse::<u64>()
+                let kb = parts[1]
+                    .parse::<u64>()
                     .context("Failed to parse VmRSS value")?;
                 return Ok(kb * 1024); // Convert KB to bytes
             }
@@ -324,10 +334,15 @@ async fn test_6_1_1_bulk_file_creation_10k() -> Result<()> {
     let batch_size = 100;
     let batch_delay_ms = 50;
 
-    println!("Generating {} files in batches of {}...", file_count, batch_size);
+    println!(
+        "Generating {} files in batches of {}...",
+        file_count, batch_size
+    );
     let start = Instant::now();
 
-    let _paths = generator.generate_in_batches(file_count, batch_size, batch_delay_ms).await?;
+    let _paths = generator
+        .generate_in_batches(file_count, batch_size, batch_delay_ms)
+        .await?;
 
     println!("File generation completed in {:?}", start.elapsed());
 
@@ -355,7 +370,10 @@ async fn test_6_1_1_bulk_file_creation_10k() -> Result<()> {
 
     if let Some(duration) = tracker.event_duration().await {
         println!("✓ Event duration: {:?}", duration);
-        println!("✓ Event rate: {:.1} events/second", created_count as f64 / duration.as_secs_f64());
+        println!(
+            "✓ Event rate: {:.1} events/second",
+            created_count as f64 / duration.as_secs_f64()
+        );
     }
 
     // Assertions
@@ -562,7 +580,11 @@ async fn test_6_1_4_mixed_operations_5k() -> Result<()> {
 
     // Expect: ~3,500 creates, ~1,500 modifies, ~1,500 deletes = ~6,500 total
     // Allow for some event loss due to FS coalescing
-    assert!(total >= 5_000, "Should receive at least 5,000 events (got {})", total);
+    assert!(
+        total >= 5_000,
+        "Should receive at least 5,000 events (got {})",
+        total
+    );
 
     println!("✓ Test passed: Mixed operations handled successfully");
 
@@ -584,7 +606,10 @@ async fn test_6_2_1_memory_leak_detection_100_cycles() -> Result<()> {
     let watch_path = temp_dir.path().to_path_buf();
 
     let mut monitor = MemoryMonitor::start()?;
-    println!("Baseline memory: {:.2} MB", monitor.initial_rss_bytes as f64 / 1_048_576.0);
+    println!(
+        "Baseline memory: {:.2} MB",
+        monitor.initial_rss_bytes as f64 / 1_048_576.0
+    );
 
     let watcher = FileWatcher::default();
     let handle = watcher.watch_directory(&watch_path).await?;
@@ -602,7 +627,10 @@ async fn test_6_2_1_memory_leak_detection_100_cycles() -> Result<()> {
     let cycle_count = 100;
     let files_per_cycle = 100;
 
-    println!("Running {} cycles of create/delete ({}  files per cycle)...", cycle_count, files_per_cycle);
+    println!(
+        "Running {} cycles of create/delete ({}  files per cycle)...",
+        cycle_count, files_per_cycle
+    );
 
     for cycle in 0..cycle_count {
         // Create files
@@ -616,7 +644,11 @@ async fn test_6_2_1_memory_leak_detection_100_cycles() -> Result<()> {
         // Sample memory every 10 cycles
         if cycle % 10 == 0 {
             monitor.sample()?;
-            println!("Cycle {}: memory growth = {:.2} MB", cycle, monitor.peak_growth_mb());
+            println!(
+                "Cycle {}: memory growth = {:.2} MB",
+                cycle,
+                monitor.peak_growth_mb()
+            );
         }
     }
 
@@ -686,7 +718,11 @@ async fn test_6_2_2_long_running_stability() -> Result<()> {
     println!("✓ Total events processed: {}", total);
 
     // Expect ~2500 events (100 creates + 50 modifies + 100 deletes) × 10 iterations
-    assert!(total >= 1000, "Should handle at least 1000 events (got {})", total);
+    assert!(
+        total >= 1000,
+        "Should handle at least 1000 events (got {})",
+        total
+    );
 
     println!("✓ Test passed: Watcher stable under sustained load");
 
@@ -760,7 +796,10 @@ async fn test_6_2_3_multiple_watchers_same_directory() -> Result<()> {
         max_count = max_count.max(count);
     }
 
-    println!("✓ Total events across all watchers: {}", total_across_watchers);
+    println!(
+        "✓ Total events across all watchers: {}",
+        total_across_watchers
+    );
     println!("✓ Max events in single watcher: {}", max_count);
 
     // At least one watcher should receive most events
@@ -831,10 +870,11 @@ async fn test_6_2_4_cleanup_verification() -> Result<()> {
     let watcher2 = FileWatcher::default();
     let _handle2 = timeout(
         Duration::from_secs(5),
-        watcher2.watch_directory(&watch_path)
-    ).await
-        .context("Timeout creating new watcher - possible resource leak")?
-        .context("Failed to create new watcher")?;
+        watcher2.watch_directory(&watch_path),
+    )
+    .await
+    .context("Timeout creating new watcher - possible resource leak")?
+    .context("Failed to create new watcher")?;
 
     println!("✓ New watcher created successfully after cleanup");
     println!("✓ Test passed: Cleanup verification successful");

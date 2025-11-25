@@ -8,8 +8,8 @@
 //! Supports: Django, Flask, Express, Next.js, React
 
 use anyhow::{anyhow, Context, Result};
-use walkdir::WalkDir;
 use std::path::Path;
+use walkdir::WalkDir;
 
 /// Framework detector for identifying project frameworks
 pub struct FrameworkDetector;
@@ -158,8 +158,7 @@ impl FrameworkDetector {
 
     fn read_package_json(project_path: &Path) -> Result<String> {
         let package_json_path = project_path.join("package.json");
-        std::fs::read_to_string(&package_json_path)
-            .context("Failed to read package.json")
+        std::fs::read_to_string(&package_json_path).context("Failed to read package.json")
     }
 
     fn has_in_dependencies(package_json_content: &str, dependency: &str) -> bool {
@@ -171,7 +170,9 @@ impl FrameworkDetector {
             format!("\"{}\": {{", dependency),
         ];
 
-        patterns.iter().any(|pattern| package_json_content.contains(pattern))
+        patterns
+            .iter()
+            .any(|pattern| package_json_content.contains(pattern))
     }
 }
 
@@ -254,10 +255,8 @@ mod tests {
 
     #[test]
     fn test_detect_flask_from_requirements() {
-        let temp_dir = create_test_project(vec![(
-            "requirements.txt",
-            "Flask==2.0.0\nWerkzeug==2.0.0",
-        )]);
+        let temp_dir =
+            create_test_project(vec![("requirements.txt", "Flask==2.0.0\nWerkzeug==2.0.0")]);
         let result = FrameworkDetector::detect_framework(temp_dir.path());
 
         assert_eq!(result.unwrap(), Some("flask".to_string()));
@@ -274,7 +273,8 @@ mod tests {
 
     #[test]
     fn test_detect_nextjs_from_package_json() {
-        let package_json = r#"{"name": "app", "dependencies": {"next": "^13.0.0", "react": "^18.0.0"}}"#;
+        let package_json =
+            r#"{"name": "app", "dependencies": {"next": "^13.0.0", "react": "^18.0.0"}}"#;
         let temp_dir = create_test_project(vec![("package.json", package_json)]);
         let result = FrameworkDetector::detect_framework(temp_dir.path());
 
@@ -283,7 +283,8 @@ mod tests {
 
     #[test]
     fn test_detect_react_without_next() {
-        let package_json = r#"{"name": "app", "dependencies": {"react": "^18.0.0", "react-dom": "^18.0.0"}}"#;
+        let package_json =
+            r#"{"name": "app", "dependencies": {"react": "^18.0.0", "react-dom": "^18.0.0"}}"#;
         let temp_dir = create_test_project(vec![("package.json", package_json)]);
         let result = FrameworkDetector::detect_framework(temp_dir.path());
 

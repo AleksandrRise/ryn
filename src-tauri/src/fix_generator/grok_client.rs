@@ -9,11 +9,11 @@
 //! - Authentication: Bearer token
 //! - Format: OpenAI-compatible chat completions
 
+use crate::models::{Control, DetectionMethod, Severity, Violation};
 use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;
-use crate::models::{Control, Violation, Severity, DetectionMethod};
 
 /// Request body structure for Grok Chat Completions API
 /// OpenAI-compatible format
@@ -139,8 +139,8 @@ impl GrokClient {
     /// # Errors
     /// Returns error if XAI_API_KEY is not set
     pub fn new() -> Result<Self> {
-        let api_key = env::var("XAI_API_KEY")
-            .context("XAI_API_KEY environment variable not set")?;
+        let api_key =
+            env::var("XAI_API_KEY").context("XAI_API_KEY environment variable not set")?;
 
         Self::validate_api_key(&api_key)?;
 
@@ -365,15 +365,11 @@ impl GrokClient {
             .context("Failed to read response body")?;
 
         if !status.is_success() {
-            return Err(anyhow!(
-                "Grok API error ({}): {}",
-                status,
-                response_text
-            ));
+            return Err(anyhow!("Grok API error ({}): {}", status, response_text));
         }
 
-        let grok_response: GrokResponse = serde_json::from_str(&response_text)
-            .context("Failed to parse Grok API response")?;
+        let grok_response: GrokResponse =
+            serde_json::from_str(&response_text).context("Failed to parse Grok API response")?;
 
         Ok(grok_response)
     }
@@ -388,10 +384,16 @@ impl GrokClient {
         let system_prompt = Self::build_soc2_system_prompt();
         let user_prompt = Self::build_analysis_prompt(file_path, code, &regex_findings);
 
-        let response = self.call_api_with_retry(&user_prompt, Some(&system_prompt), 3).await?;
+        let response = self
+            .call_api_with_retry(&user_prompt, Some(&system_prompt), 3)
+            .await?;
 
         let violations = Self::parse_violations_response(
-            &response.choices.first().map(|c| c.message.content.as_str()).unwrap_or(""),
+            &response
+                .choices
+                .first()
+                .map(|c| c.message.content.as_str())
+                .unwrap_or(""),
             scan_id,
             file_path,
         )?;
@@ -416,7 +418,11 @@ impl GrokClient {
                 **Description**: {}\n\
                 **Requirement**: {}\n\
                 **Category**: {}\n\n",
-                control.id, control.name, control.description, control.requirement, control.category
+                control.id,
+                control.name,
+                control.description,
+                control.requirement,
+                control.category
             ));
         }
 
@@ -442,7 +448,7 @@ impl GrokClient {
               }\n\
             ]\n\
             ```\n\
-            If no violations found, respond with: `[]`"
+            If no violations found, respond with: `[]`",
         );
 
         prompt
@@ -469,7 +475,7 @@ impl GrokClient {
 
         prompt.push_str(
             "Respond with JSON array of violations (or [] if none found). \
-            Consider semantic issues, not just keyword matching."
+            Consider semantic issues, not just keyword matching.",
         );
 
         prompt
@@ -491,14 +497,13 @@ impl GrokClient {
             return Ok(Vec::new());
         }
 
-        let detections: Vec<ViolationDetection> = serde_json::from_str(json_text)
-            .context("Failed to parse LLM response as JSON")?;
+        let detections: Vec<ViolationDetection> =
+            serde_json::from_str(json_text).context("Failed to parse LLM response as JSON")?;
 
         let violations: Vec<Violation> = detections
             .into_iter()
             .map(|det| {
-                let severity = Severity::from_str(&det.severity)
-                    .unwrap_or(Severity::Medium);
+                let severity = Severity::from_str(&det.severity).unwrap_or(Severity::Medium);
 
                 Violation {
                     id: 0,
@@ -539,7 +544,11 @@ impl GrokClient {
                     attempt += 1;
 
                     let error_msg = e.to_string();
-                    let is_retryable = error_msg.contains("429") || error_msg.contains("500") || error_msg.contains("529") || error_msg.contains("network") || error_msg.contains("timeout");
+                    let is_retryable = error_msg.contains("429")
+                        || error_msg.contains("500")
+                        || error_msg.contains("529")
+                        || error_msg.contains("network")
+                        || error_msg.contains("timeout");
 
                     if !is_retryable || attempt >= max_retries {
                         return Err(e);

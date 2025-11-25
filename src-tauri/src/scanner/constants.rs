@@ -11,10 +11,8 @@ pub const SKIP_DIRECTORIES: &[&str] = &[
     // Dependencies
     "node_modules",
     "vendor",
-
     // Version control
     ".git",
-
     // Python virtual environments and caches
     "venv",
     ".venv",
@@ -22,13 +20,11 @@ pub const SKIP_DIRECTORIES: &[&str] = &[
     ".pytest_cache",
     ".tox",
     ".coverage",
-
     // Build outputs
     "dist",
     "build",
     "out",
     "target",
-
     // Package manager and tooling
     ".cargo",
     ".next",

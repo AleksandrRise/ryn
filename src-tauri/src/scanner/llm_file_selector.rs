@@ -175,7 +175,9 @@ fn contains_endpoint_patterns(code: &str) -> bool {
         "@postmapping",
     ];
 
-    endpoint_keywords.iter().any(|keyword| code.contains(keyword))
+    endpoint_keywords
+        .iter()
+        .any(|keyword| code.contains(keyword))
 }
 
 /// Check for secrets/credentials patterns
@@ -200,7 +202,9 @@ fn contains_secrets_patterns(code: &str) -> bool {
         "decrypt",
     ];
 
-    secrets_keywords.iter().any(|keyword| code.contains(keyword))
+    secrets_keywords
+        .iter()
+        .any(|keyword| code.contains(keyword))
 }
 
 /// Check for file I/O patterns
@@ -237,7 +241,9 @@ fn contains_network_patterns(code: &str) -> bool {
         "socket",
     ];
 
-    network_keywords.iter().any(|keyword| code.contains(keyword))
+    network_keywords
+        .iter()
+        .any(|keyword| code.contains(keyword))
 }
 
 #[cfg(test)]

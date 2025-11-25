@@ -34,25 +34,19 @@ fn test_multiple_projects_independent_costs() {
     // Insert independent cost tracking for each scan
     test_env
         .insert_scan_cost(
-            scan1_id,
-            25,       // files
-            100_000,  // input tokens
-            25_000,   // output tokens
-            0,
-            0,
-            0.180,    // $0.18
+            scan1_id, 25,      // files
+            100_000, // input tokens
+            25_000,  // output tokens
+            0, 0, 0.180, // $0.18
         )
         .unwrap();
 
     test_env
         .insert_scan_cost(
-            scan2_id,
-            50,       // files
-            200_000,  // input tokens
-            50_000,   // output tokens
-            0,
-            0,
-            0.360,    // $0.36
+            scan2_id, 50,      // files
+            200_000, // input tokens
+            50_000,  // output tokens
+            0, 0, 0.360, // $0.36
         )
         .unwrap();
 
@@ -76,10 +70,16 @@ fn test_multiple_projects_independent_costs() {
         .unwrap();
 
     assert_eq!(scan1_files, 25, "Scan 1 should track 25 files");
-    assert!((scan1_cost - 0.180).abs() < 0.001, "Scan 1 should cost $0.18");
+    assert!(
+        (scan1_cost - 0.180).abs() < 0.001,
+        "Scan 1 should cost $0.18"
+    );
 
     assert_eq!(scan2_files, 50, "Scan 2 should track 50 files");
-    assert!((scan2_cost - 0.360).abs() < 0.001, "Scan 2 should cost $0.36");
+    assert!(
+        (scan2_cost - 0.360).abs() < 0.001,
+        "Scan 2 should cost $0.36"
+    );
 
     println!("✓ Multiple projects track costs independently");
 }
@@ -99,15 +99,23 @@ fn test_multiple_scans_same_project_independent_costs() {
     let scan3_id = test_env.insert_scan(project_id, "completed").unwrap();
 
     // Each scan has different costs
-    test_env.insert_scan_cost(scan1_id, 10, 50_000, 10_000, 0, 0, 0.048).unwrap();
-    test_env.insert_scan_cost(scan2_id, 15, 75_000, 15_000, 0, 0, 0.120).unwrap();
-    test_env.insert_scan_cost(scan3_id, 20, 100_000, 20_000, 0, 0, 0.160).unwrap();
+    test_env
+        .insert_scan_cost(scan1_id, 10, 50_000, 10_000, 0, 0, 0.048)
+        .unwrap();
+    test_env
+        .insert_scan_cost(scan2_id, 15, 75_000, 15_000, 0, 0, 0.120)
+        .unwrap();
+    test_env
+        .insert_scan_cost(scan3_id, 20, 100_000, 20_000, 0, 0, 0.160)
+        .unwrap();
 
     // Verify each scan has independent cost record
     let conn = test_env.connection();
 
     let costs: Vec<f64> = conn
-        .prepare("SELECT total_cost_usd FROM scan_costs WHERE scan_id IN (?, ?, ?) ORDER BY scan_id")
+        .prepare(
+            "SELECT total_cost_usd FROM scan_costs WHERE scan_id IN (?, ?, ?) ORDER BY scan_id",
+        )
         .unwrap()
         .query_map([scan1_id, scan2_id, scan3_id], |row| row.get(0))
         .unwrap()
@@ -115,9 +123,18 @@ fn test_multiple_scans_same_project_independent_costs() {
         .collect();
 
     assert_eq!(costs.len(), 3, "Should have 3 independent cost records");
-    assert!((costs[0] - 0.048).abs() < 0.001, "Scan 1 cost should be $0.048");
-    assert!((costs[1] - 0.120).abs() < 0.001, "Scan 2 cost should be $0.120");
-    assert!((costs[2] - 0.160).abs() < 0.001, "Scan 3 cost should be $0.160");
+    assert!(
+        (costs[0] - 0.048).abs() < 0.001,
+        "Scan 1 cost should be $0.048"
+    );
+    assert!(
+        (costs[1] - 0.120).abs() < 0.001,
+        "Scan 2 cost should be $0.120"
+    );
+    assert!(
+        (costs[2] - 0.160).abs() < 0.001,
+        "Scan 3 cost should be $0.160"
+    );
 
     println!("✓ Multiple scans on same project track costs independently");
 }
@@ -255,7 +272,10 @@ fn test_concurrent_scans_violations_isolation() {
         .collect();
 
     assert_eq!(scan1_files, vec!["app1/config.py", "app1/views.py"]);
-    assert_eq!(scan2_files, vec!["app2/admin.py", "app2/db.py", "app2/routes.py"]);
+    assert_eq!(
+        scan2_files,
+        vec!["app2/admin.py", "app2/db.py", "app2/routes.py"]
+    );
 
     println!("✓ Violations from different scans are properly isolated");
 }
@@ -266,7 +286,9 @@ fn test_shared_settings_independent_tracking() {
     let test_env = TestProject::new("shared_settings").unwrap();
 
     // Set global cost limit
-    test_env.insert_setting("cost_limit_per_scan", "0.50").unwrap();
+    test_env
+        .insert_setting("cost_limit_per_scan", "0.50")
+        .unwrap();
 
     let project_id = test_env.insert_project("App", "/tmp/app", None).unwrap();
 
@@ -274,10 +296,14 @@ fn test_shared_settings_independent_tracking() {
     let scan2_id = test_env.insert_scan(project_id, "running").unwrap();
 
     // Scan 1 costs $0.30 (under limit)
-    test_env.insert_scan_cost(scan1_id, 20, 150_000, 30_000, 0, 0, 0.30).unwrap();
+    test_env
+        .insert_scan_cost(scan1_id, 20, 150_000, 30_000, 0, 0, 0.30)
+        .unwrap();
 
     // Scan 2 costs $0.45 (also under limit - independent tracking)
-    test_env.insert_scan_cost(scan2_id, 25, 187_500, 37_500, 0, 0, 0.45).unwrap();
+    test_env
+        .insert_scan_cost(scan2_id, 25, 187_500, 37_500, 0, 0, 0.45)
+        .unwrap();
 
     // Verify both scans read same cost limit
     let conn = test_env.connection();
@@ -289,7 +315,10 @@ fn test_shared_settings_independent_tracking() {
         )
         .unwrap();
 
-    assert_eq!(cost_limit, "0.50", "Cost limit should be $0.50 for all scans");
+    assert_eq!(
+        cost_limit, "0.50",
+        "Cost limit should be $0.50 for all scans"
+    );
 
     // Verify each scan's cost is independent and under limit
     let costs: Vec<f64> = conn
@@ -371,7 +400,12 @@ fn test_concurrent_cost_calculations() {
 
     for (files, input, output, cache_read, cache_write) in scan_configs {
         let scan_id = test_env.insert_scan(project_id, "completed").unwrap();
-        let cost = ryn::models::scan_cost::ScanCost::calculate_cost(input, output, cache_read, cache_write);
+        let cost = ryn::models::scan_cost::ScanCost::calculate_cost(
+            input,
+            output,
+            cache_read,
+            cache_write,
+        );
 
         test_env
             .insert_scan_cost(scan_id, files, input, output, cache_read, cache_write, cost)
@@ -530,7 +564,10 @@ fn test_database_integrity_concurrent_scans() {
         )
         .unwrap();
 
-    assert_eq!(violation_count, 10, "Should have 10 violations (1 per scan)");
+    assert_eq!(
+        violation_count, 10,
+        "Should have 10 violations (1 per scan)"
+    );
 
     // Each scan should have 1 cost record
     let cost_count: i64 = conn

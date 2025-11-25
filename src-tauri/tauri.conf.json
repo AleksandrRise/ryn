@@ -37,6 +37,8 @@
             "dialog:allow-save",
             "dialog:default",
             "notification:default",
+            "shell:allow-open",
+            "shell:default",
             "fs:allow-read-text-file",
             "fs:allow-home-read-recursive",
             "fs:read-all",

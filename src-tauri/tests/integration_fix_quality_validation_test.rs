@@ -71,7 +71,10 @@ fn validate_python_syntax(code: &str) -> anyhow::Result<()> {
     let result = parser.parse_python(&clean_code)?;
 
     // Tree-sitter is forgiving, but we can check if root node exists
-    assert!(!result.root.text.is_empty(), "Parse result should have root node");
+    assert!(
+        !result.root.text.is_empty(),
+        "Parse result should have root node"
+    );
 
     Ok(())
 }
@@ -85,7 +88,10 @@ fn validate_javascript_syntax(code: &str) -> anyhow::Result<()> {
 
     let result = parser.parse_javascript(&clean_code)?;
 
-    assert!(!result.root.text.is_empty(), "Parse result should have root node");
+    assert!(
+        !result.root.text.is_empty(),
+        "Parse result should have root node"
+    );
 
     Ok(())
 }
@@ -99,7 +105,10 @@ fn validate_typescript_syntax(code: &str) -> anyhow::Result<()> {
 
     let result = parser.parse_typescript(&clean_code)?;
 
-    assert!(!result.root.text.is_empty(), "Parse result should have root node");
+    assert!(
+        !result.root.text.is_empty(),
+        "Parse result should have root node"
+    );
 
     Ok(())
 }
@@ -153,26 +162,26 @@ def user_profile(request):
 
     let client = GrokClient::new().expect("Failed to create Grok client");
 
-    let fixed_code = client.generate_fix(
-        "CC6.1",
-        "Missing authentication decorator on sensitive endpoint",
-        original_code,
-        "django",
-        Some("user_profile"),
-        None,
-    )
-    .await
-    .expect("Failed to generate fix");
+    let fixed_code = client
+        .generate_fix(
+            "CC6.1",
+            "Missing authentication decorator on sensitive endpoint",
+            original_code,
+            "django",
+            Some("user_profile"),
+            None,
+        )
+        .await
+        .expect("Failed to generate fix");
 
     // Validation 1: Fixed code should be syntactically valid Python
-    validate_python_syntax(&fixed_code)
-        .expect("Generated fix should be valid Python syntax");
+    validate_python_syntax(&fixed_code).expect("Generated fix should be valid Python syntax");
 
     // Validation 2: Should preserve function structure
-    let original_func_count = count_functions(original_code, "python")
-        .expect("Failed to parse original code");
-    let fixed_func_count = count_functions(&fixed_code, "python")
-        .expect("Failed to parse fixed code");
+    let original_func_count =
+        count_functions(original_code, "python").expect("Failed to parse original code");
+    let fixed_func_count =
+        count_functions(&fixed_code, "python").expect("Failed to parse fixed code");
 
     assert_eq!(
         fixed_func_count, original_func_count,
@@ -208,26 +217,26 @@ class PaymentProcessor:
 
     let client = GrokClient::new().expect("Failed to create Grok client");
 
-    let fixed_code = client.generate_fix(
-        "CC6.7",
-        "Hardcoded secret detected",
-        original_code,
-        "python",
-        Some("__init__"),
-        Some("PaymentProcessor"),
-    )
-    .await
-    .expect("Failed to generate fix");
+    let fixed_code = client
+        .generate_fix(
+            "CC6.7",
+            "Hardcoded secret detected",
+            original_code,
+            "python",
+            Some("__init__"),
+            Some("PaymentProcessor"),
+        )
+        .await
+        .expect("Failed to generate fix");
 
     // Validation 1: Fixed code should be syntactically valid Python
-    validate_python_syntax(&fixed_code)
-        .expect("Generated fix should be valid Python syntax");
+    validate_python_syntax(&fixed_code).expect("Generated fix should be valid Python syntax");
 
     // Validation 2: Should preserve class structure
-    let original_class_count = count_classes(original_code, "python")
-        .expect("Failed to parse original code");
-    let fixed_class_count = count_classes(&fixed_code, "python")
-        .expect("Failed to parse fixed code");
+    let original_class_count =
+        count_classes(original_code, "python").expect("Failed to parse original code");
+    let fixed_class_count =
+        count_classes(&fixed_code, "python").expect("Failed to parse fixed code");
 
     assert_eq!(
         fixed_class_count, original_class_count,
@@ -274,26 +283,26 @@ def delete_user(user_id):
 
     let client = GrokClient::new().expect("Failed to create Grok client");
 
-    let fixed_code = client.generate_fix(
-        "CC7.2",
-        "Missing audit log for sensitive operation",
-        original_code,
-        "django",
-        Some("delete_user"),
-        None,
-    )
-    .await
-    .expect("Failed to generate fix");
+    let fixed_code = client
+        .generate_fix(
+            "CC7.2",
+            "Missing audit log for sensitive operation",
+            original_code,
+            "django",
+            Some("delete_user"),
+            None,
+        )
+        .await
+        .expect("Failed to generate fix");
 
     // Validation 1: Fixed code should be syntactically valid Python
-    validate_python_syntax(&fixed_code)
-        .expect("Generated fix should be valid Python syntax");
+    validate_python_syntax(&fixed_code).expect("Generated fix should be valid Python syntax");
 
     // Validation 2: Should preserve function structure
-    let original_func_count = count_functions(original_code, "python")
-        .expect("Failed to parse original code");
-    let fixed_func_count = count_functions(&fixed_code, "python")
-        .expect("Failed to parse fixed code");
+    let original_func_count =
+        count_functions(original_code, "python").expect("Failed to parse original code");
+    let fixed_func_count =
+        count_functions(&fixed_code, "python").expect("Failed to parse fixed code");
 
     assert_eq!(
         fixed_func_count, original_func_count,
@@ -302,9 +311,8 @@ def delete_user(user_id):
     );
 
     // Validation 3: Fix should add logging
-    let has_logging = fixed_code.contains("logger")
-        || fixed_code.contains("log")
-        || fixed_code.contains("audit");
+    let has_logging =
+        fixed_code.contains("logger") || fixed_code.contains("log") || fixed_code.contains("audit");
 
     assert!(
         has_logging,
@@ -331,26 +339,26 @@ def fetch_user_data(user_id):
 
     let client = GrokClient::new().expect("Failed to create Grok client");
 
-    let fixed_code = client.generate_fix(
-        "A1.2",
-        "Missing error handling for external API call",
-        original_code,
-        "python",
-        Some("fetch_user_data"),
-        None,
-    )
-    .await
-    .expect("Failed to generate fix");
+    let fixed_code = client
+        .generate_fix(
+            "A1.2",
+            "Missing error handling for external API call",
+            original_code,
+            "python",
+            Some("fetch_user_data"),
+            None,
+        )
+        .await
+        .expect("Failed to generate fix");
 
     // Validation 1: Fixed code should be syntactically valid Python
-    validate_python_syntax(&fixed_code)
-        .expect("Generated fix should be valid Python syntax");
+    validate_python_syntax(&fixed_code).expect("Generated fix should be valid Python syntax");
 
     // Validation 2: Should preserve function structure
-    let original_func_count = count_functions(original_code, "python")
-        .expect("Failed to parse original code");
-    let fixed_func_count = count_functions(&fixed_code, "python")
-        .expect("Failed to parse fixed code");
+    let original_func_count =
+        count_functions(original_code, "python").expect("Failed to parse original code");
+    let fixed_func_count =
+        count_functions(&fixed_code, "python").expect("Failed to parse fixed code");
 
     assert_eq!(
         fixed_func_count, original_func_count,
@@ -385,16 +393,17 @@ app.get('/api/user/profile', (req, res) => {
 
     let client = GrokClient::new().expect("Failed to create Grok client");
 
-    let fixed_code = client.generate_fix(
-        "CC6.1",
-        "Missing authentication middleware on sensitive endpoint",
-        original_code,
-        "express",
-        None,
-        None,
-    )
-    .await
-    .expect("Failed to generate fix");
+    let fixed_code = client
+        .generate_fix(
+            "CC6.1",
+            "Missing authentication middleware on sensitive endpoint",
+            original_code,
+            "express",
+            None,
+            None,
+        )
+        .await
+        .expect("Failed to generate fix");
 
     // Validation 1: Fixed code should be syntactically valid JavaScript
     validate_javascript_syntax(&fixed_code)
@@ -433,16 +442,17 @@ module.exports = config;
 
     let client = GrokClient::new().expect("Failed to create Grok client");
 
-    let fixed_code = client.generate_fix(
-        "CC6.7",
-        "Hardcoded secret detected in configuration",
-        original_code,
-        "javascript",
-        None,
-        None,
-    )
-    .await
-    .expect("Failed to generate fix");
+    let fixed_code = client
+        .generate_fix(
+            "CC6.7",
+            "Hardcoded secret detected in configuration",
+            original_code,
+            "javascript",
+            None,
+            None,
+        )
+        .await
+        .expect("Failed to generate fix");
 
     // Validation 1: Fixed code should be syntactically valid JavaScript
     validate_javascript_syntax(&fixed_code)
@@ -487,26 +497,27 @@ async function fetchUserData(userId: string): Promise<User> {
 
     let client = GrokClient::new().expect("Failed to create Grok client");
 
-    let fixed_code = client.generate_fix(
-        "A1.2",
-        "Missing error handling for async API call",
-        original_code,
-        "typescript",
-        Some("fetchUserData"),
-        None,
-    )
-    .await
-    .expect("Failed to generate fix");
+    let fixed_code = client
+        .generate_fix(
+            "A1.2",
+            "Missing error handling for async API call",
+            original_code,
+            "typescript",
+            Some("fetchUserData"),
+            None,
+        )
+        .await
+        .expect("Failed to generate fix");
 
     // Validation 1: Fixed code should be syntactically valid TypeScript
     validate_typescript_syntax(&fixed_code)
         .expect("Generated fix should be valid TypeScript syntax");
 
     // Validation 2: Should preserve function structure
-    let original_func_count = count_functions(original_code, "typescript")
-        .expect("Failed to parse original code");
-    let fixed_func_count = count_functions(&fixed_code, "typescript")
-        .expect("Failed to parse fixed code");
+    let original_func_count =
+        count_functions(original_code, "typescript").expect("Failed to parse original code");
+    let fixed_func_count =
+        count_functions(&fixed_code, "typescript").expect("Failed to parse fixed code");
 
     assert_eq!(
         fixed_func_count, original_func_count,
@@ -548,26 +559,26 @@ class UserService:
 
     let client = GrokClient::new().expect("Failed to create Grok client");
 
-    let fixed_code = client.generate_fix(
-        "CC6.7",
-        "Hardcoded secret in class initialization",
-        original_code,
-        "python",
-        Some("__init__"),
-        Some("UserService"),
-    )
-    .await
-    .expect("Failed to generate fix");
+    let fixed_code = client
+        .generate_fix(
+            "CC6.7",
+            "Hardcoded secret in class initialization",
+            original_code,
+            "python",
+            Some("__init__"),
+            Some("UserService"),
+        )
+        .await
+        .expect("Failed to generate fix");
 
     // Validation 1: Fixed code should be syntactically valid Python
-    validate_python_syntax(&fixed_code)
-        .expect("Generated fix should be valid Python syntax");
+    validate_python_syntax(&fixed_code).expect("Generated fix should be valid Python syntax");
 
     // Validation 2: Should preserve class structure
-    let original_class_count = count_classes(original_code, "python")
-        .expect("Failed to parse original code");
-    let fixed_class_count = count_classes(&fixed_code, "python")
-        .expect("Failed to parse fixed code");
+    let original_class_count =
+        count_classes(original_code, "python").expect("Failed to parse original code");
+    let fixed_class_count =
+        count_classes(&fixed_code, "python").expect("Failed to parse fixed code");
 
     assert_eq!(
         fixed_class_count, original_class_count,
@@ -576,15 +587,16 @@ class UserService:
     );
 
     // Validation 3: Should preserve all methods
-    let original_func_count = count_functions(original_code, "python")
-        .expect("Failed to parse original code");
-    let fixed_func_count = count_functions(&fixed_code, "python")
-        .expect("Failed to parse fixed code");
+    let original_func_count =
+        count_functions(original_code, "python").expect("Failed to parse original code");
+    let fixed_func_count =
+        count_functions(&fixed_code, "python").expect("Failed to parse fixed code");
 
     assert!(
         fixed_func_count >= original_func_count,
         "Fix should preserve all methods. Original: {} methods, Fixed: {} methods",
-        original_func_count, fixed_func_count
+        original_func_count,
+        fixed_func_count
     );
 
     println!("✅ Python fix quality validated (multiline class structure preservation)");
@@ -606,16 +618,17 @@ def placeholder():
 
     let client = GrokClient::new().expect("Failed to create Grok client");
 
-    let fixed_code = client.generate_fix(
-        "CC6.7",
-        "Hardcoded secret in function",
-        original_code,
-        "python",
-        Some("placeholder"),
-        None,
-    )
-    .await
-    .expect("Failed to generate fix");
+    let fixed_code = client
+        .generate_fix(
+            "CC6.7",
+            "Hardcoded secret in function",
+            original_code,
+            "python",
+            Some("placeholder"),
+            None,
+        )
+        .await
+        .expect("Failed to generate fix");
 
     // Validation: Fixed code should be syntactically valid Python
     validate_python_syntax(&fixed_code)
@@ -641,31 +654,33 @@ class OuterClass:
 
     let client = GrokClient::new().expect("Failed to create Grok client");
 
-    let fixed_code = client.generate_fix(
-        "CC6.7",
-        "Hardcoded secret in nested class",
-        original_code,
-        "python",
-        Some("inner_method"),
-        Some("InnerClass"),
-    )
-    .await
-    .expect("Failed to generate fix");
+    let fixed_code = client
+        .generate_fix(
+            "CC6.7",
+            "Hardcoded secret in nested class",
+            original_code,
+            "python",
+            Some("inner_method"),
+            Some("InnerClass"),
+        )
+        .await
+        .expect("Failed to generate fix");
 
     // Validation 1: Fixed code should be syntactically valid Python
     validate_python_syntax(&fixed_code)
         .expect("Generated fix should be valid Python syntax for nested structures");
 
     // Validation 2: Should preserve nested class structure
-    let original_class_count = count_classes(original_code, "python")
-        .expect("Failed to parse original code");
-    let fixed_class_count = count_classes(&fixed_code, "python")
-        .expect("Failed to parse fixed code");
+    let original_class_count =
+        count_classes(original_code, "python").expect("Failed to parse original code");
+    let fixed_class_count =
+        count_classes(&fixed_code, "python").expect("Failed to parse fixed code");
 
     assert!(
         fixed_class_count >= original_class_count,
         "Fix should preserve nested class structure. Original: {} classes, Fixed: {} classes",
-        original_class_count, fixed_class_count
+        original_class_count,
+        fixed_class_count
     );
 
     println!("✅ Python fix quality validated (nested class structures)");

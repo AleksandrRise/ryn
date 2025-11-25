@@ -23,8 +23,7 @@ impl FixApplicator {
     /// # Errors
     /// Returns error if file cannot be written (permissions, missing parent dir, etc.)
     pub fn apply_fix(file_path: &Path, fixed_code: &str) -> Result<()> {
-        fs::write(file_path, fixed_code)
-            .context(format!("Failed to apply fix to {:?}", file_path))
+        fs::write(file_path, fixed_code).context(format!("Failed to apply fix to {:?}", file_path))
     }
 
     /// Read file content from disk
@@ -38,8 +37,7 @@ impl FixApplicator {
     /// # Errors
     /// Returns error if file cannot be read
     pub fn read_file(file_path: &Path) -> Result<String> {
-        fs::read_to_string(file_path)
-            .context(format!("Failed to read file {:?}", file_path))
+        fs::read_to_string(file_path).context(format!("Failed to read file {:?}", file_path))
     }
 
     /// Validate fix doesn't break basic syntax
@@ -98,8 +96,10 @@ impl FixApplicator {
         let backup_content = fs::read(&backup_path)
             .context(format!("Failed to read backup file: {}", backup_path))?;
 
-        fs::write(file_path, backup_content)
-            .context(format!("Failed to restore file from backup: {:?}", file_path))?;
+        fs::write(file_path, backup_content).context(format!(
+            "Failed to restore file from backup: {:?}",
+            file_path
+        ))?;
 
         fs::remove_file(&backup_path)
             .context(format!("Failed to remove backup file: {}", backup_path))

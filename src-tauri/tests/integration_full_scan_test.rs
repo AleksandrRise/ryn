@@ -156,7 +156,9 @@ fn test_regex_only_mode_scan() {
         .unwrap();
 
     // Set scan mode to regex_only
-    project.insert_setting("llm_scan_mode", "regex_only").unwrap();
+    project
+        .insert_setting("llm_scan_mode", "regex_only")
+        .unwrap();
 
     // Create scan record
     let scan_id = project.insert_scan(project_id, "running").unwrap();
@@ -177,26 +179,31 @@ fn test_regex_only_mode_scan() {
 
             // Insert violations into database
             for violation in violations {
-                project.insert_violation(
-                    scan_id,
-                    &violation.control_id,
-                    &violation.severity.to_string().to_lowercase(),
-                    &violation.description,
-                    &violation.file_path,
-                    violation.line_number,
-                    &violation.code_snippet,
-                    Some("regex"),
-                    None,
-                    None,
-                    violation.regex_reasoning.as_deref(),
-                ).unwrap();
+                project
+                    .insert_violation(
+                        scan_id,
+                        &violation.control_id,
+                        &violation.severity.to_string().to_lowercase(),
+                        &violation.description,
+                        &violation.file_path,
+                        violation.line_number,
+                        &violation.code_snippet,
+                        Some("regex"),
+                        None,
+                        None,
+                        violation.regex_reasoning.as_deref(),
+                    )
+                    .unwrap();
                 total_violations += 1;
             }
         }
     }
 
     // Verify violations were detected by regex
-    assert!(total_violations > 0, "Should detect violations with regex patterns");
+    assert!(
+        total_violations > 0,
+        "Should detect violations with regex patterns"
+    );
 
     // Verify all violations have detection_method="regex"
     let conn = project.connection();
@@ -208,7 +215,10 @@ fn test_regex_only_mode_scan() {
         )
         .unwrap();
 
-    assert_eq!(regex_count, total_violations as i64, "All violations should be regex-detected");
+    assert_eq!(
+        regex_count, total_violations as i64,
+        "All violations should be regex-detected"
+    );
 
     // Verify no LLM or hybrid violations (regex_only mode)
     let llm_count: i64 = conn
@@ -227,8 +237,14 @@ fn test_regex_only_mode_scan() {
         )
         .unwrap();
 
-    assert_eq!(llm_count, 0, "regex_only mode should not have LLM violations");
-    assert_eq!(hybrid_count, 0, "regex_only mode should not have hybrid violations");
+    assert_eq!(
+        llm_count, 0,
+        "regex_only mode should not have LLM violations"
+    );
+    assert_eq!(
+        hybrid_count, 0,
+        "regex_only mode should not have hybrid violations"
+    );
 
     println!("✓ regex_only mode detected {} violations", total_violations);
 }
@@ -246,14 +262,20 @@ fn test_framework_detection_django() {
     // Create manage.py (Django indicator)
     fs::write(
         project_dir.join("manage.py"),
-        "#!/usr/bin/env python\nimport django\nif __name__ == '__main__':\n    django.setup()\n"
-    ).unwrap();
+        "#!/usr/bin/env python\nimport django\nif __name__ == '__main__':\n    django.setup()\n",
+    )
+    .unwrap();
 
     // Detect framework
-    let framework = ryn::scanner::framework_detector::FrameworkDetector::detect_framework(&project_dir)
-        .unwrap();
+    let framework =
+        ryn::scanner::framework_detector::FrameworkDetector::detect_framework(&project_dir)
+            .unwrap();
 
-    assert_eq!(framework, Some("django".to_string()), "Should detect Django framework");
+    assert_eq!(
+        framework,
+        Some("django".to_string()),
+        "Should detect Django framework"
+    );
 
     println!("✓ Framework detection: {:?}", framework);
 }
@@ -278,19 +300,21 @@ fn test_violation_severities() {
 
     // Insert violations
     for violation in violations {
-        project.insert_violation(
-            scan_id,
-            &violation.control_id,
-            &violation.severity.to_string().to_lowercase(),
-            &violation.description,
-            &violation.file_path,
-            violation.line_number,
-            &violation.code_snippet,
-            Some("regex"),
-            None,
-            None,
-            violation.regex_reasoning.as_deref(),
-        ).unwrap();
+        project
+            .insert_violation(
+                scan_id,
+                &violation.control_id,
+                &violation.severity.to_string().to_lowercase(),
+                &violation.description,
+                &violation.file_path,
+                violation.line_number,
+                &violation.code_snippet,
+                Some("regex"),
+                None,
+                None,
+                violation.regex_reasoning.as_deref(),
+            )
+            .unwrap();
     }
 
     // Query severity counts
@@ -329,13 +353,21 @@ fn test_violation_severities() {
         .unwrap();
 
     // Verify we have violations of different severities
-    assert!(critical_count + high_count + medium_count + low_count > 0, "Should detect violations");
+    assert!(
+        critical_count + high_count + medium_count + low_count > 0,
+        "Should detect violations"
+    );
 
     // CC6.7 (hardcoded secrets) should be critical
-    assert!(critical_count > 0, "Should detect critical violations (hardcoded secrets)");
+    assert!(
+        critical_count > 0,
+        "Should detect critical violations (hardcoded secrets)"
+    );
 
-    println!("✓ Severity distribution: {} critical, {} high, {} medium, {} low",
-             critical_count, high_count, medium_count, low_count);
+    println!(
+        "✓ Severity distribution: {} critical, {} high, {} medium, {} low",
+        critical_count, high_count, medium_count, low_count
+    );
 }
 
 /// Test 4: Verify secure files don't trigger false positives
@@ -356,7 +388,11 @@ fn test_secure_file_no_violations() {
     let content = std::fs::read_to_string(project_dir.join("utils.py")).unwrap();
     let violations = run_all_rules(&content, "utils.py", scan_id);
 
-    assert_eq!(violations.len(), 0, "Secure utility file should not trigger violations");
+    assert_eq!(
+        violations.len(),
+        0,
+        "Secure utility file should not trigger violations"
+    );
 
     println!("✓ Secure file correctly has 0 violations");
 }
@@ -379,7 +415,10 @@ fn test_file_path_security() {
     let content = std::fs::read_to_string(project_dir.join("views.py")).unwrap();
     let violations = run_all_rules(&content, "views.py", scan_id);
 
-    assert!(violations.len() > 0, "Should scan files in project directory");
+    assert!(
+        violations.len() > 0,
+        "Should scan files in project directory"
+    );
 
     // Note: Path validation happens in scan_project command via path_validation module
     // We can't easily test the rejection case in unit tests without the full command
@@ -393,10 +432,10 @@ fn test_smart_mode_file_selection() {
     let project = TestProject::new("smart_mode_selection").unwrap();
 
     let project_dir = project.project_dir();
-    create_vulnerable_django_file(&project_dir).unwrap();  // Security file
-    create_secure_utility_file(&project_dir).unwrap();     // Utility file
-    create_auth_middleware_file(&project_dir).unwrap();    // Security file
-    create_database_models_file(&project_dir).unwrap();    // Security file
+    create_vulnerable_django_file(&project_dir).unwrap(); // Security file
+    create_secure_utility_file(&project_dir).unwrap(); // Utility file
+    create_auth_middleware_file(&project_dir).unwrap(); // Security file
+    create_database_models_file(&project_dir).unwrap(); // Security file
 
     // Test file selection heuristics
     let views_content = std::fs::read_to_string(project_dir.join("views.py")).unwrap();
@@ -411,12 +450,24 @@ fn test_smart_mode_file_selection() {
     let models_selected = should_analyze_with_llm("models.py", &models_content, "smart");
 
     // Security-critical files should be selected
-    assert!(views_selected, "views.py should be selected in smart mode (has Django views)");
-    assert!(auth_selected, "middleware.py should be selected in smart mode (auth patterns)");
-    assert!(models_selected, "models.py should be selected in smart mode (database patterns)");
+    assert!(
+        views_selected,
+        "views.py should be selected in smart mode (has Django views)"
+    );
+    assert!(
+        auth_selected,
+        "middleware.py should be selected in smart mode (auth patterns)"
+    );
+    assert!(
+        models_selected,
+        "models.py should be selected in smart mode (database patterns)"
+    );
 
     // Utility file should NOT be selected (no security patterns)
-    assert!(!utils_selected, "utils.py should NOT be selected in smart mode (no security patterns)");
+    assert!(
+        !utils_selected,
+        "utils.py should NOT be selected in smart mode (no security patterns)"
+    );
 
     println!("✓ smart mode file selection: 3/4 files selected (75%)");
 }
@@ -441,9 +492,18 @@ fn test_analyze_all_mode_selection() {
     let auth_selected = should_analyze_with_llm("middleware.py", &auth_content, "analyze_all");
 
     // All Python files should be selected in analyze_all mode
-    assert!(views_selected, "views.py should be selected in analyze_all mode");
-    assert!(utils_selected, "utils.py should be selected in analyze_all mode");
-    assert!(auth_selected, "middleware.py should be selected in analyze_all mode");
+    assert!(
+        views_selected,
+        "views.py should be selected in analyze_all mode"
+    );
+    assert!(
+        utils_selected,
+        "utils.py should be selected in analyze_all mode"
+    );
+    assert!(
+        auth_selected,
+        "middleware.py should be selected in analyze_all mode"
+    );
 
     println!("✓ analyze_all mode selection: 3/3 files selected (100%)");
 }
@@ -468,19 +528,21 @@ fn test_scan_results_persistence() {
 
     let mut violation_ids = Vec::new();
     for violation in violations {
-        let id = project.insert_violation(
-            scan_id,
-            &violation.control_id,
-            &violation.severity.to_string().to_lowercase(),
-            &violation.description,
-            &violation.file_path,
-            violation.line_number,
-            &violation.code_snippet,
-            Some("regex"),
-            None,
-            None,
-            violation.regex_reasoning.as_deref(),
-        ).unwrap();
+        let id = project
+            .insert_violation(
+                scan_id,
+                &violation.control_id,
+                &violation.severity.to_string().to_lowercase(),
+                &violation.description,
+                &violation.file_path,
+                violation.line_number,
+                &violation.code_snippet,
+                Some("regex"),
+                None,
+                None,
+                violation.regex_reasoning.as_deref(),
+            )
+            .unwrap();
         violation_ids.push(id);
     }
 
@@ -490,18 +552,20 @@ fn test_scan_results_persistence() {
     conn.execute(
         "UPDATE scans SET status = ?, completed_at = ? WHERE id = ?",
         rusqlite::params!["completed", completed_at, scan_id],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Verify scan can be retrieved with all data
     let scan_status: String = conn
-        .query_row(
-            "SELECT status FROM scans WHERE id = ?",
-            [scan_id],
-            |row| row.get(0),
-        )
+        .query_row("SELECT status FROM scans WHERE id = ?", [scan_id], |row| {
+            row.get(0)
+        })
         .unwrap();
 
-    assert_eq!(scan_status, "completed", "Scan status should be 'completed'");
+    assert_eq!(
+        scan_status, "completed",
+        "Scan status should be 'completed'"
+    );
 
     // Verify violations are persisted and can be queried
     for vid in violation_ids {
@@ -528,7 +592,9 @@ fn run_all_rules(code: &str, file_path: &str, scan_id: i64) -> Vec<ryn::models::
     let mut violations = Vec::new();
 
     // CC6.1 Access Control
-    if let Ok(cc61_violations) = ryn::rules::CC61AccessControlRule::analyze(code, file_path, scan_id) {
+    if let Ok(cc61_violations) =
+        ryn::rules::CC61AccessControlRule::analyze(code, file_path, scan_id)
+    {
         violations.extend(cc61_violations);
     }
 

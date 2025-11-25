@@ -33,13 +33,20 @@ fn test_regex_only_mode_selects_no_files() {
 
     let mut selected_count = 0;
     for (filename, code) in &test_files {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         if should_analyze_with_llm(&file_path, code, "regex_only") {
             selected_count += 1;
         }
     }
 
-    assert_eq!(selected_count, 0, "regex_only mode should select 0 files for LLM analysis");
+    assert_eq!(
+        selected_count, 0,
+        "regex_only mode should select 0 files for LLM analysis"
+    );
 }
 
 /// Test that analyze_all mode selects all supported files
@@ -65,14 +72,21 @@ fn test_analyze_all_mode_selects_all_supported_files() {
 
     let mut selected_count = 0;
     for (filename, code) in &test_files {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         if should_analyze_with_llm(&file_path, code, "analyze_all") {
             selected_count += 1;
         }
     }
 
     // Should select 4 files (.py, .js, .tsx, .go) but not .md or .json
-    assert_eq!(selected_count, 4, "analyze_all mode should select all supported language files");
+    assert_eq!(
+        selected_count, 4,
+        "analyze_all mode should select all supported language files"
+    );
 }
 
 /// Test that smart mode selects security-relevant files only
@@ -83,19 +97,31 @@ fn test_smart_mode_selects_security_relevant_files() {
     // Create security-relevant files (should be selected)
     let security_files = vec![
         ("auth.py", "@login_required\ndef admin_panel(): pass"),
-        ("database.py", "cursor.execute('INSERT INTO users VALUES (?, ?)', data)"),
+        (
+            "database.py",
+            "cursor.execute('INSERT INTO users VALUES (?, ?)', data)",
+        ),
         ("api.py", "@app.route('/api/users', methods=['POST'])"),
         ("secrets.py", "api_key = os.getenv('STRIPE_API_KEY')"),
         ("uploads.py", "file.write(user_upload_data)"),
-        ("client.py", "response = requests.post('https://api.example.com')"),
+        (
+            "client.py",
+            "response = requests.post('https://api.example.com')",
+        ),
     ];
 
     // Create non-security-relevant files (should NOT be selected)
     let utility_files = vec![
         ("utils.py", "def add(a, b): return a + b"),
-        ("formatters.py", "def format_date(date): return date.strftime('%Y-%m-%d')"),
+        (
+            "formatters.py",
+            "def format_date(date): return date.strftime('%Y-%m-%d')",
+        ),
         ("constants.py", "MAX_RETRIES = 3\nTIMEOUT = 5000"),
-        ("helpers.py", "def calculate_total(items): return sum(item.price for item in items)"),
+        (
+            "helpers.py",
+            "def calculate_total(items): return sum(item.price for item in items)",
+        ),
     ];
 
     for (filename, code) in &security_files {
@@ -111,7 +137,11 @@ fn test_smart_mode_selects_security_relevant_files() {
     // Count selected security files
     let mut security_selected = 0;
     for (filename, code) in &security_files {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         if should_analyze_with_llm(&file_path, code, "smart") {
             security_selected += 1;
         }
@@ -120,7 +150,11 @@ fn test_smart_mode_selects_security_relevant_files() {
     // Count selected utility files
     let mut utility_selected = 0;
     for (filename, code) in &utility_files {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         if should_analyze_with_llm(&file_path, code, "smart") {
             utility_selected += 1;
         }
@@ -149,33 +183,96 @@ fn test_smart_mode_realistic_selection_percentage() {
 
     // Security files (7 files)
     let security_files = vec![
-        ("app/__init__.py", "from flask import Flask\napp = Flask(__name__)"),
-        ("app/auth/login.py", "@app.route('/login', methods=['POST'])\ndef login(): pass"),
-        ("app/auth/middleware.py", "from functools import wraps\n@login_required"),
-        ("app/models/user.py", "class User(db.Model):\n    password = db.Column(db.String)"),
-        ("app/api/users.py", "@app.route('/api/users')\ndef list_users(): pass"),
+        (
+            "app/__init__.py",
+            "from flask import Flask\napp = Flask(__name__)",
+        ),
+        (
+            "app/auth/login.py",
+            "@app.route('/login', methods=['POST'])\ndef login(): pass",
+        ),
+        (
+            "app/auth/middleware.py",
+            "from functools import wraps\n@login_required",
+        ),
+        (
+            "app/models/user.py",
+            "class User(db.Model):\n    password = db.Column(db.String)",
+        ),
+        (
+            "app/api/users.py",
+            "@app.route('/api/users')\ndef list_users(): pass",
+        ),
         ("app/config.py", "SECRET_KEY = os.getenv('SECRET_KEY')"),
-        ("app/database.py", "db = SQLAlchemy(app)\ndb.session.commit()"),
+        (
+            "app/database.py",
+            "db = SQLAlchemy(app)\ndb.session.commit()",
+        ),
     ];
 
     // Utility files (16 files - ~70% of total)
     let utility_files = vec![
-        ("app/utils/formatters.py", "def format_date(d): return d.strftime('%Y-%m-%d')"),
-        ("app/utils/validators.py", "def is_valid_email(email): return '@' in email"),
-        ("app/utils/helpers.py", "def truncate(text, length): return text[:length]"),
-        ("app/utils/constants.py", "MAX_PAGE_SIZE = 100\nDEFAULT_TIMEOUT = 30"),
-        ("app/models/product.py", "class Product:\n    def __init__(self, name): self.name = name"),
-        ("app/models/order.py", "class Order:\n    def calculate_total(self): return sum(self.items)"),
-        ("app/templates/helpers.py", "def render_template(name, **ctx): pass"),
-        ("app/views/home.py", "def home(): return render_template('home.html')"),
-        ("app/views/about.py", "def about(): return render_template('about.html')"),
-        ("app/forms/contact.py", "class ContactForm(Form): name = StringField()"),
-        ("app/forms/validators.py", "def validate_phone(form, field): pass"),
+        (
+            "app/utils/formatters.py",
+            "def format_date(d): return d.strftime('%Y-%m-%d')",
+        ),
+        (
+            "app/utils/validators.py",
+            "def is_valid_email(email): return '@' in email",
+        ),
+        (
+            "app/utils/helpers.py",
+            "def truncate(text, length): return text[:length]",
+        ),
+        (
+            "app/utils/constants.py",
+            "MAX_PAGE_SIZE = 100\nDEFAULT_TIMEOUT = 30",
+        ),
+        (
+            "app/models/product.py",
+            "class Product:\n    def __init__(self, name): self.name = name",
+        ),
+        (
+            "app/models/order.py",
+            "class Order:\n    def calculate_total(self): return sum(self.items)",
+        ),
+        (
+            "app/templates/helpers.py",
+            "def render_template(name, **ctx): pass",
+        ),
+        (
+            "app/views/home.py",
+            "def home(): return render_template('home.html')",
+        ),
+        (
+            "app/views/about.py",
+            "def about(): return render_template('about.html')",
+        ),
+        (
+            "app/forms/contact.py",
+            "class ContactForm(Form): name = StringField()",
+        ),
+        (
+            "app/forms/validators.py",
+            "def validate_phone(form, field): pass",
+        ),
         ("app/static/build.py", "def compile_assets(): pass"),
-        ("app/tasks/email.py", "def format_email_body(user): return f'Hello {user.name}'"),
-        ("app/tasks/notifications.py", "def create_notification_text(msg): return msg"),
-        ("app/serializers/json.py", "def to_json(obj): return json.dumps(obj)"),
-        ("app/serializers/xml.py", "def to_xml(obj): return ET.tostring(obj)"),
+        (
+            "app/tasks/email.py",
+            "def format_email_body(user): return f'Hello {user.name}'",
+        ),
+        (
+            "app/tasks/notifications.py",
+            "def create_notification_text(msg): return msg",
+        ),
+        (
+            "app/serializers/json.py",
+            "def to_json(obj): return json.dumps(obj)",
+        ),
+        (
+            "app/serializers/xml.py",
+            "def to_xml(obj): return ET.tostring(obj)",
+        ),
     ];
 
     for (filename, code) in &security_files {
@@ -192,7 +289,11 @@ fn test_smart_mode_realistic_selection_percentage() {
     let mut selected_count = 0;
 
     for (filename, code) in security_files.iter().chain(utility_files.iter()) {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         if should_analyze_with_llm(&file_path, code, "smart") {
             selected_count += 1;
         }
@@ -218,20 +319,40 @@ fn test_auth_pattern_detection_across_frameworks() {
     let test_cases = vec![
         // Django
         ("django_view.py", "@login_required\ndef admin(): pass", true),
-        ("django_middleware.py", "if not request.user.is_authenticated: return", true),
-
+        (
+            "django_middleware.py",
+            "if not request.user.is_authenticated: return",
+            true,
+        ),
         // Flask
-        ("flask_view.py", "@login_required\n@admin_required\ndef panel(): pass", true),
+        (
+            "flask_view.py",
+            "@login_required\n@admin_required\ndef panel(): pass",
+            true,
+        ),
         ("flask_auth.py", "session.get('user_id')", true),
-
         // Express.js
-        ("express_middleware.js", "passport.authenticate('local')", true),
-        ("express_routes.js", "if (!request.user.is_authenticated) return res.status(401)", true),
-
+        (
+            "express_middleware.js",
+            "passport.authenticate('local')",
+            true,
+        ),
+        (
+            "express_routes.js",
+            "if (!request.user.is_authenticated) return res.status(401)",
+            true,
+        ),
         // FastAPI
-        ("fastapi_routes.py", "current_user: User = Depends(get_current_user)", true),
-        ("fastapi_security.py", "oauth2_scheme = OAuth2PasswordBearer()", true),
-
+        (
+            "fastapi_routes.py",
+            "current_user: User = Depends(get_current_user)",
+            true,
+        ),
+        (
+            "fastapi_security.py",
+            "oauth2_scheme = OAuth2PasswordBearer()",
+            true,
+        ),
         // Non-auth files
         ("utils.py", "def calculate(x, y): return x + y", false),
         ("constants.js", "const MAX_RETRIES = 3", false),
@@ -240,11 +361,16 @@ fn test_auth_pattern_detection_across_frameworks() {
     use ryn::scanner::llm_file_selector::should_analyze_with_llm;
 
     for (filename, code, should_select) in test_cases {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         let selected = should_analyze_with_llm(&file_path, code, "smart");
 
         assert_eq!(
-            selected, should_select,
+            selected,
+            should_select,
             "File {} with code {:?} should {}be selected",
             filename,
             code.chars().take(40).collect::<String>(),
@@ -260,29 +386,68 @@ fn test_database_pattern_detection() {
 
     let test_cases = vec![
         // SQL queries
-        ("raw_sql.py", "cursor.execute('INSERT INTO users VALUES (?, ?)')", true),
-        ("sql_update.py", "connection.execute('UPDATE users SET name = ?')", true),
-
+        (
+            "raw_sql.py",
+            "cursor.execute('INSERT INTO users VALUES (?, ?)')",
+            true,
+        ),
+        (
+            "sql_update.py",
+            "connection.execute('UPDATE users SET name = ?')",
+            true,
+        ),
         // ORM operations
-        ("sqlalchemy.py", "db.session.add(user)\ndb.session.commit()", true),
-        ("django_orm.py", "User.objects.filter(id=user_id).delete()", true),
-        ("sequelize.js", "sequelize.User.create({ name: 'test' })", true),
-        ("mongoose.js", "const schema = new mongoose.Schema({ name: String })", true),
-        ("prisma.ts", "prisma.user.create({ data: { name: 'test' } })", true),
-
+        (
+            "sqlalchemy.py",
+            "db.session.add(user)\ndb.session.commit()",
+            true,
+        ),
+        (
+            "django_orm.py",
+            "User.objects.filter(id=user_id).delete()",
+            true,
+        ),
+        (
+            "sequelize.js",
+            "sequelize.User.create({ name: 'test' })",
+            true,
+        ),
+        (
+            "mongoose.js",
+            "const schema = new mongoose.Schema({ name: String })",
+            true,
+        ),
+        (
+            "prisma.ts",
+            "prisma.user.create({ data: { name: 'test' } })",
+            true,
+        ),
         // Non-database files
-        ("math_utils.py", "def sum(numbers): return sum(numbers)", false),
-        ("formatters.js", "function formatDate(date) { return date.toISOString() }", false),
+        (
+            "math_utils.py",
+            "def sum(numbers): return sum(numbers)",
+            false,
+        ),
+        (
+            "formatters.js",
+            "function formatDate(date) { return date.toISOString() }",
+            false,
+        ),
     ];
 
     use ryn::scanner::llm_file_selector::should_analyze_with_llm;
 
     for (filename, code, should_select) in test_cases {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         let selected = should_analyze_with_llm(&file_path, code, "smart");
 
         assert_eq!(
-            selected, should_select,
+            selected,
+            should_select,
             "File {} with code {:?} should {}be selected",
             filename,
             code.chars().take(40).collect::<String>(),
@@ -298,24 +463,39 @@ fn test_api_endpoint_pattern_detection() {
 
     let test_cases = vec![
         // Flask
-        ("flask_api.py", "@app.route('/api/users', methods=['POST', 'GET'])", true),
+        (
+            "flask_api.py",
+            "@app.route('/api/users', methods=['POST', 'GET'])",
+            true,
+        ),
         ("flask_blueprint.py", "@blueprint.route('/admin')", true),
-
         // FastAPI
         ("fastapi_router.py", "@router.get('/users/{user_id}')", true),
         ("fastapi_app.py", "@app.post('/login')", true),
-
         // Express
-        ("express_routes.js", "router.post('/api/users', async (req, res) => {})", true),
-        ("express_app.js", "app.get('/health', (req, res) => res.send('OK'))", true),
-
+        (
+            "express_routes.js",
+            "router.post('/api/users', async (req, res) => {})",
+            true,
+        ),
+        (
+            "express_app.js",
+            "app.get('/health', (req, res) => res.send('OK'))",
+            true,
+        ),
         // Go
-        ("go_handlers.go", "http.HandleFunc(\"/api/users\", handleUsers)", true),
-
+        (
+            "go_handlers.go",
+            "http.HandleFunc(\"/api/users\", handleUsers)",
+            true,
+        ),
         // Spring
-        ("spring_controller.java", "@RestController\n@RequestMapping(\"/api\")", true),
+        (
+            "spring_controller.java",
+            "@RestController\n@RequestMapping(\"/api\")",
+            true,
+        ),
         ("spring_get.java", "@GetMapping(\"/users/{id}\")", true),
-
         // Non-API files
         ("helpers.py", "def process_data(data): return data", false),
     ];
@@ -323,11 +503,16 @@ fn test_api_endpoint_pattern_detection() {
     use ryn::scanner::llm_file_selector::should_analyze_with_llm;
 
     for (filename, code, should_select) in test_cases {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         let selected = should_analyze_with_llm(&file_path, code, "smart");
 
         assert_eq!(
-            selected, should_select,
+            selected,
+            should_select,
             "File {} with code {:?} should {}be selected",
             filename,
             code.chars().take(40).collect::<String>(),
@@ -345,15 +530,20 @@ fn test_secrets_pattern_detection() {
         // Environment variables
         ("config.py", "SECRET_KEY = os.getenv('SECRET_KEY')", true),
         ("env.js", "const API_KEY = process.env.STRIPE_API_KEY", true),
-
         // Credentials handling
         ("auth.py", "password = request.form.get('password')", true),
-        ("tokens.js", "const bearer = req.headers.authorization.split(' ')[1]", true),
-
+        (
+            "tokens.js",
+            "const bearer = req.headers.authorization.split(' ')[1]",
+            true,
+        ),
         // Encryption
         ("crypto.py", "encrypted = encrypt(data, private_key)", true),
-        ("vault.py", "secret = vault.read('database/credentials')", true),
-
+        (
+            "vault.py",
+            "secret = vault.read('database/credentials')",
+            true,
+        ),
         // Non-secrets files
         ("display.py", "def show_message(msg): print(msg)", false),
     ];
@@ -361,11 +551,16 @@ fn test_secrets_pattern_detection() {
     use ryn::scanner::llm_file_selector::should_analyze_with_llm;
 
     for (filename, code, should_select) in test_cases {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         let selected = should_analyze_with_llm(&file_path, code, "smart");
 
         assert_eq!(
-            selected, should_select,
+            selected,
+            should_select,
             "File {} with code {:?} should {}be selected",
             filename,
             code.chars().take(40).collect::<String>(),
@@ -381,16 +576,25 @@ fn test_file_io_pattern_detection() {
 
     let test_cases = vec![
         // Python file operations
-        ("file_handler.py", "with open(user_path, 'w') as f: f.write(data)", true),
-        ("uploads.py", "file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))", true),
-
+        (
+            "file_handler.py",
+            "with open(user_path, 'w') as f: f.write(data)",
+            true,
+        ),
+        (
+            "uploads.py",
+            "file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))",
+            true,
+        ),
         // JavaScript/Node.js file operations
         ("file_ops.js", "fs.readFile(path, 'utf8', callback)", true),
         ("writer.js", "fs.writeFileSync(tempfile, data)", true),
-
         // Path operations
-        ("paths.py", "full_path = os.path.join(base_dir, user_input)", true),
-
+        (
+            "paths.py",
+            "full_path = os.path.join(base_dir, user_input)",
+            true,
+        ),
         // Non-file-I/O files
         ("calculator.py", "def multiply(a, b): return a * b", false),
     ];
@@ -398,11 +602,16 @@ fn test_file_io_pattern_detection() {
     use ryn::scanner::llm_file_selector::should_analyze_with_llm;
 
     for (filename, code, should_select) in test_cases {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         let selected = should_analyze_with_llm(&file_path, code, "smart");
 
         assert_eq!(
-            selected, should_select,
+            selected,
+            should_select,
             "File {} with code {:?} should {}be selected",
             filename,
             code.chars().take(40).collect::<String>(),
@@ -418,29 +627,59 @@ fn test_network_pattern_detection() {
 
     let test_cases = vec![
         // Python
-        ("api_client.py", "response = requests.post('https://api.example.com', data=payload)", true),
-        ("http_client.py", "urllib.request.urlopen('https://example.com')", true),
-
+        (
+            "api_client.py",
+            "response = requests.post('https://api.example.com', data=payload)",
+            true,
+        ),
+        (
+            "http_client.py",
+            "urllib.request.urlopen('https://example.com')",
+            true,
+        ),
         // JavaScript
-        ("fetch_client.js", "fetch('/api/users').then(res => res.json())", true),
-        ("axios_client.js", "axios.get('/api/data').then(handleResponse)", true),
-
+        (
+            "fetch_client.js",
+            "fetch('/api/users').then(res => res.json())",
+            true,
+        ),
+        (
+            "axios_client.js",
+            "axios.get('/api/data').then(handleResponse)",
+            true,
+        ),
         // WebSockets
-        ("websocket.py", "ws = websocket.WebSocketApp('wss://example.com')", true),
-        ("socket_io.js", "const socket = io('https://server.com')", true),
-
+        (
+            "websocket.py",
+            "ws = websocket.WebSocketApp('wss://example.com')",
+            true,
+        ),
+        (
+            "socket_io.js",
+            "const socket = io('https://server.com')",
+            true,
+        ),
         // Non-network files
-        ("string_utils.py", "def capitalize(text): return text.upper()", false),
+        (
+            "string_utils.py",
+            "def capitalize(text): return text.upper()",
+            false,
+        ),
     ];
 
     use ryn::scanner::llm_file_selector::should_analyze_with_llm;
 
     for (filename, code, should_select) in test_cases {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         let selected = should_analyze_with_llm(&file_path, code, "smart");
 
         assert_eq!(
-            selected, should_select,
+            selected,
+            should_select,
             "File {} with code {:?} should {}be selected",
             filename,
             code.chars().take(40).collect::<String>(),
@@ -457,9 +696,18 @@ fn test_unsupported_file_types_never_selected() {
     // Create files with security-relevant content but unsupported extensions
     let unsupported_files = vec![
         ("README.md", "@login_required\npassword = 'secret'"),
-        ("config.yml", "database: postgresql://user:password@localhost"),
-        ("data.json", "{\"api_key\": \"secret\", \"password\": \"test\"}"),
-        ("notes.txt", "INSERT INTO users VALUES ('admin', 'password')"),
+        (
+            "config.yml",
+            "database: postgresql://user:password@localhost",
+        ),
+        (
+            "data.json",
+            "{\"api_key\": \"secret\", \"password\": \"test\"}",
+        ),
+        (
+            "notes.txt",
+            "INSERT INTO users VALUES ('admin', 'password')",
+        ),
         ("Dockerfile", "ENV SECRET_KEY=mysecret"),
         ("Makefile", "deploy: git push heroku master"),
     ];
@@ -471,7 +719,11 @@ fn test_unsupported_file_types_never_selected() {
     use ryn::scanner::llm_file_selector::should_analyze_with_llm;
 
     for (filename, code) in &unsupported_files {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
 
         // Test all modes - none should select unsupported files
         assert!(
@@ -500,15 +752,27 @@ fn test_case_insensitive_matching() {
     let project = TestProject::new("case_insensitive").unwrap();
 
     let test_cases = vec![
-        ("mixed_case.py", "PASSWORD = 'test'\n@LOGIN_REQUIRED\ndef ADMIN(): pass", true),
+        (
+            "mixed_case.py",
+            "PASSWORD = 'test'\n@LOGIN_REQUIRED\ndef ADMIN(): pass",
+            true,
+        ),
         ("upper_case.py", "API_KEY = OS.GETENV('SECRET')", true),
-        ("camel_case.js", "const ApiKey = process.env.StripeApiKey", true),
+        (
+            "camel_case.js",
+            "const ApiKey = process.env.StripeApiKey",
+            true,
+        ),
     ];
 
     use ryn::scanner::llm_file_selector::should_analyze_with_llm;
 
     for (filename, code, should_select) in test_cases {
-        let file_path = project.project_dir().join(filename).to_string_lossy().to_string();
+        let file_path = project
+            .project_dir()
+            .join(filename)
+            .to_string_lossy()
+            .to_string();
         let selected = should_analyze_with_llm(&file_path, code, "smart");
 
         assert_eq!(

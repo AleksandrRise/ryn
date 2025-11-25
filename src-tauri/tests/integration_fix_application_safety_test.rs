@@ -11,12 +11,12 @@
 //!
 //! These are real integration tests - NO MOCKS.
 
-use ryn::commands::fix::{generate_fix, apply_fix};
+use ryn::commands::fix::{apply_fix, generate_fix};
 use ryn::db;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
-use tempfile::TempDir;
-use std::os::unix::fs::PermissionsExt; // For chmod on Unix
+use tempfile::TempDir; // For chmod on Unix
 
 /// Helper: Setup test database environment
 fn setup_test_db() {
@@ -51,7 +51,11 @@ fn create_test_setup() -> (TempDir, PathBuf, i64, i64) {
     let project_id = conn
         .query_row(
             "INSERT INTO projects (name, path, framework) VALUES (?1, ?2, ?3) RETURNING id",
-            rusqlite::params!["test_project", project_path.to_str().unwrap(), None::<String>],
+            rusqlite::params![
+                "test_project",
+                project_path.to_str().unwrap(),
+                None::<String>
+            ],
             |row| row.get(0),
         )
         .expect("Failed to insert project");
@@ -217,7 +221,9 @@ async fn test_apply_fix_file_readonly() {
 
     let error = result.unwrap_err();
     assert!(
-        error.contains("PermissionDenied") || error.contains("permission denied") || error.contains("Permission"),
+        error.contains("PermissionDenied")
+            || error.contains("permission denied")
+            || error.contains("Permission"),
         "Error should mention permission denied. Got: {}",
         error
     );
@@ -315,10 +321,7 @@ async fn test_apply_fix_succeeds_with_backup() {
 
     // Verify backup was created
     let backup_dir = project_path.join(".ryn-backups");
-    assert!(
-        backup_dir.exists(),
-        "Backup directory should be created"
-    );
+    assert!(backup_dir.exists(), "Backup directory should be created");
 
     let backup_files: Vec<_> = std::fs::read_dir(&backup_dir)
         .expect("Failed to read backup dir")
@@ -337,8 +340,8 @@ async fn test_apply_fix_succeeds_with_backup() {
     );
 
     // Verify backup content matches original
-    let backup_content = fs::read_to_string(backup_files[0].path())
-        .expect("Failed to read backup file");
+    let backup_content =
+        fs::read_to_string(backup_files[0].path()).expect("Failed to read backup file");
     assert_eq!(
         backup_content, original_content,
         "Backup should contain original content"
@@ -433,10 +436,7 @@ async fn test_apply_fix_records_applied_at_timestamp() {
         )
         .expect("Failed to fetch fix");
 
-    assert!(
-        applied_at.is_some(),
-        "Fix should have applied_at timestamp"
-    );
+    assert!(applied_at.is_some(), "Fix should have applied_at timestamp");
     assert!(
         backup_path.is_some(),
         "Fix should have backup_path recorded"

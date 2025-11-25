@@ -2,14 +2,15 @@
 // Module re-exports
 
 pub mod commands;
-pub mod models;
 pub mod db;
-pub mod scanner;
-pub mod rules;
 pub mod fix_generator;
-pub mod utils;
-pub mod security;
+pub mod github;
+pub mod models;
 pub mod rate_limiter;
+pub mod rules;
+pub mod scanner;
+pub mod security;
+pub mod utils;
 
 // Re-export commonly used types (types added in later phases)
 // pub use models::{

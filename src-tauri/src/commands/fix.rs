@@ -3,14 +3,14 @@
 //! Handles AI-generated fix creation and application to source files
 
 use crate::db::{self, queries};
-use crate::models::Fix;
-use crate::security::path_validation;
-use crate::rate_limiter::{RateLimiter, RateLimiterConfig};
-use crate::utils::create_audit_event;
 use crate::fix_generator::grok_client::GrokClient;
+use crate::models::Fix;
+use crate::rate_limiter::{RateLimiter, RateLimiterConfig};
+use crate::security::path_validation;
+use crate::utils::create_audit_event;
+use once_cell::sync::Lazy;
 use std::path::Path;
 use std::sync::Arc;
-use once_cell::sync::Lazy;
 
 // Global rate limiter instance (shared across all fix generation calls)
 static RATE_LIMITER: Lazy<Arc<RateLimiter>> = Lazy::new(|| {
@@ -87,9 +87,7 @@ fn normalize_fixed_code(raw: &str) -> String {
 ///
 /// Returns: Generated Fix object or error
 #[tauri::command]
-pub async fn generate_fix(
-    violation_id: i64,
-) -> Result<Fix, String> {
+pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
     // Phase 1: Read all required data from database (scoped to drop guard before awaits)
     let (_violation, _scan_project_id, _project_path, _project_framework, file_path) = {
         let conn = db::get_connection();
@@ -109,39 +107,47 @@ pub async fn generate_fix(
             .ok_or_else(|| "Project not found".to_string())?;
 
         // Validate and save file path
-        let file_path = path_validation::validate_file_path(
-            Path::new(&project.path),
-            &violation.file_path
-        ).map_err(|e| format!("Security: Invalid file path: {}", e))?;
+        let file_path =
+            path_validation::validate_file_path(Path::new(&project.path), &violation.file_path)
+                .map_err(|e| format!("Security: Invalid file path: {}", e))?;
 
-        (violation.clone(), scan.project_id, project.path, project.framework, file_path)
+        (
+            violation.clone(),
+            scan.project_id,
+            project.path,
+            project.framework,
+            file_path,
+        )
     }; // MutexGuard dropped here
 
     // Validate file exists (doesn't need DB connection)
-    let _file_content = std::fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let _file_content =
+        std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     // Phase 2: Invoke AI fix generation (no DB connection held)
     // Check rate limit before calling agent
-    RATE_LIMITER.check_rate_limit().await
+    RATE_LIMITER
+        .check_rate_limit()
+        .await
         .map_err(|e| format!("API rate limit: {}", e))?;
 
     // Call Claude API to generate fix
-    let grok_client = GrokClient::new()
-        .map_err(|e| format!("Failed to create Claude client: {}", e))?;
+    let grok_client =
+        GrokClient::new().map_err(|e| format!("Failed to create Claude client: {}", e))?;
 
     let framework_str = _project_framework.as_deref().unwrap_or("unknown");
 
-    let fixed_code_raw = grok_client.generate_fix(
-        &_violation.control_id,
-        &_violation.description,
-        &_violation.code_snippet,
-        framework_str,
-        _violation.function_name.as_deref(),
-        _violation.class_name.as_deref(),
-    )
-    .await
-    .map_err(|e| format!("Claude API error: {}", e))?;
+    let fixed_code_raw = grok_client
+        .generate_fix(
+            &_violation.control_id,
+            &_violation.description,
+            &_violation.code_snippet,
+            framework_str,
+            _violation.function_name.as_deref(),
+            _violation.class_name.as_deref(),
+        )
+        .await
+        .map_err(|e| format!("Claude API error: {}", e))?;
 
     // Strip Markdown fences (```lang ... ```) and keep only the inner code.
     let fixed_code = normalize_fixed_code(&fixed_code_raw);
@@ -173,8 +179,8 @@ pub async fn generate_fix(
             backup_path: None,
         };
 
-        let fix_id = queries::insert_fix(&conn, &fix)
-            .map_err(|e| format!("Failed to save fix: {}", e))?;
+        let fix_id =
+            queries::insert_fix(&conn, &fix).map_err(|e| format!("Failed to save fix: {}", e))?;
 
         // Log audit event
         if let Ok(event) = create_audit_event(
@@ -319,9 +325,8 @@ Found {} occurrences but none covered that line.",
 
     let end_idx = start_idx + original_code.len();
 
-    let mut updated = String::with_capacity(
-        file_content.len() - original_code.len() + fixed_code.len(),
-    );
+    let mut updated =
+        String::with_capacity(file_content.len() - original_code.len() + fixed_code.len());
     updated.push_str(&file_content[..start_idx]);
     updated.push_str(fixed_code);
     updated.push_str(&file_content[end_idx..]);
@@ -363,14 +368,12 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
     let repo_path = Path::new(&project.path);
 
     // Validate file path with path traversal protection
-    let file_path = path_validation::validate_file_path(
-        repo_path,
-        &violation.file_path
-    ).map_err(|e| format!("Security: Invalid file path: {}", e))?;
+    let file_path = path_validation::validate_file_path(repo_path, &violation.file_path)
+        .map_err(|e| format!("Security: Invalid file path: {}", e))?;
 
     // Apply fix to file content using pure function
-    let file_content = std::fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let file_content =
+        std::fs::read_to_string(&file_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
     // Normalize fixed_code again at apply time so that older fixes in the
     // database (created before normalization existed) are still applied
@@ -392,7 +395,8 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
     std::fs::create_dir_all(&backup_dir)
         .map_err(|e| format!("Failed to create backup directory: {}", e))?;
 
-    let backup_file_name = file_path.file_name()
+    let backup_file_name = file_path
+        .file_name()
         .ok_or_else(|| "Failed to extract filename from path".to_string())?;
     let backup_file_name_str = backup_file_name.to_string_lossy();
     let backup_name = format!("{}_{}", backup_file_name_str, timestamp);
@@ -427,13 +431,16 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
         let _ = queries::insert_audit_event(&conn, &event);
     }
 
-    Ok(format!("Fix applied successfully to {}", violation.file_path))
+    Ok(format!(
+        "Fix applied successfully to {}",
+        violation.file_path
+    ))
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::db::test_helpers::TestDbGuard;
     use super::*;
+    use crate::db::test_helpers::TestDbGuard;
 
     #[tokio::test]
     #[serial_test::serial]
@@ -480,15 +487,11 @@ mod tests {
     #[test]
     fn test_apply_fix_to_content_line_specific() {
         // File with SAME code on multiple lines
-        let content = "import os\npassword = \"secret123\"\napi_key = \"secret123\"\ntoken = \"secret123\"\n";
+        let content =
+            "import os\npassword = \"secret123\"\napi_key = \"secret123\"\ntoken = \"secret123\"\n";
 
         // Replace ONLY line 2
-        let result = apply_fix_to_content(
-            content,
-            "\"secret123\"",
-            "os.getenv(\"PASSWORD\")",
-            2
-        );
+        let result = apply_fix_to_content(content, "\"secret123\"", "os.getenv(\"PASSWORD\")", 2);
 
         assert!(result.is_ok());
         let updated = result.unwrap();
@@ -498,7 +501,7 @@ mod tests {
         assert_eq!(lines[0], "import os");
         assert_eq!(lines[1], "password = os.getenv(\"PASSWORD\")");
         assert_eq!(lines[2], "api_key = \"secret123\""); // Unchanged
-        assert_eq!(lines[3], "token = \"secret123\"");   // Unchanged
+        assert_eq!(lines[3], "token = \"secret123\""); // Unchanged
     }
 
     /// Test apply_fix_to_content line out of range (pure function, no git)
@@ -508,12 +511,7 @@ mod tests {
 
         // Line 10 is out of range (file has 3 lines) but we still expect the
         // snippet to be replaced if it exists anywhere in the file.
-        let result = apply_fix_to_content(
-            content,
-            "line1",
-            "fixed",
-            10
-        );
+        let result = apply_fix_to_content(content, "line1", "fixed", 10);
 
         assert!(result.is_ok());
         let updated = result.unwrap();
@@ -526,12 +524,7 @@ mod tests {
         let content = "actual_code_here\n";
 
         // Original code doesn't match line content
-        let result = apply_fix_to_content(
-            content,
-            "wrong_code",
-            "fixed",
-            1
-        );
+        let result = apply_fix_to_content(content, "wrong_code", "fixed", 1);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Original code not found"));
@@ -657,7 +650,7 @@ mod tests {
     /// Test no trailing newline in input
     #[test]
     fn test_apply_fix_to_content_no_trailing_newline() {
-        let content = "line1\nline2\nline3";  // No \n at end
+        let content = "line1\nline2\nline3"; // No \n at end
         let result = apply_fix_to_content(content, "line2", "LINE2", 2);
         assert!(result.is_ok());
         let updated = result.unwrap();
@@ -670,7 +663,7 @@ mod tests {
     /// Test trailing newline in input (gets stripped by .lines())
     #[test]
     fn test_apply_fix_to_content_trailing_newline() {
-        let content = "line1\nline2\nline3\n";  // Trailing \n
+        let content = "line1\nline2\nline3\n"; // Trailing \n
         let result = apply_fix_to_content(content, "line2", "LINE2", 2);
         assert!(result.is_ok());
         let updated = result.unwrap();
@@ -685,7 +678,7 @@ mod tests {
     /// Test multiple trailing newlines
     #[test]
     fn test_apply_fix_to_content_multiple_trailing_newlines() {
-        let content = "line1\nline2\n\n\n";  // Multiple trailing newlines
+        let content = "line1\nline2\n\n\n"; // Multiple trailing newlines
         let result = apply_fix_to_content(content, "line1", "LINE1", 1);
         assert!(result.is_ok());
         let updated = result.unwrap();
@@ -708,7 +701,7 @@ mod tests {
         let updated = result.unwrap();
         let lines: Vec<&str> = updated.lines().collect();
         assert_eq!(lines[0], "CODE");
-        assert_eq!(lines[1], "   \t");  // Whitespace preserved
+        assert_eq!(lines[1], "   \t"); // Whitespace preserved
         assert_eq!(lines[2], "more code");
     }
 
@@ -789,7 +782,7 @@ mod tests {
         let updated = result.unwrap();
         let lines: Vec<&str> = updated.lines().collect();
         assert_eq!(lines[1], "  return 100;");
-        assert_eq!(lines[4], "  return 42;");  // Line 5 unchanged
+        assert_eq!(lines[4], "  return 42;"); // Line 5 unchanged
     }
 
     /// Test with file containing only newlines
@@ -817,7 +810,7 @@ mod tests {
     #[test]
     fn test_apply_fix_to_content_boundary_past_last() {
         let content = "line1\nline2\nline3";
-        let result = apply_fix_to_content(content, "line", "LINE", 4);  // File has 3 lines
+        let result = apply_fix_to_content(content, "line", "LINE", 4); // File has 3 lines
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.contains("not found on or around line"));
@@ -833,7 +826,7 @@ mod tests {
         // Behavior depends on how negative is cast to usize
         // On most platforms, large negative becomes huge positive (out of range)
         // Let's just verify it doesn't crash
-        let _ = result;  // Either error or success is acceptable
+        let _ = result; // Either error or success is acceptable
     }
 
     /// Test multi-line original_code replacement
