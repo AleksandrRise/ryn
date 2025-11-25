@@ -1,14 +1,20 @@
-use rusqlite::{Connection, params, OptionalExtension};
-use anyhow::{Result, Context};
 use crate::models::*;
+use anyhow::{Context, Result};
+use rusqlite::{params, Connection, OptionalExtension};
 
 // ===== PROJECT CRUD =====
 
-pub fn insert_project(conn: &Connection, name: &str, path: &str, framework: Option<&str>) -> Result<i64> {
+pub fn insert_project(
+    conn: &Connection,
+    name: &str,
+    path: &str,
+    framework: Option<&str>,
+) -> Result<i64> {
     conn.execute(
         "INSERT INTO projects (name, path, framework) VALUES (?, ?, ?)",
         params![name, path, framework],
-    ).context("Failed to insert project")?;
+    )
+    .context("Failed to insert project")?;
 
     Ok(conn.last_insert_rowid())
 }
@@ -38,7 +44,9 @@ pub fn select_projects(conn: &Connection) -> Result<Vec<Project>> {
 
 pub fn select_project(conn: &Connection, id: i64) -> Result<Option<Project>> {
     let mut stmt = conn
-        .prepare("SELECT id, name, path, framework, created_at, updated_at FROM projects WHERE id = ?")
+        .prepare(
+            "SELECT id, name, path, framework, created_at, updated_at FROM projects WHERE id = ?",
+        )
         .context("Failed to prepare select project query")?;
 
     let project = stmt
@@ -60,7 +68,9 @@ pub fn select_project(conn: &Connection, id: i64) -> Result<Option<Project>> {
 
 pub fn select_project_by_path(conn: &Connection, path: &str) -> Result<Option<Project>> {
     let mut stmt = conn
-        .prepare("SELECT id, name, path, framework, created_at, updated_at FROM projects WHERE path = ?")
+        .prepare(
+            "SELECT id, name, path, framework, created_at, updated_at FROM projects WHERE path = ?",
+        )
         .context("Failed to prepare select project by path query")?;
 
     let project = stmt
@@ -80,21 +90,25 @@ pub fn select_project_by_path(conn: &Connection, path: &str) -> Result<Option<Pr
     Ok(project)
 }
 
-pub fn update_project(conn: &Connection, id: i64, name: &str, framework: Option<&str>) -> Result<()> {
+pub fn update_project(
+    conn: &Connection,
+    id: i64,
+    name: &str,
+    framework: Option<&str>,
+) -> Result<()> {
     let updated_at = chrono::Utc::now().to_rfc3339();
     conn.execute(
         "UPDATE projects SET name = ?, framework = ?, updated_at = ? WHERE id = ?",
         params![name, framework, updated_at, id],
-    ).context("Failed to update project")?;
+    )
+    .context("Failed to update project")?;
 
     Ok(())
 }
 
 pub fn delete_project(conn: &Connection, id: i64) -> Result<()> {
-    conn.execute(
-        "DELETE FROM projects WHERE id = ?",
-        params![id],
-    ).context("Failed to delete project")?;
+    conn.execute("DELETE FROM projects WHERE id = ?", params![id])
+        .context("Failed to delete project")?;
 
     Ok(())
 }
@@ -105,7 +119,8 @@ pub fn insert_scan(conn: &Connection, project_id: i64, scan_mode: &str) -> Resul
     conn.execute(
         "INSERT INTO scans (project_id, status, scan_mode) VALUES (?, ?, ?)",
         params![project_id, "running", scan_mode],
-    ).context("Failed to insert scan")?;
+    )
+    .context("Failed to insert scan")?;
 
     Ok(conn.last_insert_rowid())
 }
@@ -169,20 +184,33 @@ pub fn select_scan(conn: &Connection, id: i64) -> Result<Option<Scan>> {
     Ok(scan)
 }
 
-pub fn update_scan_status(conn: &Connection, id: i64, status: &str, completed_at: Option<&str>) -> Result<()> {
+pub fn update_scan_status(
+    conn: &Connection,
+    id: i64,
+    status: &str,
+    completed_at: Option<&str>,
+) -> Result<()> {
     conn.execute(
         "UPDATE scans SET status = ?, completed_at = ? WHERE id = ?",
         params![status, completed_at, id],
-    ).context("Failed to update scan status")?;
+    )
+    .context("Failed to update scan status")?;
 
     Ok(())
 }
 
-pub fn update_scan_results(conn: &Connection, id: i64, files_scanned: i32, total_files: i32, violations_found: i32) -> Result<()> {
+pub fn update_scan_results(
+    conn: &Connection,
+    id: i64,
+    files_scanned: i32,
+    total_files: i32,
+    violations_found: i32,
+) -> Result<()> {
     conn.execute(
         "UPDATE scans SET files_scanned = ?, total_files = ?, violations_found = ? WHERE id = ?",
         params![files_scanned, total_files, violations_found, id],
-    ).context("Failed to update scan results")?;
+    )
+    .context("Failed to update scan results")?;
 
     Ok(())
 }
@@ -282,7 +310,8 @@ pub fn update_violation_status(conn: &Connection, id: i64, status: &str) -> Resu
     conn.execute(
         "UPDATE violations SET status = ? WHERE id = ?",
         params![status, id],
-    ).context("Failed to update violation status")?;
+    )
+    .context("Failed to update violation status")?;
 
     Ok(())
 }
@@ -357,12 +386,18 @@ pub fn select_fix_for_violation(conn: &Connection, violation_id: i64) -> Result<
     Ok(fix)
 }
 
-pub fn update_fix_applied(conn: &Connection, id: i64, git_commit_sha: &str, backup_path: Option<&str>) -> Result<()> {
+pub fn update_fix_applied(
+    conn: &Connection,
+    id: i64,
+    git_commit_sha: &str,
+    backup_path: Option<&str>,
+) -> Result<()> {
     let applied_at = chrono::Utc::now().to_rfc3339();
     conn.execute(
         "UPDATE fixes SET applied_at = ?, git_commit_sha = ?, backup_path = ? WHERE id = ?",
         params![applied_at, git_commit_sha, backup_path, id],
-    ).context("Failed to update fix applied")?;
+    )
+    .context("Failed to update fix applied")?;
 
     Ok(())
 }
@@ -410,7 +445,10 @@ pub fn select_audit_events(conn: &Connection, limit: i64) -> Result<Vec<AuditEve
     Ok(events)
 }
 
-pub fn select_audit_events_by_project(conn: &Connection, project_id: i64) -> Result<Vec<AuditEvent>> {
+pub fn select_audit_events_by_project(
+    conn: &Connection,
+    project_id: i64,
+) -> Result<Vec<AuditEvent>> {
     let mut stmt = conn
         .prepare("SELECT id, event_type, project_id, violation_id, fix_id, description, metadata, created_at FROM audit_events WHERE project_id = ? ORDER BY created_at DESC")
         .context("Failed to prepare select audit events query")?;
@@ -487,7 +525,8 @@ pub fn insert_or_update_setting(conn: &Connection, key: &str, value: &str) -> Re
     conn.execute(
         "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
         params![key, value, updated_at],
-    ).context("Failed to insert or update setting")?;
+    )
+    .context("Failed to insert or update setting")?;
 
     Ok(())
 }
@@ -532,10 +571,8 @@ pub fn select_all_settings(conn: &Connection) -> Result<Vec<Settings>> {
 }
 
 pub fn delete_setting(conn: &Connection, key: &str) -> Result<()> {
-    conn.execute(
-        "DELETE FROM settings WHERE key = ?",
-        params![key],
-    ).context("Failed to delete setting")?;
+    conn.execute("DELETE FROM settings WHERE key = ?", params![key])
+        .context("Failed to delete setting")?;
 
     Ok(())
 }
@@ -553,26 +590,27 @@ pub fn select_all_scans(conn: &Connection) -> Result<Vec<Scan>> {
          ORDER BY started_at DESC"
     ).context("Failed to prepare select all scans statement")?;
 
-    let scans = stmt.query_map([], |row| {
-        Ok(Scan {
-            id: row.get(0)?,
-            project_id: row.get(1)?,
-            status: row.get(2)?,
-            files_scanned: row.get(3)?,
-            total_files: row.get(4)?,
-            violations_found: row.get(5)?,
-            started_at: row.get(6)?,
-            completed_at: row.get(7)?,
-            scan_mode: row.get(8)?,
-            critical_count: 0,
-            high_count: 0,
-            medium_count: 0,
-            low_count: 0,
+    let scans = stmt
+        .query_map([], |row| {
+            Ok(Scan {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                status: row.get(2)?,
+                files_scanned: row.get(3)?,
+                total_files: row.get(4)?,
+                violations_found: row.get(5)?,
+                started_at: row.get(6)?,
+                completed_at: row.get(7)?,
+                scan_mode: row.get(8)?,
+                critical_count: 0,
+                high_count: 0,
+                medium_count: 0,
+                low_count: 0,
+            })
         })
-    })
-    .context("Failed to query all scans")?
-    .collect::<rusqlite::Result<Vec<_>>>()
-    .context("Failed to collect all scans")?;
+        .context("Failed to query all scans")?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Failed to collect all scans")?;
 
     Ok(scans)
 }
@@ -584,29 +622,30 @@ pub fn select_all_violations(conn: &Connection) -> Result<Vec<Violation>> {
          ORDER BY detected_at DESC"
     ).context("Failed to prepare select all violations statement")?;
 
-    let violations = stmt.query_map([], |row| {
-        Ok(Violation {
-            id: row.get(0)?,
-            scan_id: row.get(1)?,
-            control_id: row.get(2)?,
-            severity: row.get(3)?,
-            description: row.get(4)?,
-            file_path: row.get(5)?,
-            line_number: row.get(6)?,
-            code_snippet: row.get(7)?,
-            status: row.get(8)?,
-            detected_at: row.get(9)?,
-            detection_method: row.get(10)?,
-            confidence_score: row.get(11)?,
-            llm_reasoning: row.get(12)?,
-            regex_reasoning: row.get(13)?,
-            function_name: row.get(14)?,
-            class_name: row.get(15)?,
+    let violations = stmt
+        .query_map([], |row| {
+            Ok(Violation {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                control_id: row.get(2)?,
+                severity: row.get(3)?,
+                description: row.get(4)?,
+                file_path: row.get(5)?,
+                line_number: row.get(6)?,
+                code_snippet: row.get(7)?,
+                status: row.get(8)?,
+                detected_at: row.get(9)?,
+                detection_method: row.get(10)?,
+                confidence_score: row.get(11)?,
+                llm_reasoning: row.get(12)?,
+                regex_reasoning: row.get(13)?,
+                function_name: row.get(14)?,
+                class_name: row.get(15)?,
+            })
         })
-    })
-    .context("Failed to query all violations")?
-    .collect::<rusqlite::Result<Vec<_>>>()
-    .context("Failed to collect all violations")?;
+        .context("Failed to query all violations")?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Failed to collect all violations")?;
 
     Ok(violations)
 }
@@ -618,23 +657,24 @@ pub fn select_all_fixes(conn: &Connection) -> Result<Vec<Fix>> {
          ORDER BY id DESC"
     ).context("Failed to prepare select all fixes statement")?;
 
-    let fixes = stmt.query_map([], |row| {
-        Ok(Fix {
-            id: row.get(0)?,
-            violation_id: row.get(1)?,
-            original_code: row.get(2)?,
-            fixed_code: row.get(3)?,
-            explanation: row.get(4)?,
-            trust_level: row.get(5)?,
-            applied_at: row.get(6)?,
-            applied_by: row.get(7)?,
-            git_commit_sha: row.get(8)?,
-            backup_path: row.get(9)?,
+    let fixes = stmt
+        .query_map([], |row| {
+            Ok(Fix {
+                id: row.get(0)?,
+                violation_id: row.get(1)?,
+                original_code: row.get(2)?,
+                fixed_code: row.get(3)?,
+                explanation: row.get(4)?,
+                trust_level: row.get(5)?,
+                applied_at: row.get(6)?,
+                applied_by: row.get(7)?,
+                git_commit_sha: row.get(8)?,
+                backup_path: row.get(9)?,
+            })
         })
-    })
-    .context("Failed to query all fixes")?
-    .collect::<rusqlite::Result<Vec<_>>>()
-    .context("Failed to collect all fixes")?;
+        .context("Failed to query all fixes")?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Failed to collect all fixes")?;
 
     Ok(fixes)
 }
@@ -646,21 +686,22 @@ pub fn select_all_audit_events(conn: &Connection) -> Result<Vec<AuditEvent>> {
          ORDER BY created_at DESC"
     ).context("Failed to prepare select all audit events statement")?;
 
-    let events = stmt.query_map([], |row| {
-        Ok(AuditEvent {
-            id: row.get(0)?,
-            event_type: row.get(1)?,
-            project_id: row.get(2)?,
-            violation_id: row.get(3)?,
-            fix_id: row.get(4)?,
-            description: row.get(5)?,
-            metadata: row.get(6)?,
-            created_at: row.get(7)?,
+    let events = stmt
+        .query_map([], |row| {
+            Ok(AuditEvent {
+                id: row.get(0)?,
+                event_type: row.get(1)?,
+                project_id: row.get(2)?,
+                violation_id: row.get(3)?,
+                fix_id: row.get(4)?,
+                description: row.get(5)?,
+                metadata: row.get(6)?,
+                created_at: row.get(7)?,
+            })
         })
-    })
-    .context("Failed to query all audit events")?
-    .collect::<rusqlite::Result<Vec<_>>>()
-    .context("Failed to collect all audit events")?;
+        .context("Failed to query all audit events")?
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .context("Failed to collect all audit events")?;
 
     Ok(events)
 }
@@ -669,18 +710,20 @@ pub fn select_all_audit_events(conn: &Connection) -> Result<Vec<AuditEvent>> {
 ///
 /// Returns tuple of (critical, high, medium, low) counts
 pub fn get_severity_counts(conn: &Connection, scan_id: i64) -> Result<(i32, i32, i32, i32)> {
-    let mut stmt = conn.prepare(
-        "SELECT severity, COUNT(*) FROM violations WHERE scan_id = ? GROUP BY severity"
-    ).context("Failed to prepare severity counts query")?;
+    let mut stmt = conn
+        .prepare("SELECT severity, COUNT(*) FROM violations WHERE scan_id = ? GROUP BY severity")
+        .context("Failed to prepare severity counts query")?;
 
     let mut critical = 0;
     let mut high = 0;
     let mut medium = 0;
     let mut low = 0;
 
-    let rows = stmt.query_map([scan_id], |row| {
-        Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?))
-    }).context("Failed to query severity counts")?;
+    let rows = stmt
+        .query_map([scan_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?))
+        })
+        .context("Failed to query severity counts")?;
 
     for result in rows {
         let (severity, count) = result.context("Failed to process severity row")?;
@@ -821,11 +864,370 @@ pub fn select_all_scan_costs(conn: &Connection) -> Result<Vec<ScanCost>> {
     Ok(scan_costs)
 }
 
+// ===== GITHUB CONNECTION CRUD =====
+
+use crate::models::{GitHubConnection, GitHubRepo, TrackedRepo, TrackedRepoWithDetails};
+
+pub fn insert_github_connection(
+    conn: &Connection,
+    access_token: &str,
+    refresh_token: Option<&str>,
+    token_expires_at: Option<&str>,
+    github_user_id: i64,
+    github_username: &str,
+    github_avatar_url: Option<&str>,
+    github_email: Option<&str>,
+) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO github_connections (access_token, refresh_token, token_expires_at, github_user_id, github_username, github_avatar_url, github_email)
+         VALUES (?, ?, ?, ?, ?, ?, ?)",
+        params![access_token, refresh_token, token_expires_at, github_user_id, github_username, github_avatar_url, github_email],
+    ).context("Failed to insert GitHub connection")?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn select_github_connection(conn: &Connection) -> Result<Option<GitHubConnection>> {
+    let mut stmt = conn
+        .prepare("SELECT id, access_token, refresh_token, token_expires_at, github_user_id, github_username, github_avatar_url, github_email, created_at, updated_at FROM github_connections LIMIT 1")
+        .context("Failed to prepare select GitHub connection query")?;
+
+    let connection = stmt
+        .query_row([], |row| {
+            Ok(GitHubConnection {
+                id: row.get(0)?,
+                access_token: row.get(1)?,
+                refresh_token: row.get(2)?,
+                token_expires_at: row.get(3)?,
+                github_user_id: row.get(4)?,
+                github_username: row.get(5)?,
+                github_avatar_url: row.get(6)?,
+                github_email: row.get(7)?,
+                created_at: row.get(8)?,
+                updated_at: row.get(9)?,
+            })
+        })
+        .optional()
+        .context("Failed to query GitHub connection")?;
+
+    Ok(connection)
+}
+
+pub fn update_github_connection_token(
+    conn: &Connection,
+    id: i64,
+    access_token: &str,
+    refresh_token: Option<&str>,
+    token_expires_at: Option<&str>,
+) -> Result<()> {
+    let updated_at = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE github_connections SET access_token = ?, refresh_token = ?, token_expires_at = ?, updated_at = ? WHERE id = ?",
+        params![access_token, refresh_token, token_expires_at, updated_at, id],
+    ).context("Failed to update GitHub connection token")?;
+
+    Ok(())
+}
+
+pub fn delete_github_connection(conn: &Connection) -> Result<()> {
+    conn.execute("DELETE FROM github_connections", [])
+        .context("Failed to delete GitHub connection")?;
+    Ok(())
+}
+
+// ===== GITHUB REPOS CRUD =====
+
+pub fn upsert_github_repo(conn: &Connection, repo: &GitHubRepo) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO github_repos (github_id, name, full_name, owner, html_url, clone_url, description, private, language, stargazers_count, default_branch, fetched_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(github_id) DO UPDATE SET
+            name = excluded.name,
+            full_name = excluded.full_name,
+            owner = excluded.owner,
+            html_url = excluded.html_url,
+            clone_url = excluded.clone_url,
+            description = excluded.description,
+            private = excluded.private,
+            language = excluded.language,
+            stargazers_count = excluded.stargazers_count,
+            default_branch = excluded.default_branch,
+            fetched_at = excluded.fetched_at",
+        params![
+            repo.github_id,
+            repo.name,
+            repo.full_name,
+            repo.owner,
+            repo.html_url,
+            repo.clone_url,
+            repo.description,
+            repo.private,
+            repo.language,
+            repo.stargazers_count,
+            repo.default_branch,
+            repo.fetched_at
+        ],
+    ).context("Failed to upsert GitHub repo")?;
+
+    // Get the ID (either new or existing)
+    let id: i64 = conn
+        .query_row(
+            "SELECT id FROM github_repos WHERE github_id = ?",
+            params![repo.github_id],
+            |row| row.get(0),
+        )
+        .context("Failed to get GitHub repo ID")?;
+
+    Ok(id)
+}
+
+pub fn select_github_repos(conn: &Connection) -> Result<Vec<GitHubRepo>> {
+    let mut stmt = conn
+        .prepare("SELECT id, github_id, name, full_name, owner, html_url, clone_url, description, private, language, stargazers_count, default_branch, fetched_at FROM github_repos ORDER BY name")
+        .context("Failed to prepare select GitHub repos query")?;
+
+    let repos = stmt
+        .query_map([], |row| {
+            Ok(GitHubRepo {
+                id: row.get(0)?,
+                github_id: row.get(1)?,
+                name: row.get(2)?,
+                full_name: row.get(3)?,
+                owner: row.get(4)?,
+                html_url: row.get(5)?,
+                clone_url: row.get(6)?,
+                description: row.get(7)?,
+                private: row.get(8)?,
+                language: row.get(9)?,
+                stargazers_count: row.get(10)?,
+                default_branch: row.get(11)?,
+                fetched_at: row.get(12)?,
+            })
+        })
+        .context("Failed to map GitHub repos from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect GitHub repos")?;
+
+    Ok(repos)
+}
+
+pub fn select_github_repo(conn: &Connection, id: i64) -> Result<Option<GitHubRepo>> {
+    let mut stmt = conn
+        .prepare("SELECT id, github_id, name, full_name, owner, html_url, clone_url, description, private, language, stargazers_count, default_branch, fetched_at FROM github_repos WHERE id = ?")
+        .context("Failed to prepare select GitHub repo query")?;
+
+    let repo = stmt
+        .query_row(params![id], |row| {
+            Ok(GitHubRepo {
+                id: row.get(0)?,
+                github_id: row.get(1)?,
+                name: row.get(2)?,
+                full_name: row.get(3)?,
+                owner: row.get(4)?,
+                html_url: row.get(5)?,
+                clone_url: row.get(6)?,
+                description: row.get(7)?,
+                private: row.get(8)?,
+                language: row.get(9)?,
+                stargazers_count: row.get(10)?,
+                default_branch: row.get(11)?,
+                fetched_at: row.get(12)?,
+            })
+        })
+        .optional()
+        .context("Failed to query GitHub repo")?;
+
+    Ok(repo)
+}
+
+pub fn delete_all_github_repos(conn: &Connection) -> Result<()> {
+    conn.execute("DELETE FROM github_repos", [])
+        .context("Failed to delete all GitHub repos")?;
+    Ok(())
+}
+
+// ===== TRACKED REPOS CRUD =====
+
+pub fn insert_tracked_repo(conn: &Connection, github_repo_id: i64) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO tracked_repos (github_repo_id) VALUES (?)",
+        params![github_repo_id],
+    )
+    .context("Failed to insert tracked repo")?;
+
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn select_tracked_repos(conn: &Connection) -> Result<Vec<TrackedRepo>> {
+    let mut stmt = conn
+        .prepare("SELECT id, github_repo_id, local_path, last_scanned_at, is_active, added_at FROM tracked_repos WHERE is_active = 1 ORDER BY added_at DESC")
+        .context("Failed to prepare select tracked repos query")?;
+
+    let repos = stmt
+        .query_map([], |row| {
+            Ok(TrackedRepo {
+                id: row.get(0)?,
+                github_repo_id: row.get(1)?,
+                local_path: row.get(2)?,
+                last_scanned_at: row.get(3)?,
+                is_active: row.get(4)?,
+                added_at: row.get(5)?,
+            })
+        })
+        .context("Failed to map tracked repos from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect tracked repos")?;
+
+    Ok(repos)
+}
+
+pub fn select_tracked_repos_with_details(conn: &Connection) -> Result<Vec<TrackedRepoWithDetails>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT tr.id,
+                    tr.local_path,
+                    tr.last_scanned_at,
+                    tr.last_checked_at,
+                    tr.last_commit_sha,
+                    tr.is_active,
+                    tr.added_at,
+                    gr.id, gr.github_id, gr.name, gr.full_name, gr.owner, gr.html_url, gr.clone_url,
+                    gr.description, gr.private, gr.language, gr.stargazers_count, gr.default_branch, gr.fetched_at,
+                    -- Aggregated violation counts scoped to the tracked repo's local path
+                    COALESCE((
+                        SELECT COUNT(*)
+                        FROM violations v
+                        JOIN scans s ON v.scan_id = s.id
+                        JOIN projects p ON s.project_id = p.id
+                        WHERE p.path = tr.local_path
+                    ), 0) AS total_violations,
+                    COALESCE((
+                        SELECT COUNT(*)
+                        FROM violations v
+                        JOIN scans s ON v.scan_id = s.id
+                        JOIN projects p ON s.project_id = p.id
+                        WHERE p.path = tr.local_path AND v.severity = 'critical'
+                    ), 0) AS critical_violations,
+                    (
+                        SELECT s.status
+                        FROM scans s
+                        JOIN projects p ON s.project_id = p.id
+                        WHERE p.path = tr.local_path
+                        ORDER BY s.started_at DESC
+                        LIMIT 1
+                    ) AS last_scan_status
+             FROM tracked_repos tr
+             JOIN github_repos gr ON tr.github_repo_id = gr.id
+             WHERE tr.is_active = 1
+             ORDER BY tr.added_at DESC"
+        )
+        .context("Failed to prepare select tracked repos with details query")?;
+
+    let repos = stmt
+        .query_map([], |row| {
+            Ok(TrackedRepoWithDetails {
+                id: row.get(0)?,
+                local_path: row.get(1)?,
+                last_scanned_at: row.get(2)?,
+                last_checked_at: row.get(3)?,
+                last_commit_sha: row.get(4)?,
+                is_active: row.get(5)?,
+                added_at: row.get(6)?,
+                github_repo: GitHubRepo {
+                    id: row.get(7)?,
+                    github_id: row.get(8)?,
+                    name: row.get(9)?,
+                    full_name: row.get(10)?,
+                    owner: row.get(11)?,
+                    html_url: row.get(12)?,
+                    clone_url: row.get(13)?,
+                    description: row.get(14)?,
+                    private: row.get(15)?,
+                    language: row.get(16)?,
+                    stargazers_count: row.get(17)?,
+                    default_branch: row.get(18)?,
+                    fetched_at: row.get(19)?,
+                },
+                total_violations: row.get(20)?,
+                critical_violations: row.get(21)?,
+                last_scan_status: row.get(22)?,
+            })
+        })
+        .context("Failed to map tracked repos with details from query")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect tracked repos with details")?;
+
+    Ok(repos)
+}
+
+pub fn update_tracked_repo_local_path(conn: &Connection, id: i64, local_path: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE tracked_repos SET local_path = ? WHERE id = ?",
+        params![local_path, id],
+    )
+    .context("Failed to update tracked repo local path")?;
+
+    Ok(())
+}
+
+pub fn update_tracked_repo_last_scanned(conn: &Connection, id: i64) -> Result<()> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE tracked_repos SET last_scanned_at = ? WHERE id = ?",
+        params![now, id],
+    )
+    .context("Failed to update tracked repo last_scanned_at")?;
+
+    Ok(())
+}
+
+pub fn delete_tracked_repo(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute(
+        "UPDATE tracked_repos SET is_active = 0 WHERE id = ?",
+        params![id],
+    )
+    .context("Failed to soft-delete tracked repo")?;
+
+    Ok(())
+}
+
+pub fn is_repo_tracked(conn: &Connection, github_repo_id: i64) -> Result<bool> {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM tracked_repos WHERE github_repo_id = ? AND is_active = 1",
+            params![github_repo_id],
+            |row| row.get(0),
+        )
+        .context("Failed to check if repo is tracked")?;
+
+    Ok(count > 0)
+}
+
+pub fn get_tracked_repo_count(conn: &Connection) -> Result<i64> {
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM tracked_repos WHERE is_active = 1",
+            [],
+            |row| row.get(0),
+        )
+        .context("Failed to get tracked repo count")?;
+
+    Ok(count)
+}
+
+pub fn get_github_repo_count(conn: &Connection) -> Result<i64> {
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM github_repos", [], |row| row.get(0))
+        .context("Failed to get GitHub repo count")?;
+
+    Ok(count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::init_db;
     use tempfile::TempDir;
-    use crate::db::{init_db};
 
     fn setup_test_db() -> (TempDir, Connection) {
         let temp_dir = TempDir::new().unwrap();

@@ -3,25 +3,25 @@
 //! Handles project scanning, framework detection, and scan progress tracking
 
 use crate::db::{self, queries};
-use crate::models::{Violation, Scan, DetectionMethod, Severity, ScanCost};
+use crate::fix_generator::grok_client::GrokClient;
+use crate::models::{DetectionMethod, Scan, ScanCost, Severity, Violation};
+use crate::rules::{A12ResilienceRule, CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule};
 use crate::scanner::framework_detector::FrameworkDetector;
 use crate::scanner::llm_file_selector;
-use crate::scanner::tree_sitter_utils::{CodeParser, find_context_at_line};
-use crate::scanner::{SKIP_DIRECTORIES, FileWatcher};
-use crate::rules::{CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule, A12ResilienceRule};
+use crate::scanner::tree_sitter_utils::{find_context_at_line, CodeParser};
+use crate::scanner::WatcherHandle;
+use crate::scanner::{FileWatcher, SKIP_DIRECTORIES};
 use crate::security::path_validation;
-use crate::fix_generator::grok_client::GrokClient;
 use crate::utils::create_audit_event;
-use std::path::Path;
-use std::collections::HashMap;
-use std::sync::Mutex;
-use std::sync::Arc;
-use walkdir::WalkDir;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tauri::Emitter;
 use tokio::sync::{oneshot, Semaphore};
 use tokio::time::{timeout, Duration};
-use crate::scanner::WatcherHandle;
+use walkdir::WalkDir;
 
 /// Progress event payload emitted during scan
 #[derive(Clone, Serialize)]
@@ -96,7 +96,8 @@ impl ScanResponseChannels {
         let mut channels = self.cost_limit_responses.lock().unwrap();
 
         if let Some(sender) = channels.remove(&scan_id) {
-            sender.send(continue_scan)
+            sender
+                .send(continue_scan)
                 .map_err(|_| "Failed to send response: receiver dropped".to_string())?;
             Ok(())
         } else {
@@ -157,7 +158,11 @@ impl FileWatcherState {
     /// Start watching a project for file changes
     ///
     /// Creates and stores a FileWatcher for the given project
-    pub fn start_watching(&self, project_id: i64, handle: Arc<WatcherHandle>) -> Result<(), String> {
+    pub fn start_watching(
+        &self,
+        project_id: i64,
+        handle: Arc<WatcherHandle>,
+    ) -> Result<(), String> {
         let mut watchers = self.active_watchers.lock().unwrap();
         watchers.insert(project_id, handle);
         Ok(())
@@ -225,7 +230,7 @@ pub async fn scan_project<R: tauri::Runtime>(
 ///
 /// This function contains the core scanning logic and can be called from tests
 /// without needing to set up Tauri's State management.
-async fn scan_project_internal<R: tauri::Runtime>(
+pub async fn scan_project_internal<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
     channels: &ScanResponseChannels,
     project_id: i64,
@@ -283,7 +288,7 @@ async fn scan_project_internal<R: tauri::Runtime>(
     // Walk through project files
     let mut files_scanned = 0;
     let mut violations_found = 0;
-    let mut regex_violations: Vec<Violation> = Vec::new();  // Collect all regex violations
+    let mut regex_violations: Vec<Violation> = Vec::new(); // Collect all regex violations
 
     for entry in WalkDir::new(&project.path)
         .into_iter()
@@ -324,20 +329,29 @@ async fn scan_project_internal<R: tauri::Runtime>(
                 // Update database every 50 files for persistence
                 if files_scanned % 50 == 0 {
                     let conn = db::get_connection();
-                    let _ = queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found);
+                    let _ = queries::update_scan_results(
+                        &conn,
+                        scan_id,
+                        files_scanned,
+                        total_files,
+                        violations_found,
+                    );
                 }
 
                 // Detect language
                 if let Some(_language) = FrameworkDetector::detect_language(file_path) {
                     // Security: File MUST be within project path
-                    let relative_path = file_path
-                        .strip_prefix(&project.path)
-                        .map_err(|e| format!(
+                    let relative_path =
+                        file_path
+                            .strip_prefix(&project.path)
+                            .map_err(|e| {
+                                format!(
                             "Security: File outside project path: {} (project: {}). Error: {}",
                             file_path.display(), project.path, e
-                        ))?
-                        .to_string_lossy()
-                        .to_string();
+                        )
+                            })?
+                            .to_string_lossy()
+                            .to_string();
 
                     // Run all 4 rule engines and collect violations (don't insert yet)
                     let mut violations = run_all_rules(&content, &relative_path, scan_id);
@@ -348,7 +362,11 @@ async fn scan_project_internal<R: tauri::Runtime>(
                     //   - "smart": files with security-relevant patterns (auth, db, API, secrets, etc.)
                     //   - "analyze_all": all supported language files (.py, .js, .ts, .go, etc.)
                     //   - "regex_only": never (returns false)
-                    if llm_file_selector::should_analyze_with_llm(&relative_path, &content, &llm_scan_mode) {
+                    if llm_file_selector::should_analyze_with_llm(
+                        &relative_path,
+                        &content,
+                        &llm_scan_mode,
+                    ) {
                         files_for_llm_analysis.push((relative_path.clone(), content.clone()));
                     }
                 }
@@ -361,25 +379,31 @@ async fn scan_project_internal<R: tauri::Runtime>(
     }
 
     // Merge regex and LLM violations, then insert deduplicated results
-    println!("[ryn] Merging {} regex violations with LLM results", regex_violations.len());
+    println!(
+        "[ryn] Merging {} regex violations with LLM results",
+        regex_violations.len()
+    );
 
     // Analyze collected files with LLM if any were selected (smart/analyze_all modes)
     let llm_violations_vec = if !files_for_llm_analysis.is_empty() {
-        println!("[ryn] Analyzing {} files with Claude Haiku LLM (mode: {})",
-                  files_for_llm_analysis.len(), llm_scan_mode);
+        println!(
+            "[ryn] Analyzing {} files with Claude Haiku LLM (mode: {})",
+            files_for_llm_analysis.len(),
+            llm_scan_mode
+        );
 
         // Clone channels for async tasks (Arc makes this cheap)
         let channels_arc = Arc::new(channels.clone());
 
-        match analyze_files_with_llm(
-            scan_id,
-            files_for_llm_analysis,
-            channels_arc,
-            app.clone(),
-        ).await {
+        match analyze_files_with_llm(scan_id, files_for_llm_analysis, channels_arc, app.clone())
+            .await
+        {
             Ok((llm_violations, total_cost)) => {
-                println!("[ryn] LLM analysis complete: {} violations, ${:.4} cost",
-                          llm_violations.len(), total_cost);
+                println!(
+                    "[ryn] LLM analysis complete: {} violations, ${:.4} cost",
+                    llm_violations.len(),
+                    total_cost
+                );
                 // TODO: Store detailed token usage in scan_costs table (requires ScanCost model)
                 println!("[ryn] Total scan cost: ${:.4}", total_cost);
                 llm_violations
@@ -391,7 +415,10 @@ async fn scan_project_internal<R: tauri::Runtime>(
             }
         }
     } else {
-        println!("[ryn] No files selected for LLM analysis (mode: {})", llm_scan_mode);
+        println!(
+            "[ryn] No files selected for LLM analysis (mode: {})",
+            llm_scan_mode
+        );
         Vec::new()
     };
 
@@ -411,7 +438,10 @@ async fn scan_project_internal<R: tauri::Runtime>(
         }
     } // Connection dropped here
 
-    println!("[ryn] Inserted {} final violations after deduplication", violations_found);
+    println!(
+        "[ryn] Inserted {} final violations after deduplication",
+        violations_found
+    );
 
     // Update scan with results and fetch final data (scoped to drop connection)
     let scan = {
@@ -432,7 +462,10 @@ async fn scan_project_internal<R: tauri::Runtime>(
             Some(project_id),
             None,
             None,
-            &format!("Scanned {} files, found {} violations", files_scanned, violations_found),
+            &format!(
+                "Scanned {} files, found {} violations",
+                files_scanned, violations_found
+            ),
         ) {
             let _ = queries::insert_audit_event(&conn, &event);
         }
@@ -478,7 +511,10 @@ pub async fn watch_project<R: tauri::Runtime>(
 
     // Validate project ID
     if project_id <= 0 {
-        let err_msg = format!("Invalid project ID: must be greater than 0, got {}", project_id);
+        let err_msg = format!(
+            "Invalid project ID: must be greater than 0, got {}",
+            project_id
+        );
         println!("[ryn] watch_project validation failed: {}", err_msg);
         return Err(err_msg);
     }
@@ -518,7 +554,10 @@ pub async fn watch_project<R: tauri::Runtime>(
 
     // Spawn task to receive events and emit to frontend
     tokio::spawn(async move {
-        println!("[ryn] watch_project: event loop started for project_id={}", project_id);
+        println!(
+            "[ryn] watch_project: event loop started for project_id={}",
+            project_id
+        );
         loop {
             match handle_clone.recv().await {
                 Some(event) => {
@@ -542,8 +581,10 @@ pub async fn watch_project<R: tauri::Runtime>(
                         }
                     };
 
-                    println!("[ryn] watch_project: received event for project_id={}, path={}, type={}",
-                             project_id, file_path, event_type);
+                    println!(
+                        "[ryn] watch_project: received event for project_id={}, path={}, type={}",
+                        project_id, file_path, event_type
+                    );
 
                     let payload = FileChangedEvent {
                         project_id,
@@ -560,14 +601,20 @@ pub async fn watch_project<R: tauri::Runtime>(
                 }
                 None => {
                     // Watcher closed - exit loop
-                    println!("[ryn] watch_project: watcher closed for project_id={}", project_id);
+                    println!(
+                        "[ryn] watch_project: watcher closed for project_id={}",
+                        project_id
+                    );
                     break;
                 }
             }
         }
     });
 
-    println!("[ryn] watch_project success: started watching project_id={}", project_id);
+    println!(
+        "[ryn] watch_project success: started watching project_id={}",
+        project_id
+    );
     Ok(format!("Started watching project {}", project_id))
 }
 
@@ -617,8 +664,9 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
     }
 
     // Verify API key exists before spawning tasks
-    std::env::var("XAI_API_KEY")
-        .map_err(|_| "XAI_API_KEY environment variable not set. Set it to enable LLM scanning.".to_string())?;
+    std::env::var("XAI_API_KEY").map_err(|_| {
+        "XAI_API_KEY environment variable not set. Set it to enable LLM scanning.".to_string()
+    })?;
 
     // Query cost limit from settings (default to $1.00 if not set)
     let cost_limit_usd: f64 = {
@@ -645,7 +693,10 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
     for (batch_idx, chunk) in files.chunks(10).enumerate() {
         // Check for cancellation at start of each batch
         if channels.is_cancelled(scan_id) {
-            println!("[ryn] LLM analysis cancelled by user at batch {}", batch_idx);
+            println!(
+                "[ryn] LLM analysis cancelled by user at batch {}",
+                batch_idx
+            );
             channels.clear_cancel(scan_id);
             break;
         }
@@ -680,12 +731,8 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
                 }; // Connection dropped here
 
                 // Analyze with 30-second timeout
-                let analysis_future = client.analyze_for_violations(
-                    scan_id,
-                    &file_path,
-                    &content,
-                    regex_findings,
-                );
+                let analysis_future =
+                    client.analyze_for_violations(scan_id, &file_path, &content, regex_findings);
 
                 let result = timeout(Duration::from_secs(30), analysis_future).await;
 
@@ -700,12 +747,11 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
                             usage.calculate_cost(),
                         ))
                     }
-                    Ok(Err(e)) => {
-                        Err(format!("LLM analysis failed for {}: {}", file_path, e))
-                    }
-                    Err(_) => {
-                        Err(format!("Timeout: {} took longer than 30 seconds", file_path))
-                    }
+                    Ok(Err(e)) => Err(format!("LLM analysis failed for {}: {}", file_path, e)),
+                    Err(_) => Err(format!(
+                        "Timeout: {} took longer than 30 seconds",
+                        file_path
+                    )),
                 }
             });
 
@@ -864,8 +910,7 @@ fn merge_violations(
             // Combine reasoning from both methods
             hybrid.regex_reasoning = Some(format!(
                 "Pattern match at line {}: {}",
-                regex_violation.line_number,
-                regex_violation.description
+                regex_violation.line_number, regex_violation.description
             ));
 
             // LLM reasoning already exists, just ensure it's set
@@ -895,10 +940,7 @@ fn merge_violations(
 
             println!(
                 "[ryn] Merged hybrid violation: {} at {} line {} (±{} lines from regex)",
-                hybrid.control_id,
-                hybrid.file_path,
-                hybrid.line_number,
-                best_distance
+                hybrid.control_id, hybrid.file_path, hybrid.line_number, best_distance
             );
 
             merged.push(hybrid);
@@ -926,9 +968,18 @@ fn merge_violations(
     println!(
         "[ryn] Merge complete: {} total violations ({} hybrid, {} regex-only, {} llm-only)",
         merged.len(),
-        merged.iter().filter(|v| v.detection_method == "hybrid").count(),
-        merged.iter().filter(|v| v.detection_method == "regex").count(),
-        merged.iter().filter(|v| v.detection_method == "llm").count()
+        merged
+            .iter()
+            .filter(|v| v.detection_method == "hybrid")
+            .count(),
+        merged
+            .iter()
+            .filter(|v| v.detection_method == "regex")
+            .count(),
+        merged
+            .iter()
+            .filter(|v| v.detection_method == "llm")
+            .count()
     );
 
     merged
@@ -1047,7 +1098,10 @@ fn run_all_rules(code: &str, file_path: &str, scan_id: i64) -> Vec<Violation> {
 ///
 /// Groups violations by file, parses each file once with tree-sitter,
 /// and extracts function/class names for each violation.
-fn enrich_violations_with_context(violations: Vec<Violation>, project_path: &str) -> Vec<Violation> {
+fn enrich_violations_with_context(
+    violations: Vec<Violation>,
+    project_path: &str,
+) -> Vec<Violation> {
     // Group violations by file_path
     let mut violations_by_file: HashMap<String, Vec<Violation>> = HashMap::new();
     for violation in violations {
@@ -1078,7 +1132,10 @@ fn enrich_violations_with_context(violations: Vec<Violation>, project_path: &str
         let code = match std::fs::read_to_string(&full_path) {
             Ok(content) => content,
             Err(e) => {
-                println!("[ryn] Failed to read file for tree-sitter parsing: {} - {}", file_path, e);
+                println!(
+                    "[ryn] Failed to read file for tree-sitter parsing: {} - {}",
+                    file_path, e
+                );
                 // Keep violations as-is if file can't be read
                 enriched_violations.extend(file_violations);
                 continue;
@@ -1102,14 +1159,18 @@ fn enrich_violations_with_context(violations: Vec<Violation>, project_path: &str
             Ok(result) => {
                 // Extract context for each violation
                 for violation in &mut file_violations {
-                    let (func_name, class_name) = find_context_at_line(&result, violation.line_number);
+                    let (func_name, class_name) =
+                        find_context_at_line(&result, violation.line_number);
                     violation.function_name = func_name;
                     violation.class_name = class_name;
                 }
                 enriched_violations.extend(file_violations);
             }
             Err(e) => {
-                println!("[ryn] Failed to parse {} with tree-sitter: {}", file_path, e);
+                println!(
+                    "[ryn] Failed to parse {} with tree-sitter: {}",
+                    file_path, e
+                );
                 // Keep violations as-is if parsing fails
                 enriched_violations.extend(file_violations);
             }
@@ -1152,8 +1213,13 @@ mod tests {
         regex_reasoning: String,
     ) -> Violation {
         let mut violation = Violation::new(
-            scan_id, control_id, severity, description,
-            file_path, line_number, code_snippet,
+            scan_id,
+            control_id,
+            severity,
+            description,
+            file_path,
+            line_number,
+            code_snippet,
         );
         violation.set_detection_method(DetectionMethod::Regex);
         violation.regex_reasoning = Some(regex_reasoning);
@@ -1173,8 +1239,13 @@ mod tests {
         llm_reasoning: String,
     ) -> Violation {
         let mut violation = Violation::new(
-            scan_id, control_id, severity, description,
-            file_path, line_number, code_snippet,
+            scan_id,
+            control_id,
+            severity,
+            description,
+            file_path,
+            line_number,
+            code_snippet,
         );
         violation.set_detection_method(DetectionMethod::Llm);
         violation.confidence_score = Some(confidence);
@@ -1221,7 +1292,11 @@ mod tests {
         let path = project_dir.path().to_string_lossy().to_string();
 
         // Create manage.py to signal Django
-        fs::write(project_dir.path().join("manage.py"), "#!/usr/bin/env python").unwrap();
+        fs::write(
+            project_dir.path().join("manage.py"),
+            "#!/usr/bin/env python",
+        )
+        .unwrap();
 
         let result = detect_framework(path).await;
         assert!(result.is_ok());
@@ -1249,7 +1324,9 @@ mod tests {
     async fn test_scan_project_nonexistent_project() {
         let _guard = TestDbGuard::new();
         let app = tauri::test::mock_app();
-        let result = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), 999).await;
+        let result =
+            scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), 999)
+                .await;
         assert!(result.is_err());
     }
 
@@ -1260,7 +1337,12 @@ mod tests {
         let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         let app = tauri::test::mock_app();
-        let result = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await;
+        let result = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id,
+        )
+        .await;
         assert!(result.is_ok());
 
         let scan = result.unwrap();
@@ -1282,7 +1364,12 @@ def get_user(user_id):
         fs::write(project_dir.path().join("views.py"), py_content).unwrap();
 
         let app = tauri::test::mock_app();
-        let result = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await;
+        let result = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id,
+        )
+        .await;
         assert!(result.is_ok());
 
         let scan = result.unwrap();
@@ -1301,7 +1388,12 @@ def get_user(user_id):
         fs::write(node_modules.join("lib.js"), "console.log('test')").unwrap();
 
         let app = tauri::test::mock_app();
-        let result = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await;
+        let result = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id,
+        )
+        .await;
         assert!(result.is_ok());
     }
 
@@ -1312,7 +1404,12 @@ def get_user(user_id):
         let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         let app = tauri::test::mock_app();
-        let result = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await;
+        let result = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id,
+        )
+        .await;
         assert!(result.is_ok());
 
         let scan = result.unwrap();
@@ -1339,7 +1436,13 @@ def get_user(user_id):
         let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         let app = tauri::test::mock_app();
-        let scan = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await.unwrap();
+        let scan = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id,
+        )
+        .await
+        .unwrap();
         let progress = get_scan_progress(scan.id).await.unwrap();
 
         assert_eq!(progress.id, scan.id);
@@ -1356,8 +1459,20 @@ def get_user(user_id):
 
         // Create multiple scans
         let app = tauri::test::mock_app();
-        let _scan_id_1 = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await.unwrap();
-        let _scan_id_2 = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await.unwrap();
+        let _scan_id_1 = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id,
+        )
+        .await
+        .unwrap();
+        let _scan_id_2 = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id,
+        )
+        .await
+        .unwrap();
 
         let scans = get_scans(project_id).await.unwrap();
         assert_eq!(scans.len(), 2);
@@ -1387,7 +1502,13 @@ api_key = "sk-1234567890abcdef"
         fs::write(project_dir.path().join("config.py"), py_content).unwrap();
 
         let app = tauri::test::mock_app();
-        let scan = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await.unwrap();
+        let scan = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id,
+        )
+        .await
+        .unwrap();
         let progress = get_scan_progress(scan.id).await.unwrap();
 
         assert!(progress.violations_found >= 0);
@@ -1400,7 +1521,13 @@ api_key = "sk-1234567890abcdef"
         let (_project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         let app = tauri::test::mock_app();
-        let scan_result = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await.unwrap();
+        let scan_result = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id,
+        )
+        .await
+        .unwrap();
         let progress = get_scan_progress(scan_result.id).await.unwrap();
 
         assert_eq!(progress.id, scan_result.id);
@@ -1443,8 +1570,20 @@ api_key = "sk-1234567890abcdef"
         fs::write(project_dir_2.path().join("file2.py"), "y = 2").unwrap();
 
         let app = tauri::test::mock_app();
-        let scan_id_1 = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id_1).await.unwrap();
-        let scan_id_2 = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id_2).await.unwrap();
+        let scan_id_1 = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id_1,
+        )
+        .await
+        .unwrap();
+        let scan_id_2 = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id_2,
+        )
+        .await
+        .unwrap();
 
         assert_ne!(scan_id_1, scan_id_2);
 
@@ -1462,7 +1601,11 @@ api_key = "sk-1234567890abcdef"
         let (project_dir, project_id) = create_test_project_with_guard(&_guard);
 
         // Create manage.py to indicate Django framework
-        fs::write(project_dir.path().join("manage.py"), "#!/usr/bin/env python").unwrap();
+        fs::write(
+            project_dir.path().join("manage.py"),
+            "#!/usr/bin/env python",
+        )
+        .unwrap();
 
         // Detect and update framework before scanning
         let framework = {
@@ -1479,15 +1622,28 @@ api_key = "sk-1234567890abcdef"
         }; // Drop MutexGuard here
 
         let app = tauri::test::mock_app();
-        let _scan_id = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await.unwrap();
+        let _scan_id = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id,
+        )
+        .await
+        .unwrap();
 
         {
             let conn = db::get_connection();
             let project = queries::select_project(&conn, project_id).unwrap().unwrap();
 
             // Framework should have been detected and set before scan
-            assert_eq!(project.framework, framework, "Framework should match detected framework");
-            assert_eq!(project.framework, Some("django".to_string()), "Should detect Django from manage.py");
+            assert_eq!(
+                project.framework, framework,
+                "Framework should match detected framework"
+            );
+            assert_eq!(
+                project.framework,
+                Some("django".to_string()),
+                "Should detect Django from manage.py"
+            );
         }
     }
 
@@ -1628,7 +1784,13 @@ DB_PASSWORD = "production_secret_key_xyz"
 
         // Run scan (includes regex detection + tree-sitter enrichment)
         let app = tauri::test::mock_app();
-        let scan = scan_project_internal(app.handle().clone(), &ScanResponseChannels::default(), project_id).await.unwrap();
+        let scan = scan_project_internal(
+            app.handle().clone(),
+            &ScanResponseChannels::default(),
+            project_id,
+        )
+        .await
+        .unwrap();
 
         // Query violations from database
         let conn = db::get_connection();
@@ -1681,7 +1843,10 @@ def get_user(user_id):
         let watcher_state = FileWatcherState::default();
 
         // Verify watcher is not active initially
-        assert!(!watcher_state.is_watching(project_id), "Watcher should not be active initially");
+        assert!(
+            !watcher_state.is_watching(project_id),
+            "Watcher should not be active initially"
+        );
 
         // Create and start a FileWatcher
         let project_path = project_dir.path().to_path_buf();
@@ -1739,16 +1904,36 @@ def update_user(user_id, data):
 
         // Start watching both projects
         let watcher_1 = FileWatcher::new();
-        let handle_1 = Arc::new(watcher_1.watch_directory(project_dir_1.path()).await.unwrap());
-        watcher_state.start_watching(project_id_1, handle_1).unwrap();
+        let handle_1 = Arc::new(
+            watcher_1
+                .watch_directory(project_dir_1.path())
+                .await
+                .unwrap(),
+        );
+        watcher_state
+            .start_watching(project_id_1, handle_1)
+            .unwrap();
 
         let watcher_2 = FileWatcher::new();
-        let handle_2 = Arc::new(watcher_2.watch_directory(project_dir_2.path()).await.unwrap());
-        watcher_state.start_watching(project_id_2, handle_2).unwrap();
+        let handle_2 = Arc::new(
+            watcher_2
+                .watch_directory(project_dir_2.path())
+                .await
+                .unwrap(),
+        );
+        watcher_state
+            .start_watching(project_id_2, handle_2)
+            .unwrap();
 
         // Verify both are active
-        assert!(watcher_state.is_watching(project_id_1), "Project 1 should be watching");
-        assert!(watcher_state.is_watching(project_id_2), "Project 2 should be watching");
+        assert!(
+            watcher_state.is_watching(project_id_1),
+            "Project 1 should be watching"
+        );
+        assert!(
+            watcher_state.is_watching(project_id_2),
+            "Project 2 should be watching"
+        );
 
         // Stop watching project 1
         watcher_state.stop_watching(project_id_1).unwrap();
@@ -1767,12 +1952,21 @@ def update_user(user_id, data):
         watcher_state.stop_watching(project_id_2).unwrap();
 
         // Verify both are now inactive
-        assert!(!watcher_state.is_watching(project_id_1), "Project 1 should be inactive");
-        assert!(!watcher_state.is_watching(project_id_2), "Project 2 should be inactive");
+        assert!(
+            !watcher_state.is_watching(project_id_1),
+            "Project 1 should be inactive"
+        );
+        assert!(
+            !watcher_state.is_watching(project_id_2),
+            "Project 2 should be inactive"
+        );
 
         // Verify error when stopping inactive watcher
         let result = watcher_state.stop_watching(project_id_1);
-        assert!(result.is_err(), "Should error when stopping inactive watcher");
+        assert!(
+            result.is_err(),
+            "Should error when stopping inactive watcher"
+        );
     }
 
     /// Test that FileWatcher correctly filters file events by extension
@@ -1815,23 +2009,28 @@ def update_user(user_id, data):
     /// Test merge_violations: identical line numbers should create hybrid
     #[test]
     fn test_merge_violations_identical_lines() {
-        let regex_violations = vec![
-            new_regex_violation(
-                1, "CC6.1".to_string(), Severity::High,
-                "Missing @login_required".to_string(),
-                "app.py".to_string(), 42, "def admin(): pass".to_string(),
-                "Pattern match: missing authentication decorator".to_string(),
-            ),
-        ];
+        let regex_violations = vec![new_regex_violation(
+            1,
+            "CC6.1".to_string(),
+            Severity::High,
+            "Missing @login_required".to_string(),
+            "app.py".to_string(),
+            42,
+            "def admin(): pass".to_string(),
+            "Pattern match: missing authentication decorator".to_string(),
+        )];
 
-        let llm_violations = vec![
-            new_llm_violation(
-                1, "CC6.1".to_string(), Severity::High,
-                "Admin endpoint lacks authentication".to_string(),
-                "app.py".to_string(), 42, "def admin(): pass".to_string(),
-                85, "Claude detected: endpoint allows unauthorized access".to_string(),
-            ),
-        ];
+        let llm_violations = vec![new_llm_violation(
+            1,
+            "CC6.1".to_string(),
+            Severity::High,
+            "Admin endpoint lacks authentication".to_string(),
+            "app.py".to_string(),
+            42,
+            "def admin(): pass".to_string(),
+            85,
+            "Claude detected: endpoint allows unauthorized access".to_string(),
+        )];
 
         let merged = merge_violations(regex_violations, llm_violations);
 
@@ -1847,9 +2046,13 @@ def update_user(user_id, data):
     #[test]
     fn test_merge_violations_within_tolerance() {
         let regex_viol = new_regex_violation(
-            1, "CC6.7".to_string(), Severity::Critical,
+            1,
+            "CC6.7".to_string(),
+            Severity::Critical,
             "Hardcoded secret".to_string(),
-            "config.py".to_string(), 42, "password = 'secret'".to_string(),
+            "config.py".to_string(),
+            42,
+            "password = 'secret'".to_string(),
             "Pattern: hardcoded password".to_string(),
         );
 
@@ -1863,21 +2066,48 @@ def update_user(user_id, data):
 
         for (llm_line, should_merge) in test_cases {
             let llm_viol = new_llm_violation(
-                1, "CC6.7".to_string(), Severity::Critical,
+                1,
+                "CC6.7".to_string(),
+                Severity::Critical,
                 "Credentials in code".to_string(),
-                "config.py".to_string(), llm_line, "password = 'secret'".to_string(),
-                90, "Claude found hardcoded credentials".to_string(),
+                "config.py".to_string(),
+                llm_line,
+                "password = 'secret'".to_string(),
+                90,
+                "Claude found hardcoded credentials".to_string(),
             );
 
             let merged = merge_violations(vec![regex_viol.clone()], vec![llm_viol]);
 
             if should_merge {
-                assert_eq!(merged.len(), 1, "Lines {} and 42 should merge (within tolerance)", llm_line);
+                assert_eq!(
+                    merged.len(),
+                    1,
+                    "Lines {} and 42 should merge (within tolerance)",
+                    llm_line
+                );
                 assert_eq!(merged[0].detection_method, "hybrid");
             } else {
-                assert_eq!(merged.len(), 2, "Lines {} and 42 should NOT merge (exceeds tolerance)", llm_line);
-                assert_eq!(merged.iter().filter(|v| v.detection_method == "regex").count(), 1);
-                assert_eq!(merged.iter().filter(|v| v.detection_method == "llm").count(), 1);
+                assert_eq!(
+                    merged.len(),
+                    2,
+                    "Lines {} and 42 should NOT merge (exceeds tolerance)",
+                    llm_line
+                );
+                assert_eq!(
+                    merged
+                        .iter()
+                        .filter(|v| v.detection_method == "regex")
+                        .count(),
+                    1
+                );
+                assert_eq!(
+                    merged
+                        .iter()
+                        .filter(|v| v.detection_method == "llm")
+                        .count(),
+                    1
+                );
             }
         }
     }
@@ -1885,54 +2115,74 @@ def update_user(user_id, data):
     /// Test merge_violations: different files should not merge
     #[test]
     fn test_merge_violations_different_files() {
-        let regex_violations = vec![
-            new_regex_violation(
-                1, "CC6.1".to_string(), Severity::High,
-                "Missing auth".to_string(),
-                "views.py".to_string(), 42, "def view(): pass".to_string(),
-                "Regex: missing decorator".to_string(),
-            ),
-        ];
+        let regex_violations = vec![new_regex_violation(
+            1,
+            "CC6.1".to_string(),
+            Severity::High,
+            "Missing auth".to_string(),
+            "views.py".to_string(),
+            42,
+            "def view(): pass".to_string(),
+            "Regex: missing decorator".to_string(),
+        )];
 
-        let llm_violations = vec![
-            new_llm_violation(
-                1, "CC6.1".to_string(), Severity::High,
-                "Missing auth".to_string(),
-                "api.py".to_string(), 42, "def view(): pass".to_string(), // Different file
-                85, "LLM: missing auth".to_string(),
-            ),
-        ];
+        let llm_violations = vec![new_llm_violation(
+            1,
+            "CC6.1".to_string(),
+            Severity::High,
+            "Missing auth".to_string(),
+            "api.py".to_string(),
+            42,
+            "def view(): pass".to_string(), // Different file
+            85,
+            "LLM: missing auth".to_string(),
+        )];
 
         let merged = merge_violations(regex_violations, llm_violations);
 
         // Should remain separate (2 violations)
         assert_eq!(merged.len(), 2, "Different files should not merge");
-        assert_eq!(merged.iter().filter(|v| v.detection_method == "regex").count(), 1);
-        assert_eq!(merged.iter().filter(|v| v.detection_method == "llm").count(), 1);
+        assert_eq!(
+            merged
+                .iter()
+                .filter(|v| v.detection_method == "regex")
+                .count(),
+            1
+        );
+        assert_eq!(
+            merged
+                .iter()
+                .filter(|v| v.detection_method == "llm")
+                .count(),
+            1
+        );
     }
 
     /// Test merge_violations: different control IDs should not merge
     #[test]
     fn test_merge_violations_different_controls() {
-        let regex_violations = vec![
-            new_regex_violation(
-                1, "CC6.1".to_string(), // Access control
-                Severity::High,
-                "Missing auth".to_string(),
-                "app.py".to_string(), 42, "def view(): pass".to_string(),
-                "Regex: missing auth".to_string(),
-            ),
-        ];
+        let regex_violations = vec![new_regex_violation(
+            1,
+            "CC6.1".to_string(), // Access control
+            Severity::High,
+            "Missing auth".to_string(),
+            "app.py".to_string(),
+            42,
+            "def view(): pass".to_string(),
+            "Regex: missing auth".to_string(),
+        )];
 
-        let llm_violations = vec![
-            new_llm_violation(
-                1, "CC7.2".to_string(), // Logging - different control
-                Severity::Medium,
-                "Missing audit log".to_string(),
-                "app.py".to_string(), 42, "def view(): pass".to_string(),
-                75, "LLM: missing logging".to_string(),
-            ),
-        ];
+        let llm_violations = vec![new_llm_violation(
+            1,
+            "CC7.2".to_string(), // Logging - different control
+            Severity::Medium,
+            "Missing audit log".to_string(),
+            "app.py".to_string(),
+            42,
+            "def view(): pass".to_string(),
+            75,
+            "LLM: missing logging".to_string(),
+        )];
 
         let merged = merge_violations(regex_violations, llm_violations);
 
@@ -1953,24 +2203,34 @@ def update_user(user_id, data):
 
         for (regex_sev, llm_sev, expected_sev) in test_cases {
             let regex_viol = new_regex_violation(
-                1, "CC6.7".to_string(), regex_sev.clone(),
+                1,
+                "CC6.7".to_string(),
+                regex_sev.clone(),
                 "Issue".to_string(),
-                "test.py".to_string(), 10, "code".to_string(),
+                "test.py".to_string(),
+                10,
+                "code".to_string(),
                 "Regex found".to_string(),
             );
 
             let llm_viol = new_llm_violation(
-                1, "CC6.7".to_string(), llm_sev.clone(),
+                1,
+                "CC6.7".to_string(),
+                llm_sev.clone(),
                 "Issue".to_string(),
-                "test.py".to_string(), 10, "code".to_string(),
-                80, "LLM found".to_string(),
+                "test.py".to_string(),
+                10,
+                "code".to_string(),
+                80,
+                "LLM found".to_string(),
             );
 
             let merged = merge_violations(vec![regex_viol], vec![llm_viol]);
 
             assert_eq!(merged.len(), 1);
             let actual_severity = merged[0].get_severity().unwrap();
-            assert_eq!(actual_severity, expected_sev,
+            assert_eq!(
+                actual_severity, expected_sev,
                 "Hybrid of {:?} and {:?} should be {:?}, got {:?}",
                 regex_sev, llm_sev, expected_sev, actual_severity
             );
@@ -1982,41 +2242,81 @@ def update_user(user_id, data):
     fn test_merge_violations_multiple_violations() {
         let regex_violations = vec![
             new_regex_violation(
-                1, "CC6.7".to_string(), Severity::Critical,
+                1,
+                "CC6.7".to_string(),
+                Severity::Critical,
                 "Secret 1".to_string(),
-                "config.py".to_string(), 10, "api_key = 'sk-123'".to_string(),
+                "config.py".to_string(),
+                10,
+                "api_key = 'sk-123'".to_string(),
                 "Regex 1".to_string(),
             ),
             new_regex_violation(
-                1, "CC6.7".to_string(), Severity::Critical,
+                1,
+                "CC6.7".to_string(),
+                Severity::Critical,
                 "Secret 2".to_string(),
-                "config.py".to_string(), 20, "password = 'admin'".to_string(),
+                "config.py".to_string(),
+                20,
+                "password = 'admin'".to_string(),
                 "Regex 2".to_string(),
             ),
         ];
 
         let llm_violations = vec![
             new_llm_violation(
-                1, "CC6.7".to_string(), Severity::Critical,
+                1,
+                "CC6.7".to_string(),
+                Severity::Critical,
                 "LLM Secret 1".to_string(),
-                "config.py".to_string(), 11, "api_key = 'sk-123'".to_string(), // Matches first regex (±3)
-                90, "LLM 1".to_string(),
+                "config.py".to_string(),
+                11,
+                "api_key = 'sk-123'".to_string(), // Matches first regex (±3)
+                90,
+                "LLM 1".to_string(),
             ),
             new_llm_violation(
-                1, "CC6.1".to_string(), Severity::High,
+                1,
+                "CC6.1".to_string(),
+                Severity::High,
                 "LLM Auth issue".to_string(),
-                "config.py".to_string(), 30, "def view(): pass".to_string(), // No regex match
-                85, "LLM 2".to_string(),
+                "config.py".to_string(),
+                30,
+                "def view(): pass".to_string(), // No regex match
+                85,
+                "LLM 2".to_string(),
             ),
         ];
 
         let merged = merge_violations(regex_violations, llm_violations);
 
         // Expected: 1 hybrid (regex 1 + llm 1), 1 regex-only (regex 2), 1 llm-only (llm 2) = 3 total
-        assert_eq!(merged.len(), 3, "Should have 3 violations: 1 hybrid, 1 regex-only, 1 llm-only");
-        assert_eq!(merged.iter().filter(|v| v.detection_method == "hybrid").count(), 1);
-        assert_eq!(merged.iter().filter(|v| v.detection_method == "regex").count(), 1);
-        assert_eq!(merged.iter().filter(|v| v.detection_method == "llm").count(), 1);
+        assert_eq!(
+            merged.len(),
+            3,
+            "Should have 3 violations: 1 hybrid, 1 regex-only, 1 llm-only"
+        );
+        assert_eq!(
+            merged
+                .iter()
+                .filter(|v| v.detection_method == "hybrid")
+                .count(),
+            1
+        );
+        assert_eq!(
+            merged
+                .iter()
+                .filter(|v| v.detection_method == "regex")
+                .count(),
+            1
+        );
+        assert_eq!(
+            merged
+                .iter()
+                .filter(|v| v.detection_method == "llm")
+                .count(),
+            1
+        );
     }
 
     /// Test merge_violations: empty inputs
@@ -2027,27 +2327,32 @@ def update_user(user_id, data):
         assert_eq!(merged.len(), 0);
 
         // Only regex
-        let regex_only = vec![
-            new_regex_violation(
-                1, "CC6.7".to_string(), Severity::Critical,
-                "Secret".to_string(),
-                "test.py".to_string(), 10, "code".to_string(),
-                "Regex".to_string(),
-            ),
-        ];
+        let regex_only = vec![new_regex_violation(
+            1,
+            "CC6.7".to_string(),
+            Severity::Critical,
+            "Secret".to_string(),
+            "test.py".to_string(),
+            10,
+            "code".to_string(),
+            "Regex".to_string(),
+        )];
         let merged = merge_violations(regex_only, vec![]);
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].detection_method, "regex");
 
         // Only LLM
-        let llm_only = vec![
-            new_llm_violation(
-                1, "CC6.7".to_string(), Severity::Critical,
-                "Secret".to_string(),
-                "test.py".to_string(), 10, "code".to_string(),
-                90, "LLM".to_string(),
-            ),
-        ];
+        let llm_only = vec![new_llm_violation(
+            1,
+            "CC6.7".to_string(),
+            Severity::Critical,
+            "Secret".to_string(),
+            "test.py".to_string(),
+            10,
+            "code".to_string(),
+            90,
+            "LLM".to_string(),
+        )];
         let merged = merge_violations(vec![], llm_only);
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].detection_method, "llm");

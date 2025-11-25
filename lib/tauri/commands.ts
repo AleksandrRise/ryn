@@ -372,3 +372,147 @@ export async function respond_to_cost_limit(
 export async function cancel_scan(scanId: number): Promise<void> {
   await invoke<void>("cancel_scan", { scanId })
 }
+
+// ============================================================================
+// GITHUB COMMANDS
+// ============================================================================
+
+export interface DeviceCodeResponse {
+  device_code: string
+  user_code: string
+  verification_uri: string
+  expires_in: number
+  interval: number
+}
+
+export interface GitHubConnectionStatus {
+  connected: boolean
+  username?: string
+  avatar_url?: string
+  repo_count: number
+  tracked_count: number
+}
+
+export interface GitHubRepo {
+  id: number
+  github_id: number
+  name: string
+  full_name: string
+  owner: string
+  html_url: string
+  clone_url: string
+  description?: string
+  private: boolean
+  language?: string
+  stargazers_count: number
+  default_branch: string
+  fetched_at: string
+}
+
+export interface TrackedRepoWithDetails {
+  id: number
+  github_repo: GitHubRepo
+  local_path?: string
+  last_scanned_at?: string
+  last_checked_at?: string
+   last_commit_sha?: string
+  is_active: boolean
+  added_at: string
+  total_violations?: number
+  critical_violations?: number
+  last_scan_status?: string
+}
+
+/**
+ * Start GitHub OAuth Device Flow
+ * Returns device code info for user to authorize in browser
+ */
+export async function start_github_oauth(): Promise<DeviceCodeResponse> {
+  return await invoke<DeviceCodeResponse>("start_github_oauth")
+}
+
+/**
+ * Poll for GitHub OAuth completion
+ * Returns true when authorization is complete, false if still waiting
+ */
+export async function poll_github_oauth(): Promise<boolean> {
+  return await invoke<boolean>("poll_github_oauth")
+}
+
+/**
+ * Check GitHub connection status
+ */
+export async function check_github_connection(): Promise<GitHubConnectionStatus> {
+  return await invoke<GitHubConnectionStatus>("check_github_connection")
+}
+
+/**
+ * Disconnect GitHub account
+ */
+export async function disconnect_github(): Promise<void> {
+  await invoke<void>("disconnect_github")
+}
+
+/**
+ * Fetch repositories from GitHub API and cache them
+ */
+export async function fetch_github_repos(): Promise<GitHubRepo[]> {
+  return await invoke<GitHubRepo[]>("fetch_github_repos")
+}
+
+/**
+ * Get cached GitHub repositories
+ */
+export async function get_github_repos(): Promise<GitHubRepo[]> {
+  return await invoke<GitHubRepo[]>("get_github_repos")
+}
+
+/**
+ * Track a repository for compliance monitoring
+ * @param github_repo_id - The internal database ID of the GitHub repo
+ */
+export async function track_repo(github_repo_id: number): Promise<number> {
+  return await invoke<number>("track_repo", { githubRepoId: github_repo_id })
+}
+
+/**
+ * Untrack a repository
+ * @param tracked_repo_id - The ID of the tracked repo entry
+ */
+export async function untrack_repo(tracked_repo_id: number): Promise<void> {
+  await invoke<void>("untrack_repo", { trackedRepoId: tracked_repo_id })
+}
+
+/**
+ * Get tracked repositories with details
+ */
+export async function get_tracked_repos(): Promise<TrackedRepoWithDetails[]> {
+  return await invoke<TrackedRepoWithDetails[]>("get_tracked_repos")
+}
+
+/**
+ * Check if a tracked repo has new commits
+ * @param tracked_repo_id - The ID of the tracked repo to check
+ * @returns True if there are new changes
+ */
+export async function check_repo_for_changes(tracked_repo_id: number): Promise<boolean> {
+  return await invoke<boolean>("check_repo_for_changes", {
+    trackedRepoId: tracked_repo_id,
+  })
+}
+
+/**
+ * Scan a GitHub repository remotely without cloning
+ * @param tracked_repo_id - The ID of the tracked repo to scan
+ * @param scan_mode - Scan mode: "regex_only", "smart", or "analyze_all"
+ * @returns The scan ID
+ */
+export async function scan_github_repo(
+  tracked_repo_id: number,
+  scan_mode: string
+): Promise<number> {
+  return await invoke<number>("scan_github_repo", {
+    trackedRepoId: tracked_repo_id,
+    scanMode: scan_mode,
+  })
+}
