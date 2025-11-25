@@ -1,7 +1,6 @@
 "use client"
 
 import React, { useState, useRef, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import {
   Area,
   AreaChart,
@@ -14,15 +13,10 @@ import { Button } from "@/components/ui/button"
 import {
   check_github_connection,
   disconnect_github,
-  fetch_github_repos,
-  get_github_repos,
   get_tracked_repos,
-  track_repo,
-  untrack_repo,
   check_repo_for_changes,
   scan_github_repo,
   type GitHubConnectionStatus,
-  type GitHubRepo,
   type TrackedRepoWithDetails,
 } from "@/lib/tauri/commands"
 import { GitHubOAuthModal } from "./github-oauth-modal"
@@ -37,7 +31,6 @@ const PLATFORMS = [
 ] as const
 
 export function Dashboard() {
-  const router = useRouter()
   const [connectionStatus, setConnectionStatus] = useState<GitHubConnectionStatus | null>(null)
   const [selectedPlatform, setSelectedPlatform] = useState<typeof PLATFORMS[number]>(PLATFORMS[0])
   const [platformDropdownOpen, setPlatformDropdownOpen] = useState(false)
@@ -137,7 +130,7 @@ export function Dashboard() {
 
     try {
       // Use default scan mode from settings, or 'smart' as fallback
-      const scanId = await scan_github_repo(repoId, 'smart')
+      const scanId = await scan_github_repo(repoId, "smart")
       console.log(`Started scan ${scanId} for repo ${repoId}`)
 
       // Clear the changes indicator
@@ -262,7 +255,6 @@ export function Dashboard() {
                   <div className="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center">
                     <i className="las la-exclamation-triangle text-lg text-amber-400"></i>
                   </div>
-                  <span className="text-xs text-white/30 uppercase tracking-wider">Issues</span>
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold">{totalViolations}</span>
@@ -323,7 +315,14 @@ export function Dashboard() {
                   <div className="absolute inset-0 bg-gradient-to-br from-violet-500/[0.03] via-transparent to-blue-500/[0.02]" />
                   <div className="absolute top-0 right-0 w-48 h-48 bg-violet-500/[0.04] rounded-full blur-[60px] pointer-events-none" />
                   {/* Subtle grid overlay */}
-                  <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+                  <div
+                    className="absolute inset-0 opacity-[0.03]"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)",
+                      backgroundSize: "40px 40px",
+                    }}
+                  />
                 </>
               )}
 
@@ -527,7 +526,7 @@ export function Dashboard() {
                             {/* Show last checked time */}
                             {repo.last_checked_at && (
                               <span className="text-white/30">
-                                Checked: {new Date(repo.last_checked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                Checked: {new Date(repo.last_checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                               </span>
                             )}
                           </div>
