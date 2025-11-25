@@ -7,9 +7,9 @@ import { writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs'
 
 class FileLogger {
   private logs: string[] = []
-  private flushTimeout: NodeJS.Timeout | null = null
+  private flushTimeout: ReturnType<typeof setTimeout> | null = null
 
-  async log(level: 'log' | 'error' | 'warn' | 'info', ...args: any[]) {
+  async log(level: 'log' | 'error' | 'warn' | 'info', ...args: unknown[]) {
     const timestamp = new Date().toISOString()
     const message = args.map(arg => {
       if (typeof arg === 'object') {
@@ -59,17 +59,17 @@ const originalConsoleError = console.error
 const originalConsoleWarn = console.warn
 const originalConsoleLog = console.log
 
-console.error = (...args: any[]) => {
+console.error = (...args: unknown[]) => {
   fileLogger.log('error', ...args)
-  originalConsoleError(...args)
+  originalConsoleError(...(args as []))
 }
 
-console.warn = (...args: any[]) => {
+console.warn = (...args: unknown[]) => {
   fileLogger.log('warn', ...args)
-  originalConsoleWarn(...args)
+  originalConsoleWarn(...(args as []))
 }
 
-console.log = (...args: any[]) => {
+console.log = (...args: unknown[]) => {
   fileLogger.log('log', ...args)
-  originalConsoleLog(...args)
+  originalConsoleLog(...(args as []))
 }

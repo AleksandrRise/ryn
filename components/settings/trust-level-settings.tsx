@@ -35,6 +35,7 @@ export function TrustLevelSettings() {
             </p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
+            <span className="sr-only">Toggle auto-apply low risk fixes</span>
             <input
               type="checkbox"
               checked={settings.autoApplyLowRisk}
@@ -53,6 +54,7 @@ export function TrustLevelSettings() {
             </p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
+            <span className="sr-only">Toggle preview for medium risk</span>
             <input
               type="checkbox"
               checked={settings.requirePreviewMediumRisk}
@@ -71,6 +73,7 @@ export function TrustLevelSettings() {
             </p>
           </div>
           <label className="relative inline-flex items-center cursor-pointer">
+            <span className="sr-only">Toggle manual review for high risk</span>
             <input
               type="checkbox"
               checked={settings.manualReviewHighRisk}

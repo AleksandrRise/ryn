@@ -7,13 +7,13 @@ import { open } from "@tauri-apps/plugin-dialog"
 import { create_project, detect_framework } from "@/lib/tauri/commands"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { handleTauriError, showSuccess } from "@/lib/utils/error-handler"
-import { useState } from "react"
+import { useMemo } from "react"
 import { FrameworkBadge } from "@/components/ui/framework-badge"
 
 export function Header() {
   const router = useRouter()
   const { selectedProject, setSelectedProject } = useProjectStore()
-  const [isScanning, setIsScanning] = useState(false)
+  const isScanning = useMemo(() => false, [])
 
   const handleSelectProject = async () => {
     try {

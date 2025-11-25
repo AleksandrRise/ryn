@@ -6,7 +6,6 @@ import { Download, FileSearch, CheckCircle, AlertCircle, Play, Filter, Loader2 }
 import {
   get_audit_events,
   export_data,
-  type AuditEvent,
 } from "@/lib/tauri/commands"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
 import { save } from "@tauri-apps/plugin-dialog"
@@ -255,7 +254,7 @@ export function AuditTrail() {
 
             {/* Events */}
             <div className="space-y-6">
-              {filteredEvents.map((event, i) => (
+              {filteredEvents.map((event) => (
                 <div key={event.id} className="relative group">
                   {/* Timeline Dot */}
                   <div className={`absolute left-0 w-14 h-14 rounded-2xl border-2 ${getEventColor(event.type)} flex items-center justify-center backdrop-blur-sm group-hover:scale-110 transition-transform duration-300`}>

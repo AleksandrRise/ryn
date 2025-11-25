@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Play, RefreshCw, Clock3, Zap, Search, FolderTree, ChevronDown, Sparkles, Check } from "lucide-react"
+import { Play, RefreshCw, Clock3, Search, FolderTree, Sparkles, Check } from "lucide-react"
 import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
 import { ScanControls } from "@/components/scan/scan-controls"
 import { ScanProgressCard } from "@/components/scan/scan-progress-card"
@@ -291,7 +291,7 @@ export function ScanResults() {
 
       {isScanning && <ScanProgressCard progress={progress} onCancel={cancelScan} />}
 
-      <div className="rounded-xl border border-white/10 bg-black/25 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] grid gap-5 xl:grid-cols-[260px_360px_1fr] items-start min-h-[520px]">
+      <div className="rounded-xl border border-white/10 bg-black/25 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] grid gap-5 xl:grid-cols-[260px_360px_1fr] items-stretch min-h-[520px]">
         {/* Files */}
         <div className="flex flex-col gap-3 xl:border-r xl:border-white/10 xl:pr-4">
           <div className="flex items-center justify-between text-sm text-white/75">

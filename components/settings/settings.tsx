@@ -43,19 +43,19 @@ function settingsArrayToState(settings: SettingsType[]): SettingsState {
   const state = { ...defaultState }
 
   settings.forEach((setting) => {
-    // Find the state key that maps to this backend key
-    const stateKey = Object.entries(settingsKeyMap).find(
-      ([_k, backendKey]) => backendKey === setting.key
-    )?.[0] as keyof SettingsState | undefined
+    const entry = Object.entries(settingsKeyMap).find(([, backendKey]) => backendKey === setting.key)
+    const stateKey = entry ? (entry[0] as keyof SettingsState) : undefined
 
-    if (stateKey) {
-      const value = setting.value
-      // Parse boolean strings
-      if (value === "true" || value === "false") {
-        (state as any)[stateKey] = value === "true"
-      } else {
-        (state as any)[stateKey] = value
-      }
+    if (!stateKey) return
+
+    const value = setting.value
+    const parsedValue = value === "true" || value === "false" ? (value === "true") : value
+    if (stateKey === "desktopNotifications") {
+      state.desktopNotifications = Boolean(parsedValue)
+    } else if (stateKey === "llmScanMode") {
+      state.llmScanMode = parsedValue as SettingsState["llmScanMode"]
+    } else if (stateKey === "costLimitPerScan") {
+      state.costLimitPerScan = String(parsedValue)
     }
   })
 
@@ -170,7 +170,7 @@ export function Settings() {
   }
 
   // Update individual setting in state
-  const updateSetting = (key: keyof SettingsState, value: any) => {
+  const updateSetting = (key: keyof SettingsState, value: unknown) => {
     setState((prev) => ({ ...prev, [key]: value }))
   }
 
@@ -236,10 +236,11 @@ export function Settings() {
           </div>
           <div className="space-y-5">
             <div>
-              <label className="block mb-3 text-sm font-medium">Scanning Mode</label>
-              <div className="space-y-3">
-                <label className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+              <fieldset className="space-y-3">
+                <legend className="sr-only">Scanning mode</legend>
+                <div className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
                   <input
+                    id="scanModeRegex"
                     type="radio"
                     name="scanMode"
                     value="regex_only"
@@ -247,13 +248,14 @@ export function Settings() {
                     onChange={(e) => handleLlmScanModeChange(e.target.value)}
                     className="mt-1"
                   />
-                  <div className="flex-1">
+                  <label htmlFor="scanModeRegex" className="flex-1 cursor-pointer">
                     <p className="text-sm font-medium">Pattern Only</p>
                     <p className="text-xs text-white/50">Free, instant regex-based detection only</p>
-                  </div>
-                </label>
-                <label className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+                  </label>
+                </div>
+                <div className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
                   <input
+                    id="scanModeSmart"
                     type="radio"
                     name="scanMode"
                     value="smart"
@@ -261,15 +263,16 @@ export function Settings() {
                     onChange={(e) => handleLlmScanModeChange(e.target.value)}
                     className="mt-1"
                   />
-                  <div className="flex-1">
+                  <label htmlFor="scanModeSmart" className="flex-1 cursor-pointer">
                     <p className="text-sm font-medium">Smart (Recommended)</p>
                     <p className="text-xs text-white/50">
                       AI analyzes ~30-40% of files (security-critical code only)
                     </p>
-                  </div>
-                </label>
-                <label className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+                  </label>
+                </div>
+                <div className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
                   <input
+                    id="scanModeAll"
                     type="radio"
                     name="scanMode"
                     value="analyze_all"
@@ -277,18 +280,19 @@ export function Settings() {
                     onChange={(e) => handleLlmScanModeChange(e.target.value)}
                     className="mt-1"
                   />
-                  <div className="flex-1">
+                  <label htmlFor="scanModeAll" className="flex-1 cursor-pointer">
                     <p className="text-sm font-medium">Analyze All</p>
                     <p className="text-xs text-white/50">AI analyzes every file (maximum accuracy, higher cost)</p>
-                  </div>
-                </label>
-              </div>
+                  </label>
+                </div>
+              </fieldset>
             </div>
 
             {state.llmScanMode !== "regex_only" && (
               <div>
-                <label className="block mb-2 text-sm font-medium">Cost Limit Per Scan (USD)</label>
+                <label className="block mb-2 text-sm font-medium" htmlFor="cost_limit_setting">Cost Limit Per Scan (USD)</label>
                 <input
+                  id="cost_limit_setting"
                   type="number"
                   step="0.01"
                   min="0"

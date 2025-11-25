@@ -166,8 +166,8 @@ export function ErrorBoundary({ children }: { children: React.ReactNode }) {
 
   const handleReset = (
     details:
-      | { reason: "imperative-api"; args: any[] }
-      | { reason: "keys"; prev: any[] | undefined; next: any[] | undefined }
+      | { reason: "imperative-api"; args: unknown[] }
+      | { reason: "keys"; prev: unknown[] | undefined; next: unknown[] | undefined }
   ) => {
     // Log reset event for debugging
     if (details.reason === "imperative-api") {

@@ -8,7 +8,6 @@ interface DiffViewProps {
 export function DiffView({ originalCode, fixedCode }: DiffViewProps) {
   const originalLines = originalCode.split("\n")
   const fixedLines = fixedCode.split("\n")
-  const maxLines = Math.max(originalLines.length, fixedLines.length)
 
   return (
     <div className="space-y-3">

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.ryn.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev:static",
+    "beforeDevCommand": "npm run dev:static:tauri",
     "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../out"

@@ -12,7 +12,7 @@ export default function HomePage() {
 
   useEffect(() => {
     let mounted = true
-    const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI__)
+    const isTauri = typeof window !== "undefined" && Boolean((window as { __TAURI__?: unknown }).__TAURI__)
 
     const checkOnboarding = async () => {
       if (!isTauri) {

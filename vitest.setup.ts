@@ -1,9 +1,13 @@
 import '@testing-library/jest-dom/vitest'
 
 // Type declaration for Tauri internals
+type TauriInternals = {
+  metadata: { currentWindow: { label: string } }
+  postMessage: () => void
+}
+
 declare global {
-  // eslint-disable-next-line no-var
-  var __TAURI_INTERNALS__: any
+  var __TAURI_INTERNALS__: TauriInternals
 }
 
 // Mock Tauri APIs for unit tests

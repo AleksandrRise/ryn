@@ -10,6 +10,7 @@ import type { Project } from "@/lib/tauri/commands"
 import { toScanSummary, toViolation } from "@/lib/tauri/transformers"
 import type { SeverityCounts } from "@/lib/types/scan"
 import { handleTauriError } from "@/lib/utils/error-handler"
+import type { ScanSummary } from "@/lib/types/scan"
 
 export interface ProjectHealth {
   project: Project
@@ -39,7 +40,12 @@ interface UseDashboardDataResult {
   projectHealthList: ProjectHealth[]
   // Trend data
   scanTrend: ScanTrendPoint[]
+  recentScans: RecentScan[]
   refresh: () => Promise<void>
+}
+
+export interface RecentScan extends ScanSummary {
+  projectName: string
 }
 
 const EMPTY_COUNTS: SeverityCounts = {
@@ -57,6 +63,7 @@ export function useDashboardData(): UseDashboardDataResult {
   const [severityCounts, setSeverityCounts] = useState<SeverityCounts>(EMPTY_COUNTS)
   const [projectHealthList, setProjectHealthList] = useState<ProjectHealth[]>([])
   const [scanTrend, setScanTrend] = useState<ScanTrendPoint[]>([])
+  const [recentScans, setRecentScans] = useState<RecentScan[]>([])
 
   const refresh = useCallback(async () => {
     setIsLoading(true)
@@ -80,10 +87,11 @@ export function useDashboardData(): UseDashboardDataResult {
       const aggCounts: SeverityCounts = { ...EMPTY_COUNTS }
       const healthList: ProjectHealth[] = []
       const allScansForTrend: { date: Date; violations: number }[] = []
+      const allCompletedScans: { project: Project; scan: ScanSummary }[] = []
 
       for (const project of projects) {
         try {
-          const scans = await get_scans(project.id)
+          const scans = (await get_scans(project.id)).map(toScanSummary)
           const completedScans = scans.filter(s => s.status === "completed")
           aggScans += completedScans.length
 
@@ -115,9 +123,14 @@ export function useDashboardData(): UseDashboardDataResult {
             // Collect scans for trend (last 10 scans across all projects)
             for (const scan of completedScans.slice(0, 5)) {
               allScansForTrend.push({
-                date: new Date(scan.completed_at || scan.started_at),
-                violations: scan.violations_found,
+                date: new Date(scan.completedAt || scan.startedAt),
+                violations: scan.violationsFound,
               })
+            }
+
+            // Collect for recent scans feed
+            for (const scan of completedScans) {
+              allCompletedScans.push({ project, scan })
             }
           }
 
@@ -131,7 +144,7 @@ export function useDashboardData(): UseDashboardDataResult {
 
           healthList.push({
             project,
-            lastScanDate: latestScan?.completed_at || latestScan?.started_at || null,
+            lastScanDate: latestScan?.completedAt || latestScan?.startedAt || null,
             totalViolations: projectViolations,
             criticalCount: projectCritical,
             highCount: projectHigh,
@@ -140,7 +153,7 @@ export function useDashboardData(): UseDashboardDataResult {
             scanCount: completedScans.length,
             status,
           })
-        } catch (err) {
+        } catch {
           // If a project fails, still include it with no-scans status
           healthList.push({
             project,
@@ -167,11 +180,24 @@ export function useDashboardData(): UseDashboardDataResult {
         violations: s.violations,
       }))
 
+      // Build recent scans (most recent first)
+      allCompletedScans.sort((a, b) => {
+        const aDate = new Date(a.scan.completedAt || a.scan.startedAt).getTime()
+        const bDate = new Date(b.scan.completedAt || b.scan.startedAt).getTime()
+        return bDate - aDate
+      })
+
+      const recent = allCompletedScans.slice(0, 10).map(({ project, scan }) => ({
+        ...scan,
+        projectName: project.name,
+      }))
+
       setTotalViolations(aggViolations)
       setTotalScans(aggScans)
       setSeverityCounts(aggCounts)
       setProjectHealthList(healthList)
       setScanTrend(trendData)
+      setRecentScans(recent)
     } catch (error) {
       handleTauriError(error, "Failed to load dashboard data")
     } finally {
@@ -191,6 +217,7 @@ export function useDashboardData(): UseDashboardDataResult {
     severityCounts,
     projectHealthList,
     scanTrend,
+    recentScans,
     refresh,
   }
 }

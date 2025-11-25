@@ -11,7 +11,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // Import command modules
-use ryn::commands::{analytics, audit, fix, github, logger, project, scan, settings, violation};
+use ryn::commands::{
+    analytics, audit, fix, github, logger, project, scan, settings, violation
+};
+use tauri_plugin_mcp_bridge;
 
 fn main() {
     // Load environment variables from .env file
@@ -42,7 +45,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
-        // .plugin(tauri_plugin_mcp_bridge::init())
+        .plugin(tauri_plugin_mcp_bridge::init())
         .manage(scan::ScanResponseChannels::default())
         .manage(scan::FileWatcherState::default());
 

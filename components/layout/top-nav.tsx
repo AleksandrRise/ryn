@@ -5,7 +5,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { open } from "@tauri-apps/plugin-dialog"
-import { Button } from "@/components/ui/button"
 import { Folder } from "lucide-react"
 import {
   create_project,
@@ -36,16 +35,6 @@ export function TopNav() {
     { href: "/audit", label: "Audit Trail" },
     { href: "/settings", label: "Settings" },
   ]
-
-  const getBreadcrumbLabel = (path: string) => {
-    const pathMap: Record<string, string> = {
-      "/": "Dashboard",
-      "/scan": "Scan Results",
-      "/audit": "Audit Trail",
-      "/settings": "Settings",
-    }
-    return pathMap[path] || "Page"
-  }
 
   const loadProjects = async () => {
     try {

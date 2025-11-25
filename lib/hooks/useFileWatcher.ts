@@ -24,7 +24,7 @@ import { toast } from "sonner"
 import * as commands from "@/lib/tauri/commands"
 import type { FileChangedEvent } from "@/lib/types/events"
 
-const isTauri = typeof window !== "undefined" && Boolean((window as any).__TAURI__)
+const isTauri = typeof window !== "undefined" && Boolean((window as { __TAURI__?: unknown }).__TAURI__)
 
 interface UseFileWatcherOptions {
   /**
@@ -146,18 +146,19 @@ export function useFileWatcher(
       if (showNotifications) {
         toast.success(`Started watching project for changes`)
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Tauri errors - extract message from various possible properties
-      let errorMsg = 'Failed to start watching'
-
-      if (typeof err === 'string') {
-        errorMsg = err
-      } else if (err instanceof Error) {
-        errorMsg = err.message
-      } else if (err && typeof err === 'object') {
-        // Try common error properties
-        errorMsg = err.message || err.error || err.msg || String(err) || errorMsg
-      }
+      const errorMsg =
+        typeof err === 'string'
+          ? err
+          : err instanceof Error
+            ? err.message
+            : (err && typeof err === 'object' && ('message' in err || 'error' in err || 'msg' in err))
+              ? (err as { message?: string; error?: string; msg?: string }).message ||
+                (err as { message?: string; error?: string; msg?: string }).error ||
+                (err as { message?: string; error?: string; msg?: string }).msg ||
+                'Failed to start watching'
+              : 'Failed to start watching'
 
       // If the error is "already being watched", treat it as success
       // This can happen in React Strict Mode when the component mounts twice
