@@ -7,11 +7,20 @@ use screenshots::Screen;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 #[cfg(target_os = "macos")]
 use core_graphics::{
-    geometry::{CGPoint, CGSize, CGRect},
-    window::{create_image, kCGWindowImageBoundsIgnoreFraming, kCGWindowImageNominalResolution, kCGWindowListOptionIncludingWindow},
+    geometry::CGRect,
+    window::{
+        copy_window_info, create_image, kCGWindowBounds, kCGWindowImageBoundsIgnoreFraming,
+        kCGWindowImageNominalResolution, kCGWindowListOptionIncludingWindow,
+    },
 };
 #[cfg(target_os = "macos")]
 use objc2_app_kit::NSWindow;
+#[cfg(target_os = "macos")]
+use core_foundation::dictionary::CFDictionary;
+#[cfg(target_os = "macos")]
+use core_foundation_sys::base::CFTypeRef;
+#[cfg(target_os = "macos")]
+use core_foundation::base::TCFType;
 
 /// Capture a screenshot of the specified window
 /// Params: { label?: string, path?: string }
@@ -111,14 +120,16 @@ fn capture_macos_window<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Result<
     let window_id = ns_win.windowNumber() as u32;
     log::info!("[MCP] macOS window capture for id={}", window_id);
 
-    // Compute window rect in physical coords
-    let scale = window.scale_factor().map_err(|e| format!("Failed to get scale factor: {}", e))?;
-    let pos = window.outer_position().map_err(|e| format!("Failed to get window position: {}", e))?;
-    let size = window.outer_size().map_err(|e| format!("Failed to get window size: {}", e))?;
-    let rect = CGRect::new(
-        &CGPoint::new(pos.x as f64 * scale, pos.y as f64 * scale),
-        &CGSize::new(size.width as f64 * scale, size.height as f64 * scale),
-    );
+    // Fetch window bounds from CoreGraphics to avoid coordinate/scale mistakes
+    let info = copy_window_info(kCGWindowListOptionIncludingWindow, window_id)
+        .ok_or("CGWindowListCopyWindowInfo returned null")?;
+    let first = info
+        .get(0)
+        .ok_or("No window info returned")?;
+    let dict: CFDictionary<CFTypeRef, CFTypeRef> = unsafe { CFDictionary::wrap_under_create_rule(first.as_CFTypeRef() as *mut _) };
+    let bounds_cf = dict.find(kCGWindowBounds).ok_or("Missing kCGWindowBounds")?;
+    let bounds_dict = unsafe { CFDictionary::wrap_under_create_rule(bounds_cf as *mut _) };
+    let rect = CGRect::from_dict_representation(&bounds_dict).ok_or("Failed to parse window bounds")?;
 
     // Capture just this window (CG will render only the specified window id)
     let cg_image = create_image(

@@ -33,6 +33,7 @@ base64 = "0.21"
 core-graphics = { version = "0.22", optional = true }
 objc2-app-kit = { version = "0.3", optional = true }
 core-foundation = { version = "0.10", optional = true }
+core-foundation-sys = { version = "0.8", optional = true }
 
 # Screenshot capability
 screenshots = "0.8"
@@ -44,4 +45,4 @@ tauri-plugin = { version = "2.0", features = ["build"] }
 [features]
 default = []
 devtools = []
-macos-window-capture = ["core-graphics", "objc2-app-kit", "core-foundation"]
+macos-window-capture = ["core-graphics", "objc2-app-kit", "core-foundation", "core-foundation-sys"]
