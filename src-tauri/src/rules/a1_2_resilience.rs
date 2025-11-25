@@ -10,9 +10,9 @@
 //! - Missing circuit breaker patterns
 //! - Unhandled database query failures
 
+use crate::models::{Severity, Violation};
 use anyhow::Context;
 use anyhow::Result;
-use crate::models::{Severity, Violation};
 use regex::Regex;
 
 /// A1.2 Resilience & Error Handling Rule Engine
@@ -35,7 +35,9 @@ impl A12ResilienceRule {
         let mut violations = Vec::new();
 
         // Pattern 1: External calls without error handling
-        violations.extend(Self::detect_unhandled_external_calls(code, file_path, scan_id)?);
+        violations.extend(Self::detect_unhandled_external_calls(
+            code, file_path, scan_id,
+        )?);
 
         // Pattern 2: Requests without timeout
         violations.extend(Self::detect_missing_timeout(code, file_path, scan_id)?);
@@ -44,10 +46,14 @@ impl A12ResilienceRule {
         violations.extend(Self::detect_missing_retry_logic(code, file_path, scan_id)?);
 
         // Pattern 4: Database operations without error handling
-        violations.extend(Self::detect_unhandled_database_ops(code, file_path, scan_id)?);
+        violations.extend(Self::detect_unhandled_database_ops(
+            code, file_path, scan_id,
+        )?);
 
         // Pattern 5: Missing circuit breaker patterns
-        violations.extend(Self::detect_missing_circuit_breaker(code, file_path, scan_id)?);
+        violations.extend(Self::detect_missing_circuit_breaker(
+            code, file_path, scan_id,
+        )?);
 
         Ok(violations)
     }
@@ -66,9 +72,8 @@ impl A12ResilienceRule {
         )
         .context("Failed to compile external call pattern")?;
 
-        let try_pattern =
-            Regex::new(r"(try:|try\s*\{|try\(|with\s+)")
-                .context("Failed to compile try pattern")?;
+        let try_pattern = Regex::new(r"(try:|try\s*\{|try\(|with\s+)")
+            .context("Failed to compile try pattern")?;
 
         let except_pattern = Regex::new(r"(except|catch\s*\(|except\s+|\.catch\()")
             .context("Failed to compile except pattern")?;
@@ -114,11 +119,7 @@ impl A12ResilienceRule {
     }
 
     /// Detects requests without timeout configuration
-    fn detect_missing_timeout(
-        code: &str,
-        file_path: &str,
-        scan_id: i64,
-    ) -> Result<Vec<Violation>> {
+    fn detect_missing_timeout(code: &str, file_path: &str, scan_id: i64) -> Result<Vec<Violation>> {
         let mut violations = Vec::new();
 
         // Pattern: HTTP requests
@@ -169,10 +170,8 @@ impl A12ResilienceRule {
         let mut violations = Vec::new();
 
         // Pattern: API calls that need retry
-        let api_call = Regex::new(
-            r"(requests\.(get|post)|\.query\(|http\.request|fetch|axios\.)"
-        )
-        .context("Failed to compile API call pattern")?;
+        let api_call = Regex::new(r"(requests\.(get|post)|\.query\(|http\.request|fetch|axios\.)")
+            .context("Failed to compile API call pattern")?;
 
         let retry_pattern = Regex::new(
             r"(@retry|retry|Retry|@tenacity|backoff|exponential|max_retries|retry_count|attempt|retries\s*=)"
@@ -182,7 +181,8 @@ impl A12ResilienceRule {
         // Only flag once per file if there are API calls but no retry mechanisms
         if api_call.is_match(code) && !retry_pattern.is_match(code) {
             for (idx, line) in code.lines().enumerate() {
-                if api_call.is_match(line) && !line.trim().starts_with("#")
+                if api_call.is_match(line)
+                    && !line.trim().starts_with("#")
                     && !line.trim().starts_with("//")
                 {
                     violations.push(Violation::new(
@@ -258,13 +258,11 @@ impl A12ResilienceRule {
         let mut violations = Vec::new();
 
         // Pattern: External service calls (indicates need for circuit breaker)
-        let external_service = Regex::new(
-            r"(requests\.(get|post)|http\.(get|post)|fetch|axios\.)"
-        )
-        .context("Failed to compile external service pattern")?;
+        let external_service = Regex::new(r"(requests\.(get|post)|http\.(get|post)|fetch|axios\.)")
+            .context("Failed to compile external service pattern")?;
 
         let circuit_breaker_pattern = Regex::new(
-            r"(circuit_breaker|CircuitBreaker|@circuit_breaker|Hystrix|bulkhead|breaker)"
+            r"(circuit_breaker|CircuitBreaker|@circuit_breaker|Hystrix|bulkhead|breaker)",
         )
         .context("Failed to compile circuit breaker pattern")?;
 
@@ -273,7 +271,8 @@ impl A12ResilienceRule {
 
         if external_call_count > 1 && !circuit_breaker_pattern.is_match(code) {
             for (idx, line) in code.lines().enumerate() {
-                if external_service.is_match(line) && !line.trim().starts_with("#")
+                if external_service.is_match(line)
+                    && !line.trim().starts_with("#")
                     && !line.trim().starts_with("//")
                 {
                     violations.push(Violation::new(
@@ -307,9 +306,7 @@ mod tests {
             "Should detect unhandled external request"
         );
         assert_eq!(violations[0].severity, "high");
-        assert!(violations[0]
-            .description
-            .contains("error handling"));
+        assert!(violations[0].description.contains("error handling"));
     }
 
     #[test]
@@ -317,18 +314,31 @@ mod tests {
         let code = "try:\n    response = requests.get('http://api.example.com')\nexcept Exception as e:\n    pass";
         let violations = A12ResilienceRule::analyze(code, "api.py", 1).unwrap();
         // Should not flag error handling violations, but may flag other issues (timeout, retry)
-        let error_handling_violations: Vec<_> = violations.iter().filter(|v| v.description.contains("error handling")).collect();
-        assert!(error_handling_violations.is_empty(), "Should allow request with error handling");
+        let error_handling_violations: Vec<_> = violations
+            .iter()
+            .filter(|v| v.description.contains("error handling"))
+            .collect();
+        assert!(
+            error_handling_violations.is_empty(),
+            "Should allow request with error handling"
+        );
     }
 
     #[test]
     fn test_with_context_manager_handling() {
-        let code = "with requests.get('http://api.example.com') as response:\n    data = response.json()";
+        let code =
+            "with requests.get('http://api.example.com') as response:\n    data = response.json()";
         let violations = A12ResilienceRule::analyze(code, "api.py", 1).unwrap();
         // With context manager provides resource management but not exception handling per se
         // Should not flag error handling, but may flag missing timeout
-        let error_handling_violations: Vec<_> = violations.iter().filter(|v| v.description.contains("error handling")).collect();
-        assert!(error_handling_violations.is_empty(), "Should allow with context manager");
+        let error_handling_violations: Vec<_> = violations
+            .iter()
+            .filter(|v| v.description.contains("error handling"))
+            .collect();
+        assert!(
+            error_handling_violations.is_empty(),
+            "Should allow with context manager"
+        );
     }
 
     #[test]
@@ -368,7 +378,10 @@ mod tests {
             .iter()
             .filter(|v| v.description.contains("timeout"))
             .collect();
-        assert!(timeout_violations.is_empty(), "Should detect timeout in multiline");
+        assert!(
+            timeout_violations.is_empty(),
+            "Should detect timeout in multiline"
+        );
     }
 
     #[test]
@@ -379,7 +392,10 @@ mod tests {
             .iter()
             .filter(|v| v.description.contains("retry"))
             .collect();
-        assert!(!retry_violations.is_empty(), "Should detect missing retry logic");
+        assert!(
+            !retry_violations.is_empty(),
+            "Should detect missing retry logic"
+        );
         assert_eq!(retry_violations[0].severity, "medium");
     }
 
@@ -419,7 +435,10 @@ mod tests {
             !violations.is_empty(),
             "Should detect unhandled database query"
         );
-        assert!(violations[0].description.contains("Database") || violations[0].description.contains("database"));
+        assert!(
+            violations[0].description.contains("Database")
+                || violations[0].description.contains("database")
+        );
         assert_eq!(violations[0].severity, "high");
     }
 
@@ -427,7 +446,10 @@ mod tests {
     fn test_database_with_error_handling() {
         let code = "try:\n    cursor.execute('SELECT * FROM users')\nexcept Exception as e:\n    logger.error(e)";
         let violations = A12ResilienceRule::analyze(code, "db.py", 1).unwrap();
-        assert!(violations.is_empty(), "Should allow database with error handling");
+        assert!(
+            violations.is_empty(),
+            "Should allow database with error handling"
+        );
     }
 
     #[test]
@@ -493,10 +515,7 @@ mod tests {
     fn test_fetch_without_error_handling() {
         let code = "fetch('http://api.example.com').then(r => r.json())";
         let violations = A12ResilienceRule::analyze(code, "api.js", 1).unwrap();
-        assert!(
-            !violations.is_empty(),
-            "Should detect unhandled fetch call"
-        );
+        assert!(!violations.is_empty(), "Should detect unhandled fetch call");
     }
 
     #[test]
@@ -507,14 +526,20 @@ mod tests {
             .iter()
             .filter(|v| v.description.contains("timeout"))
             .collect();
-        assert!(!timeout_violations.is_empty(), "Should detect axios without timeout");
+        assert!(
+            !timeout_violations.is_empty(),
+            "Should detect axios without timeout"
+        );
     }
 
     #[test]
     fn test_database_with_try_block_above() {
         let code = "try:\n    connection.execute('SELECT * FROM users')\n    process_results()";
         let violations = A12ResilienceRule::analyze(code, "db.py", 1).unwrap();
-        assert!(violations.is_empty(), "Should recognize error handling context");
+        assert!(
+            violations.is_empty(),
+            "Should recognize error handling context"
+        );
     }
 
     #[test]
@@ -525,7 +550,10 @@ mod tests {
             .iter()
             .filter(|v| v.description.contains("timeout"))
             .collect();
-        assert!(!timeout_violations.is_empty(), "Should detect httpx without timeout");
+        assert!(
+            !timeout_violations.is_empty(),
+            "Should detect httpx without timeout"
+        );
     }
 
     #[test]

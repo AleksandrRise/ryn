@@ -65,8 +65,8 @@ pub async fn clear_database() -> Result<String, String> {
     let conn = db::get_connection();
 
     // Create backup directory
-    let home_dir = dirs::home_dir()
-        .ok_or_else(|| "Could not determine home directory".to_string())?;
+    let home_dir =
+        dirs::home_dir().ok_or_else(|| "Could not determine home directory".to_string())?;
     let backup_dir = home_dir.join(".ryn/backups");
     std::fs::create_dir_all(&backup_dir)
         .map_err(|e| format!("Failed to create backup directory: {}", e))?;
@@ -82,7 +82,8 @@ pub async fn clear_database() -> Result<String, String> {
     let backup = rusqlite::backup::Backup::new(&conn, &mut backup_conn)
         .map_err(|e| format!("Failed to initialize backup: {}", e))?;
 
-    backup.run_to_completion(5, std::time::Duration::from_millis(250), None)
+    backup
+        .run_to_completion(5, std::time::Duration::from_millis(250), None)
         .map_err(|e| format!("Failed to complete backup: {}", e))?;
 
     let backup_path_str = backup_path.to_string_lossy().to_string();
@@ -114,7 +115,10 @@ pub async fn clear_database() -> Result<String, String> {
         let _ = queries::insert_audit_event(&conn, &event);
     }
 
-    Ok(format!("Database cleared successfully. Backup saved to: {}", backup_path_str))
+    Ok(format!(
+        "Database cleared successfully. Backup saved to: {}",
+        backup_path_str
+    ))
 }
 
 /// Export all database data to JSON format
@@ -130,14 +134,14 @@ pub async fn export_data() -> Result<String, String> {
     let projects = queries::select_all_projects(&conn)
         .map_err(|e| format!("Failed to fetch projects: {}", e))?;
 
-    let scans = queries::select_all_scans(&conn)
-        .map_err(|e| format!("Failed to fetch scans: {}", e))?;
+    let scans =
+        queries::select_all_scans(&conn).map_err(|e| format!("Failed to fetch scans: {}", e))?;
 
     let violations = queries::select_all_violations(&conn)
         .map_err(|e| format!("Failed to fetch violations: {}", e))?;
 
-    let fixes = queries::select_all_fixes(&conn)
-        .map_err(|e| format!("Failed to fetch fixes: {}", e))?;
+    let fixes =
+        queries::select_all_fixes(&conn).map_err(|e| format!("Failed to fetch fixes: {}", e))?;
 
     let audit_events = queries::select_all_audit_events(&conn)
         .map_err(|e| format!("Failed to fetch audit events: {}", e))?;
@@ -185,7 +189,10 @@ pub async fn complete_onboarding(scan_mode: String, cost_limit: f64) -> Result<(
 
     // Validate scan_mode
     if !matches!(scan_mode.as_str(), "regex_only" | "smart" | "analyze_all") {
-        return Err(format!("Invalid scan mode: {}. Must be regex_only, smart, or analyze_all", scan_mode));
+        return Err(format!(
+            "Invalid scan mode: {}. Must be regex_only, smart, or analyze_all",
+            scan_mode
+        ));
     }
 
     // Validate cost_limit
@@ -214,7 +221,10 @@ pub async fn complete_onboarding(scan_mode: String, cost_limit: f64) -> Result<(
         None,
         None,
         None,
-        &format!("Onboarding completed: scan_mode={}, cost_limit=${:.2}", scan_mode, cost_limit),
+        &format!(
+            "Onboarding completed: scan_mode={}, cost_limit=${:.2}",
+            scan_mode, cost_limit
+        ),
     ) {
         let _ = queries::insert_audit_event(&conn, &event);
     }
@@ -224,8 +234,8 @@ pub async fn complete_onboarding(scan_mode: String, cost_limit: f64) -> Result<(
 
 #[cfg(test)]
 mod tests {
-    use crate::db::test_helpers::TestDbGuard;
     use super::*;
+    use crate::db::test_helpers::TestDbGuard;
 
     #[tokio::test]
     #[serial_test::serial]
@@ -356,7 +366,8 @@ mod tests {
         let result = update_settings(
             "json_config".to_string(),
             r#"{"framework": "django", "version": "3.2"}"#.to_string(),
-        ).await;
+        )
+        .await;
         assert!(result.is_ok());
 
         let settings = get_settings().await.unwrap();

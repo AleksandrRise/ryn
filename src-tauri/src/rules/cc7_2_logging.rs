@@ -10,9 +10,9 @@
 //! - Insufficient error logging
 //! - Missing authentication event logging
 
+use crate::models::{Severity, Violation};
 use anyhow::Context;
 use anyhow::Result;
-use crate::models::{Severity, Violation};
 use regex::Regex;
 
 /// CC7.2 Logging & Monitoring Rule Engine
@@ -38,13 +38,17 @@ impl CC72LoggingRule {
         violations.extend(Self::detect_missing_audit_log(code, file_path, scan_id)?);
 
         // Pattern 2: Logging sensitive data
-        violations.extend(Self::detect_sensitive_data_logging(code, file_path, scan_id)?);
+        violations.extend(Self::detect_sensitive_data_logging(
+            code, file_path, scan_id,
+        )?);
 
         // Pattern 3: Authentication events without logging
         violations.extend(Self::detect_missing_auth_logging(code, file_path, scan_id)?);
 
         // Pattern 4: Database modifications without transaction logging
-        violations.extend(Self::detect_missing_transaction_logging(code, file_path, scan_id)?);
+        violations.extend(Self::detect_missing_transaction_logging(
+            code, file_path, scan_id,
+        )?);
 
         Ok(violations)
     }
@@ -69,7 +73,10 @@ impl CC72LoggingRule {
         let lines: Vec<&str> = code.lines().collect();
 
         for (idx, line) in lines.iter().enumerate() {
-            if sensitive_ops.is_match(line) && !line.trim().starts_with("#") && !line.trim().starts_with("//") {
+            if sensitive_ops.is_match(line)
+                && !line.trim().starts_with("#")
+                && !line.trim().starts_with("//")
+            {
                 // Check if logging exists in current or next 3 lines
                 let check_start = if idx > 1 { idx - 1 } else { 0 };
                 let check_end = std::cmp::min(idx + 3, lines.len());
@@ -158,19 +165,20 @@ impl CC72LoggingRule {
 
         // Pattern: authentication function definitions (not calls)
         let auth_def = Regex::new(
-            r"^\s*def\s+(login|authenticate|verify_token|verify_password|validate_credentials)\b"
+            r"^\s*def\s+(login|authenticate|verify_token|verify_password|validate_credentials)\b",
         )
         .context("Failed to compile auth definition pattern")?;
 
-        let logging_keywords = Regex::new(
-            r"(logger|logging|log\(|console\.log|print\(|audit)",
-        )
-        .context("Failed to compile logging keywords pattern")?;
+        let logging_keywords = Regex::new(r"(logger|logging|log\(|console\.log|print\(|audit)")
+            .context("Failed to compile logging keywords pattern")?;
 
         let lines: Vec<&str> = code.lines().collect();
 
         for (idx, line) in lines.iter().enumerate() {
-            if auth_def.is_match(line) && !line.trim().starts_with("#") && !line.trim().starts_with("//") {
+            if auth_def.is_match(line)
+                && !line.trim().starts_with("#")
+                && !line.trim().starts_with("//")
+            {
                 // Look for logging in the next few lines
                 let check_end = std::cmp::min(idx + 4, lines.len());
                 let next_lines = lines[idx + 1..check_end].join(" ");
@@ -202,14 +210,13 @@ impl CC72LoggingRule {
 
         // Pattern: database transaction operations
         let db_transaction = Regex::new(
-            r"\b(BEGIN|COMMIT|ROLLBACK|START TRANSACTION|begin_transaction|commit|rollback)\b"
+            r"\b(BEGIN|COMMIT|ROLLBACK|START TRANSACTION|begin_transaction|commit|rollback)\b",
         )
         .context("Failed to compile transaction pattern")?;
 
-        let logging_keywords = Regex::new(
-            r"(logger|logging|log\(|console\.log|print\(|audit|transaction.log)",
-        )
-        .context("Failed to compile logging keywords pattern")?;
+        let logging_keywords =
+            Regex::new(r"(logger|logging|log\(|console\.log|print\(|audit|transaction.log)")
+                .context("Failed to compile logging keywords pattern")?;
 
         // Only flag if there are transactions but no logging in the file
         if db_transaction.is_match(code) && !logging_keywords.is_match(code) {
@@ -301,10 +308,7 @@ mod tests {
     fn test_detect_logging_api_key() {
         let code = "console.log('API Key: ' + apikey)";
         let violations = CC72LoggingRule::analyze(code, "service.js", 1).unwrap();
-        assert!(
-            !violations.is_empty(),
-            "Should detect API key in logging"
-        );
+        assert!(!violations.is_empty(), "Should detect API key in logging");
         assert_eq!(violations[0].severity, "critical");
     }
 
@@ -331,7 +335,8 @@ mod tests {
 
     #[test]
     fn test_detect_missing_auth_logging() {
-        let code = "def authenticate(username, password):\n    return check_password(username, password)";
+        let code =
+            "def authenticate(username, password):\n    return check_password(username, password)";
         let violations = CC72LoggingRule::analyze(code, "auth.py", 1).unwrap();
         assert!(
             !violations.is_empty(),
@@ -345,8 +350,14 @@ mod tests {
         let code = "def authenticate(username, password):\n    logger.info('Auth attempt')\n    return check_password(username, password)";
         let violations = CC72LoggingRule::analyze(code, "auth.py", 1).unwrap();
         // The check_password call should not trigger a violation if logging is nearby
-        let auth_violations: Vec<_> = violations.iter().filter(|v| v.description.contains("Authentication event")).collect();
-        assert!(auth_violations.is_empty(), "Should allow auth with logging nearby");
+        let auth_violations: Vec<_> = violations
+            .iter()
+            .filter(|v| v.description.contains("Authentication event"))
+            .collect();
+        assert!(
+            auth_violations.is_empty(),
+            "Should allow auth with logging nearby"
+        );
     }
 
     #[test]
@@ -364,7 +375,10 @@ mod tests {
     fn test_transaction_with_logging() {
         let code = "logger.info('Starting transaction')\nBEGIN\nUPDATE users SET active=1\nCOMMIT\nlogger.info('Transaction complete')";
         let violations = CC72LoggingRule::analyze(code, "schema.sql", 1).unwrap();
-        assert!(violations.is_empty(), "Should allow transaction with logging");
+        assert!(
+            violations.is_empty(),
+            "Should allow transaction with logging"
+        );
     }
 
     #[test]
@@ -383,7 +397,9 @@ mod tests {
         let violations = CC72LoggingRule::analyze(code, "app.py", 1).unwrap();
         // Should detect at least the password in logging and the authenticate without logging
         assert!(violations.len() >= 1, "Should detect violations");
-        let has_password = violations.iter().any(|v| v.description.contains("password") || v.description.contains("Sensitive data"));
+        let has_password = violations.iter().any(|v| {
+            v.description.contains("password") || v.description.contains("Sensitive data")
+        });
         assert!(has_password, "Should detect password logging");
     }
 
@@ -412,7 +428,10 @@ mod tests {
         let code = "logger.info(f'Secret: {secret}')";
         let violations = CC72LoggingRule::analyze(code, "config.py", 1).unwrap();
         // This may or may not trigger depending on whether "secret" is in the password list
-        let secret_violations: Vec<_> = violations.iter().filter(|v| v.description.contains("Sensitive data")).collect();
+        let secret_violations: Vec<_> = violations
+            .iter()
+            .filter(|v| v.description.contains("Sensitive data"))
+            .collect();
         assert!(
             !secret_violations.is_empty(),
             "Should detect secret in logging statement"

@@ -3,8 +3,8 @@
 //! Provides security functions to prevent directory traversal attacks
 //! and validate file paths before file system operations
 
+use anyhow::{anyhow, Result};
 use std::path::{Path, PathBuf};
-use anyhow::{Result, anyhow};
 
 /// Validate and canonicalize a file path to prevent directory traversal
 ///
@@ -44,11 +44,13 @@ pub fn validate_file_path(base_dir: &Path, relative_path: &str) -> Result<PathBu
     let full_path = base_dir.join(relative_path);
 
     // Canonicalize to resolve symlinks and relative components
-    let canonical = full_path.canonicalize()
+    let canonical = full_path
+        .canonicalize()
         .map_err(|e| anyhow!("Invalid or non-existent path {}: {}", relative_path, e))?;
 
     // Ensure the canonical path is still within base_dir
-    let canonical_base = base_dir.canonicalize()
+    let canonical_base = base_dir
+        .canonicalize()
         .map_err(|e| anyhow!("Invalid base directory: {}", e))?;
 
     if !canonical.starts_with(&canonical_base) {
@@ -81,30 +83,34 @@ pub fn validate_project_path(path: &Path) -> Result<()> {
 
     // Ensure path is a directory
     if !path.is_dir() {
-        return Err(anyhow!("Project path is not a directory: {}", path.display()));
+        return Err(anyhow!(
+            "Project path is not a directory: {}",
+            path.display()
+        ));
     }
 
     // Canonicalize to resolve symlinks
-    let canonical = path.canonicalize()
+    let canonical = path
+        .canonicalize()
         .map_err(|e| anyhow!("Invalid project path: {}", e))?;
 
     // List of forbidden system directories
     let forbidden = [
-        "/",                // Root
-        "/etc",             // System configuration
-        "/private/etc",     // macOS: /etc symlinks to /private/etc
-        "/usr",             // System binaries
-        "/bin",             // Essential binaries
-        "/sbin",            // System binaries
-        "/var",             // Variable data
-        "/private/var",     // macOS: /var symlinks to /private/var
-        "/sys",             // System information
-        "/proc",            // Process information
-        "/boot",            // Boot files
-        "/dev",             // Device files
-        "/root",            // Root user home
-        "/tmp",             // Temporary (could be large)
-        "/private/tmp",     // macOS: /tmp symlinks to /private/tmp
+        "/",            // Root
+        "/etc",         // System configuration
+        "/private/etc", // macOS: /etc symlinks to /private/etc
+        "/usr",         // System binaries
+        "/bin",         // Essential binaries
+        "/sbin",        // System binaries
+        "/var",         // Variable data
+        "/private/var", // macOS: /var symlinks to /private/var
+        "/sys",         // System information
+        "/proc",        // Process information
+        "/boot",        // Boot files
+        "/dev",         // Device files
+        "/root",        // Root user home
+        "/tmp",         // Temporary (could be large)
+        "/private/tmp", // macOS: /tmp symlinks to /private/tmp
     ];
 
     let path_str = canonical.to_string_lossy();
@@ -115,10 +121,7 @@ pub fn validate_project_path(path: &Path) -> Result<()> {
             let remainder = &path_str[forbidden_path.len()..];
             // Allow only if significantly nested (more than 10 chars deep)
             if remainder.is_empty() || remainder.len() <= 10 {
-                return Err(anyhow!(
-                    "Cannot scan system directory: {}",
-                    path_str
-                ));
+                return Err(anyhow!("Cannot scan system directory: {}", path_str));
             }
         }
     }
@@ -129,8 +132,8 @@ pub fn validate_project_path(path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     #[test]
     fn test_reject_absolute_path() {
@@ -193,7 +196,10 @@ mod tests {
         let base = TempDir::new().unwrap();
         let result = validate_file_path(base.path(), "nonexistent.txt");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid or non-existent"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid or non-existent"));
     }
 
     #[test]

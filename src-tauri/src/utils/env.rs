@@ -19,8 +19,9 @@ pub fn load_env() -> Result<()> {
 /// # Errors
 /// Returns error if XAI_API_KEY environment variable is not set
 pub fn get_xai_key() -> Result<String> {
-    env::var("XAI_API_KEY")
-        .context("XAI_API_KEY environment variable not set. Please set it in .env or your environment.")
+    env::var("XAI_API_KEY").context(
+        "XAI_API_KEY environment variable not set. Please set it in .env or your environment.",
+    )
 }
 
 /// Validate API key format

@@ -1,0 +1,204 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import {
+  start_github_oauth,
+  poll_github_oauth,
+  type DeviceCodeResponse,
+} from "@/lib/tauri/commands"
+import { open } from "@tauri-apps/plugin-shell"
+
+interface GitHubOAuthModalProps {
+  onSuccess: () => void
+  onClose: () => void
+}
+
+export function GitHubOAuthModal({ onSuccess, onClose }: GitHubOAuthModalProps) {
+  const [step, setStep] = useState<"starting" | "waiting" | "polling" | "success" | "error">("starting")
+  const [deviceCode, setDeviceCode] = useState<DeviceCodeResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    startOAuth()
+  }, [])
+
+  const startOAuth = async () => {
+    try {
+      const response = await start_github_oauth()
+      setDeviceCode(response)
+      setStep("waiting")
+
+      // Auto-open GitHub auth page
+      await open(response.verification_uri)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setStep("error")
+    }
+  }
+
+  const startPolling = async () => {
+    setStep("polling")
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const completed = await poll_github_oauth()
+        if (completed) {
+          clearInterval(pollInterval)
+          setStep("success")
+          setTimeout(() => {
+            onSuccess()
+          }, 1500)
+        }
+      } catch (err) {
+        clearInterval(pollInterval)
+        setError(err instanceof Error ? err.message : String(err))
+        setStep("error")
+      }
+    }, (deviceCode?.interval || 5) * 1000)
+
+    // Cleanup on unmount
+    return () => clearInterval(pollInterval)
+  }
+
+  const copyCode = () => {
+    if (deviceCode?.user_code) {
+      navigator.clipboard.writeText(deviceCode.user_code)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fadeIn" onClick={step === "error" ? onClose : undefined} />
+      <div className="relative w-full max-w-md bg-[#12121a] rounded-2xl shadow-2xl overflow-hidden animate-fadeIn">
+        <div className="px-6 py-5 flex items-center justify-between border-b border-white/[0.06]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center">
+              <i className="lab la-github text-xl"></i>
+            </div>
+            <div>
+              <h2 className="font-semibold">Connect GitHub</h2>
+              <p className="text-xs text-white/40">
+                {step === "starting" && "Initializing..."}
+                {step === "waiting" && "Authorize in browser"}
+                {step === "polling" && "Waiting for authorization..."}
+                {step === "success" && "Connected successfully!"}
+                {step === "error" && "Connection failed"}
+              </p>
+            </div>
+          </div>
+          {step !== "polling" && (
+            <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-white/[0.06] flex items-center justify-center transition-colors">
+              <i className="las la-times text-white/40"></i>
+            </button>
+          )}
+        </div>
+
+        <div className="px-6 py-8">
+          {step === "starting" && (
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 flex items-center justify-center animate-pulse">
+                <i className="lab la-github text-3xl text-emerald-400"></i>
+              </div>
+              <p className="text-sm text-white/50">Starting OAuth flow...</p>
+            </div>
+          )}
+
+          {step === "waiting" && deviceCode && (
+            <div className="text-center">
+              <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 flex items-center justify-center">
+                <i className="lab la-github text-4xl text-emerald-400"></i>
+              </div>
+              <h3 className="font-semibold mb-2">Enter this code</h3>
+              <p className="text-sm text-white/50 mb-4">A browser window should have opened. Enter this code:</p>
+
+              <div className="flex items-center justify-center gap-2 mb-6">
+                <div className="px-6 py-4 bg-white/[0.06] rounded-xl border border-white/[0.08]">
+                  <div className="text-2xl font-mono font-bold tracking-widest">{deviceCode.user_code}</div>
+                </div>
+                <button
+                  onClick={copyCode}
+                  className="p-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+                  title="Copy code"
+                >
+                  <i className="las la-copy text-white/60"></i>
+                </button>
+              </div>
+
+              <div className="space-y-2 mb-6">
+                <button
+                  onClick={() => open(deviceCode.verification_uri)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] transition-colors text-sm"
+                >
+                  <i className="las la-external-link-alt mr-2"></i>
+                  Open GitHub Authorization
+                </button>
+              </div>
+
+              <button
+                onClick={startPolling}
+                className="group relative w-full px-6 py-3 rounded-xl font-medium text-sm overflow-hidden transition-all hover:scale-[1.02]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-90 group-hover:opacity-100 transition-opacity"></div>
+                <span className="relative text-white">I've authorized, continue</span>
+              </button>
+            </div>
+          )}
+
+          {step === "polling" && (
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 flex items-center justify-center">
+                <i className="lab la-github text-3xl text-emerald-400 animate-pulse"></i>
+              </div>
+              <h3 className="font-semibold mb-2">Checking authorization...</h3>
+              <p className="text-sm text-white/50">This may take a few seconds</p>
+              <div className="mt-4 flex items-center justify-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: "300ms" }}></div>
+              </div>
+            </div>
+          )}
+
+          {step === "success" && (
+            <div className="text-center">
+              <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 flex items-center justify-center">
+                <i className="las la-check text-4xl text-emerald-400"></i>
+              </div>
+              <h3 className="font-semibold mb-2">Successfully Connected!</h3>
+              <p className="text-sm text-white/50">Loading your repositories...</p>
+            </div>
+          )}
+
+          {step === "error" && (
+            <div className="text-center">
+              <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-red-500/20 to-orange-500/10 flex items-center justify-center">
+                <i className="las la-exclamation-triangle text-4xl text-red-400"></i>
+              </div>
+              <h3 className="font-semibold mb-2">Connection Failed</h3>
+              <p className="text-sm text-white/50 mb-6">{error || "An error occurred"}</p>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button className="flex-1 bg-gradient-to-r from-emerald-500 to-cyan-500 border-0" onClick={startOAuth}>
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
+    </div>
+  )
+}

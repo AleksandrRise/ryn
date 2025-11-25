@@ -100,10 +100,13 @@ impl FileWatcher {
             let ignore_patterns_clone = ignore_patterns.clone();
             let extensions_clone = extensions.clone();
 
-            let result = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
-                match res {
+            let result =
+                notify::recommended_watcher(move |res: notify::Result<notify::Event>| match res {
                     Ok(event) => {
-                        println!("[FileWatcher] Received notify event: kind={:?}, paths={:?}", event.kind, event.paths);
+                        println!(
+                            "[FileWatcher] Received notify event: kind={:?}, paths={:?}",
+                            event.kind, event.paths
+                        );
                         use notify::EventKind;
                         match event.kind {
                             EventKind::Modify(_) => {
@@ -113,12 +116,14 @@ impl FileWatcher {
                                         &ignore_patterns_clone,
                                         &extensions_clone,
                                     );
-                                    println!("[FileWatcher] Modify event for {:?}, should_watch={}", path, should_watch);
+                                    println!(
+                                        "[FileWatcher] Modify event for {:?}, should_watch={}",
+                                        path, should_watch
+                                    );
                                     if should_watch {
-                                        let _ =
-                                            tx_clone.send_blocking(FileEvent::FileModified {
-                                                path: path.clone(),
-                                            });
+                                        let _ = tx_clone.send_blocking(FileEvent::FileModified {
+                                            path: path.clone(),
+                                        });
                                     }
                                 }
                             }
@@ -129,7 +134,10 @@ impl FileWatcher {
                                         &ignore_patterns_clone,
                                         &extensions_clone,
                                     );
-                                    println!("[FileWatcher] Create event for {:?}, should_watch={}", path, should_watch);
+                                    println!(
+                                        "[FileWatcher] Create event for {:?}, should_watch={}",
+                                        path, should_watch
+                                    );
                                     if should_watch {
                                         let _ = tx_clone.send_blocking(FileEvent::FileCreated {
                                             path: path.clone(),
@@ -144,7 +152,10 @@ impl FileWatcher {
                                         &ignore_patterns_clone,
                                         &extensions_clone,
                                     );
-                                    println!("[FileWatcher] Remove event for {:?}, should_watch={}", path, should_watch);
+                                    println!(
+                                        "[FileWatcher] Remove event for {:?}, should_watch={}",
+                                        path, should_watch
+                                    );
                                     if should_watch {
                                         let _ = tx_clone.send_blocking(FileEvent::FileDeleted {
                                             path: path.clone(),
@@ -158,12 +169,14 @@ impl FileWatcher {
                         }
                     }
                     Err(e) => println!("[FileWatcher] Watch error: {}", e),
-                }
-            });
+                });
 
             match result {
                 Ok(mut watcher) => {
-                    println!("[FileWatcher] Successfully created watcher, watching {:?}", path_buf);
+                    println!(
+                        "[FileWatcher] Successfully created watcher, watching {:?}",
+                        path_buf
+                    );
                     if let Err(e) = watcher.watch(&path_buf, RecursiveMode::Recursive) {
                         println!("[FileWatcher] FAILED to watch directory: {}", e);
                         return;
@@ -192,11 +205,7 @@ impl FileWatcher {
         })
     }
 
-    fn should_watch_path(
-        path: &Path,
-        ignore_patterns: &[String],
-        extensions: &[String],
-    ) -> bool {
+    fn should_watch_path(path: &Path, ignore_patterns: &[String], extensions: &[String]) -> bool {
         let path_str = path.to_string_lossy();
 
         // Check if in ignore list
@@ -254,8 +263,16 @@ mod tests {
         let patterns = vec![".git".to_string(), "node_modules".to_string()];
         let extensions = vec!["py".to_string(), "js".to_string()];
 
-        assert!(FileWatcher::should_watch_path(Path::new("app.py"), &patterns, &extensions));
-        assert!(!FileWatcher::should_watch_path(Path::new("app.txt"), &patterns, &extensions));
+        assert!(FileWatcher::should_watch_path(
+            Path::new("app.py"),
+            &patterns,
+            &extensions
+        ));
+        assert!(!FileWatcher::should_watch_path(
+            Path::new("app.txt"),
+            &patterns,
+            &extensions
+        ));
     }
 
     #[test]
@@ -280,7 +297,11 @@ mod tests {
         let patterns = vec![];
         let extensions = vec!["py".to_string()];
 
-        assert!(FileWatcher::should_watch_path(Path::new("test.py"), &patterns, &extensions));
+        assert!(FileWatcher::should_watch_path(
+            Path::new("test.py"),
+            &patterns,
+            &extensions
+        ));
         assert!(!FileWatcher::should_watch_path(
             Path::new("test.js"),
             &patterns,

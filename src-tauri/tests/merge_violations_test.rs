@@ -20,34 +20,38 @@ fn test_merge_identical_line_numbers() {
     let scan_id = project.insert_scan(project_id, "completed").unwrap();
 
     // Insert regex violation
-    let regex_id = project.insert_violation(
-        scan_id,
-        "CC6.1",
-        "high",
-        "Missing @login_required decorator",
-        "app.py",
-        42,
-        "def admin(): pass",
-        Some("regex"),
-        None,
-        None,
-        Some("Pattern match: missing authentication decorator"),
-    ).unwrap();
+    let regex_id = project
+        .insert_violation(
+            scan_id,
+            "CC6.1",
+            "high",
+            "Missing @login_required decorator",
+            "app.py",
+            42,
+            "def admin(): pass",
+            Some("regex"),
+            None,
+            None,
+            Some("Pattern match: missing authentication decorator"),
+        )
+        .unwrap();
 
     // Insert LLM violation at same line
-    let llm_id = project.insert_violation(
-        scan_id,
-        "CC6.1",
-        "high",
-        "This admin endpoint lacks authentication",
-        "app.py",
-        42,  // Same line
-        "def admin(): pass",
-        Some("llm"),
-        Some(85),  // 85% confidence
-        Some("Claude detected: endpoint allows unauthorized access"),
-        None,
-    ).unwrap();
+    let llm_id = project
+        .insert_violation(
+            scan_id,
+            "CC6.1",
+            "high",
+            "This admin endpoint lacks authentication",
+            "app.py",
+            42, // Same line
+            "def admin(): pass",
+            Some("llm"),
+            Some(85), // 85% confidence
+            Some("Claude detected: endpoint allows unauthorized access"),
+            None,
+        )
+        .unwrap();
 
     // In real implementation, merge_violations() is called before DB insertion
     // Here we verify the test infrastructure can represent merged violations
@@ -62,7 +66,10 @@ fn test_merge_identical_line_numbers() {
         )
         .unwrap();
 
-    assert_eq!(count, 2, "Should have 2 separate violations (before merging)");
+    assert_eq!(
+        count, 2,
+        "Should have 2 separate violations (before merging)"
+    );
 
     // Verify both exist
     let regex_exists: bool = conn
@@ -95,49 +102,54 @@ fn test_merge_within_tolerance() {
 
     // Test cases: (regex_line, llm_line, should_merge)
     let test_cases = vec![
-        (42, 42, true),   // Exact match
-        (42, 43, true),   // 1 line apart
-        (42, 45, true),   // 3 lines apart (at tolerance)
-        (42, 46, false),  // 4 lines apart (exceeds tolerance)
-        (42, 39, true),   // 3 lines before (at tolerance)
-        (42, 38, false),  // 4 lines before (exceeds tolerance)
+        (42, 42, true),  // Exact match
+        (42, 43, true),  // 1 line apart
+        (42, 45, true),  // 3 lines apart (at tolerance)
+        (42, 46, false), // 4 lines apart (exceeds tolerance)
+        (42, 39, true),  // 3 lines before (at tolerance)
+        (42, 38, false), // 4 lines before (exceeds tolerance)
     ];
 
     for (idx, (regex_line, llm_line, should_merge)) in test_cases.iter().enumerate() {
         let file = format!("test_{}.py", idx);
 
         // Insert regex violation
-        project.insert_violation(
-            scan_id,
-            "CC6.7",
-            "critical",
-            "Hardcoded secret",
-            &file,
-            *regex_line,
-            "password = 'secret'",
-            Some("regex"),
-            None,
-            None,
-            Some("Pattern: hardcoded password"),
-        ).unwrap();
+        project
+            .insert_violation(
+                scan_id,
+                "CC6.7",
+                "critical",
+                "Hardcoded secret",
+                &file,
+                *regex_line,
+                "password = 'secret'",
+                Some("regex"),
+                None,
+                None,
+                Some("Pattern: hardcoded password"),
+            )
+            .unwrap();
 
         // Insert LLM violation
-        project.insert_violation(
-            scan_id,
-            "CC6.7",
-            "critical",
-            "Credentials in code",
-            &file,
-            *llm_line,
-            "password = 'secret'",
-            Some("llm"),
-            Some(90),
-            Some("Claude found hardcoded credentials"),
-            None,
-        ).unwrap();
+        project
+            .insert_violation(
+                scan_id,
+                "CC6.7",
+                "critical",
+                "Credentials in code",
+                &file,
+                *llm_line,
+                "password = 'secret'",
+                Some("llm"),
+                Some(90),
+                Some("Claude found hardcoded credentials"),
+                None,
+            )
+            .unwrap();
 
         // Verify both violations exist
-        let count: i64 = project.connection()
+        let count: i64 = project
+            .connection()
             .query_row(
                 "SELECT COUNT(*) FROM violations WHERE scan_id = ? AND file_path = ?",
                 rusqlite::params![scan_id, file],
@@ -161,36 +173,41 @@ fn test_no_merge_different_files() {
     let scan_id = project.insert_scan(project_id, "completed").unwrap();
 
     // Same line number, same control, but different files
-    project.insert_violation(
-        scan_id,
-        "CC6.1",
-        "high",
-        "Missing auth",
-        "views.py",
-        42,
-        "def view(): pass",
-        Some("regex"),
-        None,
-        None,
-        Some("Regex: missing decorator"),
-    ).unwrap();
+    project
+        .insert_violation(
+            scan_id,
+            "CC6.1",
+            "high",
+            "Missing auth",
+            "views.py",
+            42,
+            "def view(): pass",
+            Some("regex"),
+            None,
+            None,
+            Some("Regex: missing decorator"),
+        )
+        .unwrap();
 
-    project.insert_violation(
-        scan_id,
-        "CC6.1",
-        "high",
-        "Missing auth",
-        "api.py",  // Different file
-        42,
-        "def view(): pass",
-        Some("llm"),
-        Some(85),
-        Some("LLM: missing auth"),
-        None,
-    ).unwrap();
+    project
+        .insert_violation(
+            scan_id,
+            "CC6.1",
+            "high",
+            "Missing auth",
+            "api.py", // Different file
+            42,
+            "def view(): pass",
+            Some("llm"),
+            Some(85),
+            Some("LLM: missing auth"),
+            None,
+        )
+        .unwrap();
 
     // Should remain separate
-    let count: i64 = project.connection()
+    let count: i64 = project
+        .connection()
         .query_row(
             "SELECT COUNT(*) FROM violations WHERE scan_id = ?",
             [scan_id],
@@ -210,36 +227,41 @@ fn test_no_merge_different_controls() {
     let scan_id = project.insert_scan(project_id, "completed").unwrap();
 
     // Same file, same line, but different controls
-    project.insert_violation(
-        scan_id,
-        "CC6.1",  // Access control
-        "high",
-        "Missing auth",
-        "app.py",
-        42,
-        "def view(): pass",
-        Some("regex"),
-        None,
-        None,
-        Some("Regex: missing auth"),
-    ).unwrap();
+    project
+        .insert_violation(
+            scan_id,
+            "CC6.1", // Access control
+            "high",
+            "Missing auth",
+            "app.py",
+            42,
+            "def view(): pass",
+            Some("regex"),
+            None,
+            None,
+            Some("Regex: missing auth"),
+        )
+        .unwrap();
 
-    project.insert_violation(
-        scan_id,
-        "CC7.2",  // Logging - different control
-        "medium",
-        "Missing audit log",
-        "app.py",
-        42,
-        "def view(): pass",
-        Some("llm"),
-        Some(75),
-        Some("LLM: missing logging"),
-        None,
-    ).unwrap();
+    project
+        .insert_violation(
+            scan_id,
+            "CC7.2", // Logging - different control
+            "medium",
+            "Missing audit log",
+            "app.py",
+            42,
+            "def view(): pass",
+            Some("llm"),
+            Some(75),
+            Some("LLM: missing logging"),
+            None,
+        )
+        .unwrap();
 
     // Should remain separate
-    let count: i64 = project.connection()
+    let count: i64 = project
+        .connection()
         .query_row(
             "SELECT COUNT(*) FROM violations WHERE scan_id = ?",
             [scan_id],
@@ -259,19 +281,21 @@ fn test_hybrid_violation_structure() {
     let scan_id = project.insert_scan(project_id, "completed").unwrap();
 
     // Insert a hybrid violation manually
-    let hybrid_id = project.insert_violation(
-        scan_id,
-        "CC6.7",
-        "critical",
-        "Hardcoded API key",
-        "config.py",
-        15,
-        "api_key = 'sk-1234567890'",
-        Some("hybrid"),  // Hybrid detection
-        Some(92),        // Confidence from LLM
-        Some("Claude detected hardcoded credentials with high confidence"),  // LLM reasoning
-        Some("Pattern match at line 15: Hardcoded secret detected"),        // Regex reasoning
-    ).unwrap();
+    let hybrid_id = project
+        .insert_violation(
+            scan_id,
+            "CC6.7",
+            "critical",
+            "Hardcoded API key",
+            "config.py",
+            15,
+            "api_key = 'sk-1234567890'",
+            Some("hybrid"), // Hybrid detection
+            Some(92),       // Confidence from LLM
+            Some("Claude detected hardcoded credentials with high confidence"), // LLM reasoning
+            Some("Pattern match at line 15: Hardcoded secret detected"), // Regex reasoning
+        )
+        .unwrap();
 
     // Verify all hybrid fields are present
     let (detection_method, confidence, llm_reasoning, regex_reasoning): (
@@ -279,7 +303,8 @@ fn test_hybrid_violation_structure() {
         Option<i64>,
         Option<String>,
         Option<String>,
-    ) = project.connection()
+    ) = project
+        .connection()
         .query_row(
             "SELECT detection_method, confidence_score, llm_reasoning, regex_reasoning
              FROM violations WHERE id = ?",
@@ -288,7 +313,10 @@ fn test_hybrid_violation_structure() {
         )
         .unwrap();
 
-    assert_eq!(detection_method, "hybrid", "Detection method should be 'hybrid'");
+    assert_eq!(
+        detection_method, "hybrid",
+        "Detection method should be 'hybrid'"
+    );
     assert_eq!(confidence, Some(92), "Should have confidence score");
     assert!(llm_reasoning.is_some(), "Should have LLM reasoning");
     assert!(regex_reasoning.is_some(), "Should have regex reasoning");
@@ -297,11 +325,23 @@ fn test_hybrid_violation_structure() {
     let llm_reason = llm_reasoning.unwrap();
     let regex_reason = regex_reasoning.unwrap();
 
-    assert!(llm_reason.contains("Claude"), "LLM reasoning should mention Claude");
-    assert!(llm_reason.contains("confidence"), "LLM reasoning should explain confidence");
+    assert!(
+        llm_reason.contains("Claude"),
+        "LLM reasoning should mention Claude"
+    );
+    assert!(
+        llm_reason.contains("confidence"),
+        "LLM reasoning should explain confidence"
+    );
 
-    assert!(regex_reason.contains("Pattern"), "Regex reasoning should mention pattern");
-    assert!(regex_reason.contains("line 15"), "Regex reasoning should mention line number");
+    assert!(
+        regex_reason.contains("Pattern"),
+        "Regex reasoning should mention pattern"
+    );
+    assert!(
+        regex_reason.contains("line 15"),
+        "Regex reasoning should mention line number"
+    );
 }
 
 /// Test severity comparison in merged violations
@@ -317,48 +357,53 @@ fn test_merge_severity_selection() {
         ("critical", "high", "critical"),
         ("high", "critical", "critical"),
         ("medium", "low", "medium"),
-        ("high", "high", "high"),  // Same severity
+        ("high", "high", "high"), // Same severity
     ];
 
     for (idx, (regex_sev, llm_sev, expected)) in test_cases.iter().enumerate() {
         let file = format!("severity_{}.py", idx);
 
         // Insert both violations
-        project.insert_violation(
-            scan_id,
-            "CC6.1",
-            regex_sev,
-            "Issue",
-            &file,
-            10,
-            "code",
-            Some("regex"),
-            None,
-            None,
-            Some("Regex found"),
-        ).unwrap();
+        project
+            .insert_violation(
+                scan_id,
+                "CC6.1",
+                regex_sev,
+                "Issue",
+                &file,
+                10,
+                "code",
+                Some("regex"),
+                None,
+                None,
+                Some("Regex found"),
+            )
+            .unwrap();
 
-        project.insert_violation(
-            scan_id,
-            "CC6.1",
-            llm_sev,
-            "Issue",
-            &file,
-            10,
-            "code",
-            Some("llm"),
-            Some(80),
-            Some("LLM found"),
-            None,
-        ).unwrap();
+        project
+            .insert_violation(
+                scan_id,
+                "CC6.1",
+                llm_sev,
+                "Issue",
+                &file,
+                10,
+                "code",
+                Some("llm"),
+                Some(80),
+                Some("LLM found"),
+                None,
+            )
+            .unwrap();
 
         // In production merge_violations(), the hybrid would use max severity
         // Verify both severities are stored
-        let severities: Vec<String> = project.connection()
+        let severities: Vec<String> = project
+            .connection()
             .prepare(
                 "SELECT severity FROM violations
                  WHERE scan_id = ? AND file_path = ?
-                 ORDER BY severity DESC"
+                 ORDER BY severity DESC",
             )
             .unwrap()
             .query_map(rusqlite::params![scan_id, file], |row| row.get(0))

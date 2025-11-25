@@ -12,7 +12,7 @@
 
 // Import command modules
 use ryn::commands::{
-    project, scan, violation, fix, audit, settings, analytics, logger
+    analytics, audit, fix, github, logger, project, scan, settings, violation
 };
 use tauri_plugin_mcp_bridge;
 
@@ -44,6 +44,7 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_mcp_bridge::init())
         .manage(scan::ScanResponseChannels::default())
         .manage(scan::FileWatcherState::default());
@@ -104,6 +105,18 @@ fn main() {
             analytics::get_scan_cost,
             // Logger Commands (1)
             logger::log_frontend_message,
+            // GitHub Commands (10)
+            github::start_github_oauth,
+            github::poll_github_oauth,
+            github::check_github_connection,
+            github::disconnect_github,
+            github::fetch_github_repos,
+            github::get_github_repos,
+            github::track_repo,
+            github::untrack_repo,
+            github::get_tracked_repos,
+            github::check_repo_for_changes,
+            github::scan_github_repo,
         ])
         .run(tauri::generate_context!())
     {

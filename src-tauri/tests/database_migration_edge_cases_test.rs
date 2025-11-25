@@ -18,10 +18,10 @@
 //! - Robustness over correctness - Verify graceful degradation
 //! - Data integrity - Verify no corruption occurs
 
+use anyhow::{Context, Result};
 use rusqlite::Connection;
-use tempfile::TempDir;
-use anyhow::{Result, Context};
 use std::sync::Arc;
+use tempfile::TempDir;
 
 // Import database modules
 use ryn::db::migrations::{run_migrations, seed_controls};
@@ -71,7 +71,9 @@ fn column_exists(conn: &Connection, table_name: &str, column_name: &str) -> Resu
 /// Helper to count rows in a table
 fn count_rows(conn: &Connection, table_name: &str) -> Result<i64> {
     let count: i64 = conn
-        .query_row(&format!("SELECT COUNT(*) FROM {}", table_name), [], |row| row.get(0))
+        .query_row(&format!("SELECT COUNT(*) FROM {}", table_name), [], |row| {
+            row.get(0)
+        })
         .context(format!("Failed to count rows in {}", table_name))?;
     Ok(count)
 }
@@ -126,8 +128,10 @@ fn test_migration_failure_leaves_version_unchanged() -> Result<()> {
     // Step 5: Verify we can detect incomplete migration state
     // detection_method exists but confidence_score doesn't (incomplete v2)
     assert!(column_exists(&conn, "violations", "detection_method")?);
-    assert!(!column_exists(&conn, "violations", "confidence_score")?,
-            "Partial migration should leave some v2 columns missing");
+    assert!(
+        !column_exists(&conn, "violations", "confidence_score")?,
+        "Partial migration should leave some v2 columns missing"
+    );
 
     println!("✓ Migration failure correctly left version unchanged at v1");
     println!("✓ Partial v2 changes detected (detection_method exists, confidence_score missing)");
@@ -187,7 +191,10 @@ fn test_migration_recovery_after_failure() -> Result<()> {
     // Create test data to ensure no corruption
     seed_controls(&conn)?;
     let control_count = count_rows(&conn, "controls")?;
-    assert_eq!(control_count, 4, "Controls should be seeded correctly despite migration issue");
+    assert_eq!(
+        control_count, 4,
+        "Controls should be seeded correctly despite migration issue"
+    );
 
     Ok(())
 }
@@ -210,12 +217,22 @@ fn test_downgrade_protection() -> Result<()> {
 
     // Verify we're at v3 and all tables exist
     assert_eq!(get_schema_version(&conn)?, 3);
-    assert!(table_exists(&conn, "scan_costs")?, "v2 scan_costs table should exist");
-    assert!(column_exists(&conn, "violations", "function_name")?, "v3 function_name column should exist");
+    assert!(
+        table_exists(&conn, "scan_costs")?,
+        "v2 scan_costs table should exist"
+    );
+    assert!(
+        column_exists(&conn, "violations", "function_name")?,
+        "v3 function_name column should exist"
+    );
 
     // Step 2: Manually set version back to 1 (simulate downgrade)
     set_schema_version(&conn, 1)?;
-    assert_eq!(get_schema_version(&conn)?, 1, "Version should be forcibly set to 1");
+    assert_eq!(
+        get_schema_version(&conn)?,
+        1,
+        "Version should be forcibly set to 1"
+    );
 
     println!("⚠️  Manually downgraded schema version from 3 to 1");
 
@@ -239,7 +256,10 @@ fn test_downgrade_protection() -> Result<()> {
 
     // Step 4: Verify existing data is intact despite migration failure
     let control_count = count_rows(&conn, "controls")?;
-    assert_eq!(control_count, 4, "Controls should still exist after failed re-migration");
+    assert_eq!(
+        control_count, 4,
+        "Controls should still exist after failed re-migration"
+    );
 
     println!("✓ Existing data intact despite migration failure");
 
@@ -317,7 +337,10 @@ fn test_migration_idempotency() -> Result<()> {
         [project_id],
         |row| row.get(0),
     )?;
-    assert_eq!(project_name, "test-project", "Project data should be intact");
+    assert_eq!(
+        project_name, "test-project",
+        "Project data should be intact"
+    );
 
     println!("✓ Existing data intact after migration attempts");
     println!("✓ Migrations should use IF NOT EXISTS or column_exists() checks");
@@ -355,7 +378,8 @@ async fn test_concurrent_scans_different_projects() -> Result<()> {
     let task1 = tokio::spawn(async move {
         let conn = Connection::open(&db_path_clone1).unwrap();
         conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
-        conn.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
 
         // Wait for both tasks to be ready
         barrier1.wait().await;
@@ -364,14 +388,16 @@ async fn test_concurrent_scans_different_projects() -> Result<()> {
         conn.execute(
             "INSERT INTO projects (name, path) VALUES (?, ?)",
             ["project-a", "/tmp/project-a"],
-        ).unwrap();
+        )
+        .unwrap();
         let project_id: i64 = conn.last_insert_rowid();
 
         // Create scan for project A
         conn.execute(
             "INSERT INTO scans (project_id, status) VALUES (?, ?)",
             rusqlite::params![project_id, "running"],
-        ).unwrap();
+        )
+        .unwrap();
         let scan_id: i64 = conn.last_insert_rowid();
 
         // Insert 100 violations for project A
@@ -406,7 +432,8 @@ async fn test_concurrent_scans_different_projects() -> Result<()> {
     let task2 = tokio::spawn(async move {
         let conn = Connection::open(&db_path_clone2).unwrap();
         conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
-        conn.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
 
         // Wait for both tasks to be ready
         barrier2.wait().await;
@@ -415,14 +442,16 @@ async fn test_concurrent_scans_different_projects() -> Result<()> {
         conn.execute(
             "INSERT INTO projects (name, path) VALUES (?, ?)",
             ["project-b", "/tmp/project-b"],
-        ).unwrap();
+        )
+        .unwrap();
         let project_id: i64 = conn.last_insert_rowid();
 
         // Create scan for project B
         conn.execute(
             "INSERT INTO scans (project_id, status) VALUES (?, ?)",
             rusqlite::params![project_id, "running"],
-        ).unwrap();
+        )
+        .unwrap();
         let scan_id: i64 = conn.last_insert_rowid();
 
         // Insert 100 violations for project B
@@ -542,7 +571,8 @@ async fn test_concurrent_scans_same_project() -> Result<()> {
     let task1 = tokio::spawn(async move {
         let conn = Connection::open(&db_path_clone1).unwrap();
         conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
-        conn.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
 
         barrier1.wait().await;
 
@@ -550,7 +580,8 @@ async fn test_concurrent_scans_same_project() -> Result<()> {
         conn.execute(
             "INSERT INTO scans (project_id, status) VALUES (?, ?)",
             rusqlite::params![project_id, "running"],
-        ).unwrap();
+        )
+        .unwrap();
         let scan_id: i64 = conn.last_insert_rowid();
 
         // Insert 50 violations
@@ -569,7 +600,8 @@ async fn test_concurrent_scans_same_project() -> Result<()> {
         conn.execute(
             "UPDATE scans SET status = ?, violations_found = ? WHERE id = ?",
             rusqlite::params!["completed", 50, scan_id],
-        ).unwrap();
+        )
+        .unwrap();
 
         scan_id
     });
@@ -580,7 +612,8 @@ async fn test_concurrent_scans_same_project() -> Result<()> {
     let task2 = tokio::spawn(async move {
         let conn = Connection::open(&db_path_clone2).unwrap();
         conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
-        conn.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
 
         barrier2.wait().await;
 
@@ -588,7 +621,8 @@ async fn test_concurrent_scans_same_project() -> Result<()> {
         conn.execute(
             "INSERT INTO scans (project_id, status) VALUES (?, ?)",
             rusqlite::params![project_id, "running"],
-        ).unwrap();
+        )
+        .unwrap();
         let scan_id: i64 = conn.last_insert_rowid();
 
         // Insert 50 violations
@@ -607,7 +641,8 @@ async fn test_concurrent_scans_same_project() -> Result<()> {
         conn.execute(
             "UPDATE scans SET status = ?, violations_found = ? WHERE id = ?",
             rusqlite::params!["completed", 50, scan_id],
-        ).unwrap();
+        )
+        .unwrap();
 
         scan_id
     });
@@ -693,7 +728,8 @@ async fn test_concurrent_insert_stress() -> Result<()> {
         let task = tokio::spawn(async move {
             let conn = Connection::open(&db_path_clone).unwrap();
             conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
-            conn.busy_timeout(std::time::Duration::from_secs(10)).unwrap();
+            conn.busy_timeout(std::time::Duration::from_secs(10))
+                .unwrap();
 
             // Wait for all tasks to be ready
             barrier_clone.wait().await;
@@ -812,7 +848,8 @@ async fn test_concurrent_read_write_isolation() -> Result<()> {
     let writer = tokio::spawn(async move {
         let conn = Connection::open(&db_path_writer).unwrap();
         conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
-        conn.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
 
         barrier_writer.wait().await;
 
@@ -838,7 +875,8 @@ async fn test_concurrent_read_write_isolation() -> Result<()> {
     let reader = tokio::spawn(async move {
         let conn = Connection::open(&db_path_reader).unwrap();
         conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
-        conn.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
 
         barrier_reader.wait().await;
 
@@ -847,11 +885,13 @@ async fn test_concurrent_read_write_isolation() -> Result<()> {
 
         // Read for ~100 iterations
         for _ in 0..100 {
-            let count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM violations WHERE scan_id = ?",
-                [scan_id],
-                |row| row.get(0),
-            ).unwrap();
+            let count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM violations WHERE scan_id = ?",
+                    [scan_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
 
             // Verify count is monotonically increasing (or equal)
             assert!(
@@ -885,7 +925,10 @@ async fn test_concurrent_read_write_isolation() -> Result<()> {
 
     println!("✓ Concurrent read-write test passed");
     println!("✓ Writer inserted 500 violations");
-    println!("✓ Reader performed {} reads without seeing corrupted data", reads_performed);
+    println!(
+        "✓ Reader performed {} reads without seeing corrupted data",
+        reads_performed
+    );
     println!("✓ Read isolation verified (counts monotonically increased)");
 
     Ok(())
@@ -973,9 +1016,9 @@ fn test_insert_failure_disk_full_simulation() -> Result<()> {
 
     // SQLite error should mention "full" or "space"
     assert!(
-        error_message.to_lowercase().contains("full") ||
-        error_message.to_lowercase().contains("space") ||
-        error_message.to_lowercase().contains("disk"),
+        error_message.to_lowercase().contains("full")
+            || error_message.to_lowercase().contains("space")
+            || error_message.to_lowercase().contains("disk"),
         "Error should indicate disk space issue"
     );
 
@@ -986,7 +1029,10 @@ fn test_insert_failure_disk_full_simulation() -> Result<()> {
         |row| row.get(0),
     )?;
 
-    assert_eq!(violation_count, inserted, "All successfully inserted violations should be stored");
+    assert_eq!(
+        violation_count, inserted,
+        "All successfully inserted violations should be stored"
+    );
 
     // Verify we can read existing violations
     let sample_violation: String = conn.query_row(
@@ -994,7 +1040,10 @@ fn test_insert_failure_disk_full_simulation() -> Result<()> {
         [scan_id],
         |row| row.get(0),
     )?;
-    assert!(sample_violation.starts_with("Large violation"), "Existing data should be readable");
+    assert!(
+        sample_violation.starts_with("Large violation"),
+        "Existing data should be readable"
+    );
 
     println!("✓ Existing data intact despite disk full error");
     println!("✓ Graceful failure - no corruption detected");
@@ -1069,7 +1118,10 @@ fn test_update_failure_during_fix_application() -> Result<()> {
     );
 
     // UPDATE should succeed (doesn't add new pages)
-    assert!(update_result.is_ok(), "UPDATE should succeed even when disk near full");
+    assert!(
+        update_result.is_ok(),
+        "UPDATE should succeed even when disk near full"
+    );
 
     // Verify update was applied
     let status: String = conn.query_row(
@@ -1115,13 +1167,13 @@ fn test_connection_failure_recovery() -> Result<()> {
 
     // Verify data from previous connection
     let project_count = count_rows(&conn, "projects")?;
-    assert_eq!(project_count, 1, "Project should persist after connection close");
+    assert_eq!(
+        project_count, 1,
+        "Project should persist after connection close"
+    );
 
-    let project_name: String = conn.query_row(
-        "SELECT name FROM projects LIMIT 1",
-        [],
-        |row| row.get(0),
-    )?;
+    let project_name: String =
+        conn.query_row("SELECT name FROM projects LIMIT 1", [], |row| row.get(0))?;
     assert_eq!(project_name, "conn-test", "Project data should be intact");
 
     // Verify we can perform new operations
@@ -1181,7 +1233,10 @@ fn test_migration_failure_on_disk_full() -> Result<()> {
     );
 
     // This should succeed (ALTER TABLE is efficient)
-    assert!(result1.is_ok(), "ALTER TABLE should work with limited space");
+    assert!(
+        result1.is_ok(),
+        "ALTER TABLE should work with limited space"
+    );
 
     // Add confidence_score column
     let result2 = conn.execute(

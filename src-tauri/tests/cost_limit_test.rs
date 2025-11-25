@@ -47,7 +47,10 @@ async fn test_respond_to_nonexistent_scan() {
     // Try to respond without creating channel first
     let result = channels.respond_to_cost_limit(scan_id, true);
 
-    assert!(result.is_err(), "Should error when responding to non-existent scan");
+    assert!(
+        result.is_err(),
+        "Should error when responding to non-existent scan"
+    );
     assert!(
         result.unwrap_err().contains("No pending cost limit prompt"),
         "Error should mention no pending prompt"
@@ -123,12 +126,12 @@ fn test_cost_calculation_2025_pricing() {
 
     let test_cases = vec![
         // (input, output, cache_read, cache_write, expected_cost)
-        (1_000_000, 0, 0, 0, 0.80),          // 1M input tokens = $0.80
-        (0, 1_000_000, 0, 0, 4.00),          // 1M output tokens = $4.00
-        (0, 0, 1_000_000, 0, 0.08),          // 1M cache read = $0.08
-        (0, 0, 0, 1_000_000, 1.00),          // 1M cache write = $1.00
+        (1_000_000, 0, 0, 0, 0.80), // 1M input tokens = $0.80
+        (0, 1_000_000, 0, 0, 4.00), // 1M output tokens = $4.00
+        (0, 0, 1_000_000, 0, 0.08), // 1M cache read = $0.08
+        (0, 0, 0, 1_000_000, 1.00), // 1M cache write = $1.00
         (100_000, 50_000, 200_000, 50_000, 0.346), // Mixed usage
-        (10_000, 5_000, 0, 0, 0.028),        // Small scan
+        (10_000, 5_000, 0, 0, 0.028), // Small scan
     ];
 
     for (input, output, cache_read, cache_write, expected) in test_cases {
@@ -138,7 +141,13 @@ fn test_cost_calculation_2025_pricing() {
         assert!(
             diff < 0.001,
             "Cost mismatch for tokens ({}, {}, {}, {}): expected ${}, got ${} (diff: ${})",
-            input, output, cache_read, cache_write, expected, cost, diff
+            input,
+            output,
+            cache_read,
+            cache_write,
+            expected,
+            cost,
+            diff
         );
     }
 
@@ -151,7 +160,9 @@ fn test_cost_limit_detection() {
     let project = TestProject::new("cost_limit_detection").unwrap();
 
     // Set cost limit to $0.50
-    project.insert_setting("cost_limit_per_scan", "0.50").unwrap();
+    project
+        .insert_setting("cost_limit_per_scan", "0.50")
+        .unwrap();
 
     // Query cost limit from settings
     let conn = project.connection();
@@ -200,10 +211,10 @@ fn test_cost_limit_detection() {
 fn test_cost_per_file_calculation() {
     let test_cases = vec![
         // (files, input, output, cache_read, cache_write, expected_cost_per_file)
-        (10, 50_000, 10_000, 20_000, 5_000, 0.0086),   // $0.086 / 10 = $0.0086
+        (10, 50_000, 10_000, 20_000, 5_000, 0.0086), // $0.086 / 10 = $0.0086
         (100, 500_000, 100_000, 200_000, 50_000, 0.0086), // Same per-file cost
-        (1, 10_000, 2_000, 0, 0, 0.016),               // Single file
-        (0, 10_000, 2_000, 0, 0, 0.0),                 // Zero files (edge case)
+        (1, 10_000, 2_000, 0, 0, 0.016),             // Single file
+        (0, 10_000, 2_000, 0, 0, 0.0),               // Zero files (edge case)
     ];
 
     for (files, input, output, cache_read, cache_write, expected_per_file) in test_cases {
@@ -218,7 +229,9 @@ fn test_cost_per_file_calculation() {
             assert!(
                 diff < 0.001,
                 "Cost per file mismatch for {} files: expected ${}, got ${}",
-                files, expected_per_file, cost_per_file
+                files,
+                expected_per_file,
+                cost_per_file
             );
         }
     }
@@ -245,7 +258,10 @@ async fn test_receiver_timeout_on_no_response() {
             println!("✓ Receiver correctly times out when no response is sent");
         }
         Ok(Ok(decision)) => {
-            panic!("Should not receive decision without response: {:?}", decision);
+            panic!(
+                "Should not receive decision without response: {:?}",
+                decision
+            );
         }
         Ok(Err(e)) => {
             // Channel closed without sending - also acceptable
@@ -272,7 +288,9 @@ fn test_cost_limit_settings_persistence() {
     assert_eq!(default_limit, "1.0", "Default cost limit should be $1.0");
 
     // Update cost limit
-    project.insert_setting("cost_limit_per_scan", "5.00").unwrap();
+    project
+        .insert_setting("cost_limit_per_scan", "5.00")
+        .unwrap();
 
     let updated_limit: String = conn
         .query_row(
@@ -288,7 +306,9 @@ fn test_cost_limit_settings_persistence() {
     let test_limits = vec!["0.10", "2.50", "10.00", "100.00"];
 
     for limit in test_limits {
-        project.insert_setting("cost_limit_per_scan", limit).unwrap();
+        project
+            .insert_setting("cost_limit_per_scan", limit)
+            .unwrap();
 
         let stored_limit: String = conn
             .query_row(
@@ -329,15 +349,23 @@ fn test_batch_size_cost_checking() {
         // Check cost limit after each batch (this is what scan_project does)
         if cumulative_cost > cost_limit && !cost_limit_hit {
             cost_limit_hit = true;
-            println!("Cost limit hit after batch {}, {} files processed, ${:.2} spent",
-                     batch_num, total_files_processed, cumulative_cost);
+            println!(
+                "Cost limit hit after batch {}, {} files processed, ${:.2} spent",
+                batch_num, total_files_processed, cumulative_cost
+            );
             break;
         }
     }
 
     assert!(cost_limit_hit, "Should hit cost limit");
-    assert_eq!(total_files_processed, 10, "Should check after first batch (10 files)");
-    assert!(cumulative_cost > cost_limit, "Cumulative cost should exceed limit");
+    assert_eq!(
+        total_files_processed, 10,
+        "Should check after first batch (10 files)"
+    );
+    assert!(
+        cumulative_cost > cost_limit,
+        "Cumulative cost should exceed limit"
+    );
 
     println!("✓ Batch-based cost checking works correctly");
 }
@@ -352,10 +380,10 @@ fn test_scan_costs_table_tracking() {
 
     // Simulate multiple batches with increasing costs
     let batches = vec![
-        (10, 50_000, 10_000, 0, 0),         // Batch 1
-        (10, 50_000, 10_000, 0, 0),         // Batch 2
-        (10, 50_000, 10_000, 0, 0),         // Batch 3
-        (5, 25_000, 5_000, 0, 0),           // Batch 4 (partial)
+        (10, 50_000, 10_000, 0, 0), // Batch 1
+        (10, 50_000, 10_000, 0, 0), // Batch 2
+        (10, 50_000, 10_000, 0, 0), // Batch 3
+        (5, 25_000, 5_000, 0, 0),   // Batch 4 (partial)
     ];
 
     let mut total_files = 0;
@@ -377,15 +405,17 @@ fn test_scan_costs_table_tracking() {
     // Store final cumulative cost
     let total_cost = ScanCost::calculate_cost(total_input, total_output, 0, 0);
 
-    project.insert_scan_cost(
-        scan_id,
-        total_files,
-        total_input,
-        total_output,
-        0,
-        0,
-        total_cost,
-    ).unwrap();
+    project
+        .insert_scan_cost(
+            scan_id,
+            total_files,
+            total_input,
+            total_output,
+            0,
+            0,
+            total_cost,
+        )
+        .unwrap();
 
     // Verify stored correctly
     let conn = project.connection();
@@ -398,7 +428,10 @@ fn test_scan_costs_table_tracking() {
         .unwrap();
 
     assert_eq!(stored_files, total_files, "Should store correct file count");
-    assert!((stored_cost - total_cost).abs() < 0.001, "Should store correct cost");
+    assert!(
+        (stored_cost - total_cost).abs() < 0.001,
+        "Should store correct cost"
+    );
 
     println!("✓ Scan costs table tracks cumulative costs correctly");
 }

@@ -10,9 +10,9 @@
 //! - Insecure HTTP connections (should use HTTPS)
 //! - Hardcoded JWT tokens and OAuth tokens
 
-use anyhow::{Context, Result};
 use crate::models::{Severity, Violation};
 use crate::utils::extract_context_from_string;
+use anyhow::{Context, Result};
 use regex::Regex;
 
 /// CC6.7 Secrets Detection Rule Engine
@@ -90,7 +90,8 @@ impl CC67SecretsRule {
 
                 // Extract code block with 5 lines of context before and after
                 let line_number = (idx + 1) as i64;
-                let (code_snippet, _relative_line) = extract_context_from_string(code, line_number, 5);
+                let (code_snippet, _relative_line) =
+                    extract_context_from_string(code, line_number, 5);
 
                 violations.push(Violation::new(
                     scan_id,
@@ -117,9 +118,8 @@ impl CC67SecretsRule {
         // ghu_ - GitHub User-to-Server Token (36+ chars)
         // ghs_ - GitHub Server-to-Server Token (36+ chars)
         // ghr_ - GitHub Refresh Token (36+ chars)
-        let github_token_pattern =
-            Regex::new(r"(ghp_|gho_|ghu_|ghs_|ghr_)[a-zA-Z0-9_]{20,}")
-                .context("Failed to compile GitHub token pattern")?;
+        let github_token_pattern = Regex::new(r"(ghp_|gho_|ghu_|ghs_|ghr_)[a-zA-Z0-9_]{20,}")
+            .context("Failed to compile GitHub token pattern")?;
 
         for (idx, line) in code.lines().enumerate() {
             if line.trim().starts_with("#") || line.trim().starts_with("//") {
@@ -149,11 +149,13 @@ impl CC67SecretsRule {
         // AWS patterns:
         // Access Key ID: AKIA + 16 alphanumeric
         // Secret Access Key: 40 character string
-        let aws_access_key_pattern =
-            Regex::new(r"(AKIA[0-9A-Z]{16})").context("Failed to compile AWS access key pattern")?;
+        let aws_access_key_pattern = Regex::new(r"(AKIA[0-9A-Z]{16})")
+            .context("Failed to compile AWS access key pattern")?;
 
-        let aws_secret_key_pattern = Regex::new(r#"(?i)(aws_secret|secret_access_key|secret_key)\s*[:=]\s*["']?([a-zA-Z0-9/+=]{20,})"#)
-            .context("Failed to compile AWS secret pattern")?;
+        let aws_secret_key_pattern = Regex::new(
+            r#"(?i)(aws_secret|secret_access_key|secret_key)\s*[:=]\s*["']?([a-zA-Z0-9/+=]{20,})"#,
+        )
+        .context("Failed to compile AWS secret pattern")?;
 
         for (idx, line) in code.lines().enumerate() {
             if line.trim().starts_with("#") || line.trim().starts_with("//") {
@@ -206,15 +208,17 @@ impl CC67SecretsRule {
         // More precise example pattern - only skip obvious documentation examples
         // Removed "admin" to allow detection of real passwords like "admin123"
         // Removed "placeholder" to detect hardcoded placeholder values like '[placeholder_password]'
-        let is_example = Regex::new(r"(example|test|demo|fake|temp|xxx|password123|12345|changeme|your_|my_)")
-            .context("Failed to compile example pattern")?;
+        let is_example =
+            Regex::new(r"(example|test|demo|fake|temp|xxx|password123|12345|changeme|your_|my_)")
+                .context("Failed to compile example pattern")?;
 
-        let is_comment =
-            Regex::new(r"^\s*[#//]").context("Failed to compile comment pattern")?;
+        let is_comment = Regex::new(r"^\s*[#//]").context("Failed to compile comment pattern")?;
 
         for (idx, line) in code.lines().enumerate() {
             // Skip comments and test files
-            if is_comment.is_match(line) || file_path.contains("test") || file_path.contains("example")
+            if is_comment.is_match(line)
+                || file_path.contains("test")
+                || file_path.contains("example")
             {
                 continue;
             }
@@ -236,8 +240,11 @@ impl CC67SecretsRule {
                 };
 
                 // Skip if the CODE (not comments) contains env variable reference
-                if code_part.contains("os.getenv") || code_part.contains("process.env") || code_part.contains("ENV[")
-                    || code_part.contains("$") && (code_part.contains("PASS") || code_part.contains("KEY"))
+                if code_part.contains("os.getenv")
+                    || code_part.contains("process.env")
+                    || code_part.contains("ENV[")
+                    || code_part.contains("$")
+                        && (code_part.contains("PASS") || code_part.contains("KEY"))
                 {
                     continue;
                 }
@@ -263,10 +270,9 @@ impl CC67SecretsRule {
 
         // Pattern: db://username:password@host:port/database
         // Supports PostgreSQL, MySQL, MongoDB, Oracle
-        let db_cred_pattern = Regex::new(
-            r#"(postgresql|postgres|mysql|mongodb|oracle|mssql)://(\w+):([^@\s'"]+)@"#
-        )
-        .context("Failed to compile database credential pattern")?;
+        let db_cred_pattern =
+            Regex::new(r#"(postgresql|postgres|mysql|mongodb|oracle|mssql)://(\w+):([^@\s'"]+)@"#)
+                .context("Failed to compile database credential pattern")?;
 
         let is_env_var = Regex::new(r"(\$|getenv|process\.env|ENV\[)")
             .context("Failed to compile environment variable pattern")?;
@@ -371,7 +377,11 @@ impl CC67SecretsRule {
     }
 
     /// Detects hardcoded JWT tokens and OAuth tokens
-    fn detect_hardcoded_tokens(code: &str, file_path: &str, scan_id: i64) -> Result<Vec<Violation>> {
+    fn detect_hardcoded_tokens(
+        code: &str,
+        file_path: &str,
+        scan_id: i64,
+    ) -> Result<Vec<Violation>> {
         let mut violations = Vec::new();
 
         // JWT pattern: eyJ (base64 encoded JSON), typically 100+ characters
@@ -381,16 +391,20 @@ impl CC67SecretsRule {
                 .context("Failed to compile JWT pattern")?;
 
         // OAuth token pattern: Bearer + alphanumeric
-        let oauth_pattern = Regex::new(r#"(oauth_token|access_token)\s*[:=]\s*['"]?([a-zA-Z0-9_-]{40,})"#)
-            .context("Failed to compile OAuth pattern")?;
+        let oauth_pattern =
+            Regex::new(r#"(oauth_token|access_token)\s*[:=]\s*['"]?([a-zA-Z0-9_-]{40,})"#)
+                .context("Failed to compile OAuth pattern")?;
 
         for (idx, line) in code.lines().enumerate() {
             if line.trim().starts_with("#") || line.trim().starts_with("//") {
                 continue;
             }
 
-            if jwt_pattern.is_match(line) && !line.contains("decode") && !line.contains("verify")
-                && !line.contains("test") && !line.contains("mock")
+            if jwt_pattern.is_match(line)
+                && !line.contains("decode")
+                && !line.contains("verify")
+                && !line.contains("test")
+                && !line.contains("mock")
             {
                 violations.push(Violation::new(
                     scan_id,
@@ -420,7 +434,11 @@ impl CC67SecretsRule {
     }
 
     /// Detects generic hardcoded API keys
-    fn detect_generic_api_keys(code: &str, file_path: &str, scan_id: i64) -> Result<Vec<Violation>> {
+    fn detect_generic_api_keys(
+        code: &str,
+        file_path: &str,
+        scan_id: i64,
+    ) -> Result<Vec<Violation>> {
         let mut violations = Vec::new();
 
         // Pattern: api_key = 'value' where value doesn't look like a placeholder
@@ -429,10 +447,9 @@ impl CC67SecretsRule {
         )
         .context("Failed to compile generic API key pattern")?;
 
-        let placeholder_pattern = Regex::new(
-            r"(your_?|xxx|test|demo|example|fake|placeholder|change_?this|put_?your)"
-        )
-        .context("Failed to compile placeholder pattern")?;
+        let placeholder_pattern =
+            Regex::new(r"(your_?|xxx|test|demo|example|fake|placeholder|change_?this|put_?your)")
+                .context("Failed to compile placeholder pattern")?;
 
         for (idx, line) in code.lines().enumerate() {
             if line.trim().starts_with("#") || line.trim().starts_with("//") {
@@ -446,7 +463,9 @@ impl CC67SecretsRule {
                 }
 
                 // Skip if it's using environment variables
-                if line.contains("os.getenv") || line.contains("process.env") || line.contains("ENV[")
+                if line.contains("os.getenv")
+                    || line.contains("process.env")
+                    || line.contains("ENV[")
                 {
                     continue;
                 }
@@ -472,7 +491,11 @@ impl CC67SecretsRule {
     /// - app.config['SECRET_KEY'] = 'value'
     /// - config['API_KEY'] = 'value'
     /// - settings['PASSWORD'] = 'value'
-    fn detect_config_dict_secrets(code: &str, file_path: &str, scan_id: i64) -> Result<Vec<Violation>> {
+    fn detect_config_dict_secrets(
+        code: &str,
+        file_path: &str,
+        scan_id: i64,
+    ) -> Result<Vec<Violation>> {
         let mut violations = Vec::new();
 
         // Pattern: config['KEYWORD'] = 'value' or config["KEYWORD"] = "value"
@@ -483,7 +506,7 @@ impl CC67SecretsRule {
         .context("Failed to compile config dict pattern")?;
 
         let placeholder_pattern = Regex::new(
-            r"(your_?|xxx|test|demo|example|fake|placeholder|change_?this|put_?your|<|>|\{\{|\}\})"
+            r"(your_?|xxx|test|demo|example|fake|placeholder|change_?this|put_?your|<|>|\{\{|\}\})",
         )
         .context("Failed to compile placeholder pattern")?;
 
@@ -511,7 +534,9 @@ impl CC67SecretsRule {
                 };
 
                 // Skip if the CODE (not comments) references environment variables
-                if code_part.contains("os.getenv") || code_part.contains("process.env") || code_part.contains("ENV[")
+                if code_part.contains("os.getenv")
+                    || code_part.contains("process.env")
+                    || code_part.contains("ENV[")
                 {
                     continue;
                 }
@@ -606,7 +631,10 @@ mod tests {
         let code = "password = '[placeholder_password]'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(!violations.is_empty(), "Should detect hardcoded password");
-        assert_eq!(violations[0].description, "Hardcoded password or secret in code");
+        assert_eq!(
+            violations[0].description,
+            "Hardcoded password or secret in code"
+        );
     }
 
     #[test]
@@ -621,10 +649,7 @@ mod tests {
     fn test_detect_mongodb_credentials() {
         let code = "MONGO_URL = 'mongodb://testuser:testpass@cluster0.mongodb.net/testdb'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
-        assert!(
-            !violations.is_empty(),
-            "Should detect MongoDB credentials"
-        );
+        assert!(!violations.is_empty(), "Should detect MongoDB credentials");
     }
 
     #[test]
@@ -639,10 +664,7 @@ mod tests {
     fn test_ignore_http_localhost() {
         let code = "requests.get('http://localhost:8000/api')";
         let violations = CC67SecretsRule::analyze(code, "api.py", 1).unwrap();
-        assert!(
-            violations.is_empty(),
-            "Should not flag localhost HTTP"
-        );
+        assert!(violations.is_empty(), "Should not flag localhost HTTP");
     }
 
     #[test]
@@ -702,7 +724,8 @@ mod tests {
 
     #[test]
     fn test_detect_jwt_token() {
-        let code = "bearer_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6InRlc3QifQ.eyJzdWIiOiJ0ZXN0In0.test'";
+        let code =
+            "bearer_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6InRlc3QifQ.eyJzdWIiOiJ0ZXN0In0.test'";
         let violations = CC67SecretsRule::analyze(code, "auth.py", 1).unwrap();
         // JWT-like tokens may or may not be flagged depending on context detection
         // This test verifies the detection runs without error
@@ -713,7 +736,10 @@ mod tests {
     fn test_ignore_jwt_in_decode() {
         let code = "decoded = jwt.decode(token, secret_key)";
         let violations = CC67SecretsRule::analyze(code, "auth.py", 1).unwrap();
-        assert!(violations.is_empty(), "Should not flag JWT in decode context");
+        assert!(
+            violations.is_empty(),
+            "Should not flag JWT in decode context"
+        );
     }
 
     #[test]
@@ -728,9 +754,7 @@ mod tests {
         let code = "api_key = 'your_api_key_here'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         // Should not flag placeholders
-        let has_violations = violations
-            .iter()
-            .any(|v| v.description.contains("API key"));
+        let has_violations = violations.iter().any(|v| v.description.contains("API key"));
         assert!(!has_violations, "Should ignore placeholder keys");
     }
 
@@ -795,7 +819,10 @@ mod tests {
         let code = "db_url = f'postgresql://user:{os.getenv(\"DB_PASSWORD\")}@host/db'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         // Should not flag if using environment variables
-        assert!(violations.is_empty(), "Should allow env var in connection string");
+        assert!(
+            violations.is_empty(),
+            "Should allow env var in connection string"
+        );
     }
 
     #[test]
@@ -809,17 +836,15 @@ mod tests {
     fn test_square_api_key() {
         let code = "square_key = 'sq0atp_testkey0000000000000000'";
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
-        assert!(
-            !violations.is_empty(),
-            "Should detect Square API key"
-        );
+        assert!(!violations.is_empty(), "Should detect Square API key");
     }
 
     /// CRITICAL EDGE CASE: Hardcoded secret with os.getenv() mentioned in comment
     /// This test verifies we don't skip detection when env var is only in comment
     #[test]
     fn test_hardcoded_secret_with_env_var_in_comment() {
-        let code = r#"SUPER_SECRET_TOKEN = "5u93R53Cr3tT0k3n"  # FIXME: os.getenv("SUPER_SECRET_TOKEN")"#;
+        let code =
+            r#"SUPER_SECRET_TOKEN = "5u93R53Cr3tT0k3n"  # FIXME: os.getenv("SUPER_SECRET_TOKEN")"#;
         let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
         assert!(
             !violations.is_empty(),
@@ -827,59 +852,68 @@ mod tests {
             violations.len()
         );
         assert_eq!(violations[0].severity, "critical");
-        assert!(violations[0].description.to_lowercase().contains("secret") ||
-                violations[0].description.to_lowercase().contains("password"));
+        assert!(
+            violations[0].description.to_lowercase().contains("secret")
+                || violations[0]
+                    .description
+                    .to_lowercase()
+                    .contains("password")
+        );
     }
 }
 
-    #[test]
-    fn test_detect_db_password_exact() {
-        let code = r#"
+#[test]
+fn test_detect_db_password_exact() {
+    let code = r#"
 DB_PASSWORD = "production_secret_key_xyz"
 "#;
-        let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
-        assert!(!violations.is_empty(), "Should detect DB_PASSWORD secret. Found {} violations", violations.len());
-    }
+    let violations = CC67SecretsRule::analyze(code, "config.py", 1).unwrap();
+    assert!(
+        !violations.is_empty(),
+        "Should detect DB_PASSWORD secret. Found {} violations",
+        violations.len()
+    );
+}
 
-    /// CRITICAL GAP TEST: Flask config dictionary assignments with hardcoded secrets
-    #[test]
-    fn test_detect_flask_config_secret() {
-        let code = r#"
+/// CRITICAL GAP TEST: Flask config dictionary assignments with hardcoded secrets
+#[test]
+fn test_detect_flask_config_secret() {
+    let code = r#"
 app.config['SECRET_KEY_HMAC'] = 'secret'
 app.config['SECRET_KEY_HMAC_2'] = 'am0r3C0mpl3xK3y'
 "#;
-        let violations = CC67SecretsRule::analyze(code, "app.py", 1).unwrap();
-        assert!(
+    let violations = CC67SecretsRule::analyze(code, "app.py", 1).unwrap();
+    assert!(
             violations.len() >= 2,
             "Should detect Flask config secrets. Found {} violations, expected 2. This is a KNOWN GAP in CC6.7.",
             violations.len()
         );
-    }
+}
 
-    /// CRITICAL GAP TEST: Generic passwords like 'admin123' should NOT be skipped
-    #[test]
-    fn test_detect_admin_password() {
-        let code = r#"
+/// CRITICAL GAP TEST: Generic passwords like 'admin123' should NOT be skipped
+#[test]
+fn test_detect_admin_password() {
+    let code = r#"
 user.password = 'admin123'
 "#;
-        let violations = CC67SecretsRule::analyze(code, "app.py", 1).unwrap();
-        assert!(
+    let violations = CC67SecretsRule::analyze(code, "app.py", 1).unwrap();
+    assert!(
             !violations.is_empty(),
             "Should detect 'admin123' password. Found {} violations. Currently SKIPPED due to overly broad 'admin' exclusion.",
             violations.len()
         );
-    }
+}
 
-    /// Test that we correctly identify real Django config secrets
-    #[test]
-    fn test_detect_django_secret_key() {
-        let code = r#"
+/// Test that we correctly identify real Django config secrets
+#[test]
+fn test_detect_django_secret_key() {
+    let code = r#"
 SECRET_KEY = 'django-insecure-actual-secret-key-here'
 "#;
-        let violations = CC67SecretsRule::analyze(code, "settings.py", 1).unwrap();
-        assert!(
-            !violations.is_empty(),
-            "Should detect Django SECRET_KEY. Found {} violations",
-            violations.len()
-        );
-    }
+    let violations = CC67SecretsRule::analyze(code, "settings.py", 1).unwrap();
+    assert!(
+        !violations.is_empty(),
+        "Should detect Django SECRET_KEY. Found {} violations",
+        violations.len()
+    );
+}

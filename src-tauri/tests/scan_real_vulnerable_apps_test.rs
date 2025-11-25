@@ -19,8 +19,8 @@
 mod common;
 
 use common::TestProject;
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Helper: Clone a vulnerable repo into tests/fixtures/ if not already present
@@ -31,8 +31,7 @@ fn ensure_fixture(name: &str, url: &str) -> PathBuf {
         println!("[Test Fixture] Cloning {} from {}", name, url);
 
         // Create fixtures directory
-        fs::create_dir_all("tests/fixtures")
-            .expect("Failed to create tests/fixtures directory");
+        fs::create_dir_all("tests/fixtures").expect("Failed to create tests/fixtures directory");
 
         // Clone with --depth=1 for speed
         let status = Command::new("git")
@@ -55,7 +54,9 @@ fn run_all_rules(code: &str, file_path: &str, scan_id: i64) -> Vec<ryn::models::
     let mut violations = Vec::new();
 
     // CC6.1 Access Control
-    if let Ok(cc61_violations) = ryn::rules::CC61AccessControlRule::analyze(code, file_path, scan_id) {
+    if let Ok(cc61_violations) =
+        ryn::rules::CC61AccessControlRule::analyze(code, file_path, scan_id)
+    {
         violations.extend(cc61_violations);
     }
 
@@ -93,7 +94,8 @@ fn scan_python_files(project_dir: &Path, scan_id: i64) -> Vec<ryn::models::Viola
         if path.extension().and_then(|s| s.to_str()) == Some("py") {
             if let Ok(content) = fs::read_to_string(&path) {
                 // Get relative path from project root
-                let relative_path = path.strip_prefix(project_dir)
+                let relative_path = path
+                    .strip_prefix(project_dir)
                     .unwrap_or(path)
                     .to_str()
                     .unwrap_or("unknown");
@@ -128,13 +130,15 @@ fn scan_js_files(project_dir: &Path, scan_id: i64) -> Vec<ryn::models::Violation
             if path_str.contains(".min.js")
                 || path_str.contains("node_modules")
                 || path_str.contains("jquery")
-                || path_str.contains("bootstrap") {
+                || path_str.contains("bootstrap")
+            {
                 continue;
             }
 
             if let Ok(content) = fs::read_to_string(&path) {
                 // Get relative path from project root
-                let relative_path = path.strip_prefix(project_dir)
+                let relative_path = path
+                    .strip_prefix(project_dir)
                     .unwrap_or(path)
                     .to_str()
                     .unwrap_or("unknown");
@@ -151,7 +155,8 @@ fn scan_js_files(project_dir: &Path, scan_id: i64) -> Vec<ryn::models::Violation
 
 /// Helper: Assert at least one violation exists for a control_id
 fn assert_has_violations_for(violations: &[ryn::models::Violation], control_id: &str) {
-    let count = violations.iter()
+    let count = violations
+        .iter()
         .filter(|v| v.control_id == control_id)
         .count();
 
@@ -163,21 +168,18 @@ fn assert_has_violations_for(violations: &[ryn::models::Violation], control_id: 
 }
 
 /// Helper: Assert a specific violation exists
-fn assert_has_violation(
-    violations: &[ryn::models::Violation],
-    control_id: &str,
-    keyword: &str
-) {
-    let found = violations.iter().any(|v|
-        v.control_id == control_id &&
-        v.description.to_lowercase().contains(&keyword.to_lowercase())
-    );
+fn assert_has_violation(violations: &[ryn::models::Violation], control_id: &str, keyword: &str) {
+    let found = violations.iter().any(|v| {
+        v.control_id == control_id
+            && v.description
+                .to_lowercase()
+                .contains(&keyword.to_lowercase())
+    });
 
     assert!(
         found,
         "Expected to find {} violation with '{}' in description, but didn't find it",
-        control_id,
-        keyword
+        control_id, keyword
     );
 }
 
@@ -191,7 +193,10 @@ fn test_scan_vulnerable_flask_finds_all_rules() {
     let fixture = PathBuf::from("/Users/seane/test-repos/vulnerable-flask");
 
     if !fixture.exists() {
-        eprintln!("Skipping test: vulnerable-flask not found at {}", fixture.display());
+        eprintln!(
+            "Skipping test: vulnerable-flask not found at {}",
+            fixture.display()
+        );
         eprintln!("Expected location: /Users/seane/test-repos/vulnerable-flask");
         return;
     }
@@ -209,7 +214,10 @@ fn test_scan_vulnerable_flask_finds_all_rules() {
 
     // Print breakdown by control
     for control_id in ["CC6.1", "CC6.7", "CC7.2", "A1.2"] {
-        let count = violations.iter().filter(|v| v.control_id == control_id).count();
+        let count = violations
+            .iter()
+            .filter(|v| v.control_id == control_id)
+            .count();
         println!("[Test]   {}: {} violations", control_id, count);
     }
 
@@ -225,7 +233,7 @@ fn test_scan_vulnerable_flask_finds_all_rules() {
     // because the patterns don't match Flask's specific syntax patterns.
     // This reveals a gap in Ryn's rule coverage that should be addressed.
     assert_has_violations_for(&violations, "CC7.2"); // Logging
-    assert_has_violations_for(&violations, "A1.2");  // Resilience
+    assert_has_violations_for(&violations, "A1.2"); // Resilience
 
     // ASSERTION 3: Verify specific known violations exist
     assert_has_violation(&violations, "A1.2", "error");
@@ -233,7 +241,8 @@ fn test_scan_vulnerable_flask_finds_all_rules() {
 
     // Print summary of what was found
     println!("[Test] Summary:");
-    println!("[Test]   - Found violations in {} rule engines",
+    println!(
+        "[Test]   - Found violations in {} rule engines",
         ["CC6.1", "CC6.7", "CC7.2", "A1.2"]
             .iter()
             .filter(|id| violations.iter().any(|v| v.control_id == **id))
@@ -249,7 +258,9 @@ fn test_scan_vulnerable_flask_finds_all_rules() {
     if violations.iter().any(|v| v.control_id == "CC6.7") {
         println!("[Test]   - CC6.7 (Secrets): ✅ Working");
     } else {
-        println!("[Test]   - CC6.7 (Secrets): ⚠️ No violations detected (may need pattern improvements)");
+        println!(
+            "[Test]   - CC6.7 (Secrets): ⚠️ No violations detected (may need pattern improvements)"
+        );
     }
 
     println!("[Test] ✅ Core functionality verified!");
@@ -271,11 +282,9 @@ fn test_violations_persisted_to_database() {
     let conn = project.connection();
 
     // Create project and scan records
-    let project_id = project.insert_project(
-        "vulnerable-flask",
-        fixture.to_str().unwrap(),
-        Some("flask")
-    ).unwrap();
+    let project_id = project
+        .insert_project("vulnerable-flask", fixture.to_str().unwrap(), Some("flask"))
+        .unwrap();
 
     let scan_id = project.insert_scan(project_id, "running").unwrap();
 
@@ -284,28 +293,36 @@ fn test_violations_persisted_to_database() {
 
     let mut inserted_count = 0;
     for violation in &violations {
-        project.insert_violation(
-            scan_id,
-            &violation.control_id,
-            &violation.severity.to_string().to_lowercase(),
-            &violation.description,
-            &violation.file_path,
-            violation.line_number,
-            &violation.code_snippet,
-            Some("regex"),
-            None,
-            None,
-            violation.regex_reasoning.as_deref(),
-        ).unwrap();
+        project
+            .insert_violation(
+                scan_id,
+                &violation.control_id,
+                &violation.severity.to_string().to_lowercase(),
+                &violation.description,
+                &violation.file_path,
+                violation.line_number,
+                &violation.code_snippet,
+                Some("regex"),
+                None,
+                None,
+                violation.regex_reasoning.as_deref(),
+            )
+            .unwrap();
         inserted_count += 1;
     }
 
-    println!("[Test] Inserted {} violations into database", inserted_count);
+    println!(
+        "[Test] Inserted {} violations into database",
+        inserted_count
+    );
 
     // Query back from database
     let db_violations = ryn::db::queries::select_violations(conn, scan_id).unwrap();
 
-    println!("[Test] Retrieved {} violations from database", db_violations.len());
+    println!(
+        "[Test] Retrieved {} violations from database",
+        db_violations.len()
+    );
 
     // ASSERTION 1: Same number inserted as queried
     assert_eq!(
@@ -318,7 +335,10 @@ fn test_violations_persisted_to_database() {
     for v in &db_violations {
         assert!(!v.file_path.is_empty(), "file_path should not be empty");
         assert!(v.line_number > 0, "line_number should be positive");
-        assert!(!v.code_snippet.is_empty(), "code_snippet should not be empty");
+        assert!(
+            !v.code_snippet.is_empty(),
+            "code_snippet should not be empty"
+        );
         assert!(!v.description.is_empty(), "description should not be empty");
         assert!(!v.control_id.is_empty(), "control_id should not be empty");
     }
@@ -364,7 +384,9 @@ fn test_scan_vulnerable_node_finds_violations() {
 
     if !fixture.exists() {
         eprintln!("Skipping test: vulnerable-node not found at {:?}", fixture);
-        eprintln!("Run the test_scan_vulnerable_flask_finds_all_rules test first to clone fixtures");
+        eprintln!(
+            "Run the test_scan_vulnerable_flask_finds_all_rules test first to clone fixtures"
+        );
         return;
     }
 
@@ -379,7 +401,10 @@ fn test_scan_vulnerable_node_finds_violations() {
 
     // Print breakdown by control
     for control_id in ["CC6.1", "CC6.7", "CC7.2", "A1.2"] {
-        let count = violations.iter().filter(|v| v.control_id == control_id).count();
+        let count = violations
+            .iter()
+            .filter(|v| v.control_id == control_id)
+            .count();
         println!("[Test]   {}: {} violations", control_id, count);
 
         // Print first 3 violations for each control (for debugging)
@@ -390,7 +415,10 @@ fn test_scan_vulnerable_node_finds_violations() {
             .collect();
 
         for v in control_violations {
-            println!("[Test]     - {} ({}:{})", v.description, v.file_path, v.line_number);
+            println!(
+                "[Test]     - {} ({}:{})",
+                v.description, v.file_path, v.line_number
+            );
         }
     }
 
@@ -403,7 +431,10 @@ fn test_scan_vulnerable_node_finds_violations() {
 
     // ASSERTION 2: CC6.7 should detect hardcoded secrets
     // Expected: PostgreSQL connection strings in config.js and session secret in app.js
-    let cc67_count = violations.iter().filter(|v| v.control_id == "CC6.7").count();
+    let cc67_count = violations
+        .iter()
+        .filter(|v| v.control_id == "CC6.7")
+        .count();
     assert!(
         cc67_count >= 3,
         "Expected at least 3 CC6.7 violations (postgres credentials + session secret), found {}",
@@ -412,12 +443,12 @@ fn test_scan_vulnerable_node_finds_violations() {
 
     // ASSERTION 3: Verify specific known violations exist
     // Check for database credentials
-    let has_db_creds = violations.iter().any(|v|
-        v.control_id == "CC6.7" &&
-        (v.description.to_lowercase().contains("database") ||
-         v.description.to_lowercase().contains("credentials") ||
-         v.description.to_lowercase().contains("postgres"))
-    );
+    let has_db_creds = violations.iter().any(|v| {
+        v.control_id == "CC6.7"
+            && (v.description.to_lowercase().contains("database")
+                || v.description.to_lowercase().contains("credentials")
+                || v.description.to_lowercase().contains("postgres"))
+    });
 
     assert!(
         has_db_creds,
@@ -425,12 +456,12 @@ fn test_scan_vulnerable_node_finds_violations() {
     );
 
     // ASSERTION 4: Verify session secret is detected
-    let has_session_secret = violations.iter().any(|v|
-        v.control_id == "CC6.7" &&
-        v.file_path == "app.js" &&
-        (v.description.to_lowercase().contains("secret") ||
-         v.description.to_lowercase().contains("password"))
-    );
+    let has_session_secret = violations.iter().any(|v| {
+        v.control_id == "CC6.7"
+            && v.file_path == "app.js"
+            && (v.description.to_lowercase().contains("secret")
+                || v.description.to_lowercase().contains("password"))
+    });
 
     assert!(
         has_session_secret,
@@ -446,11 +477,18 @@ fn test_scan_vulnerable_node_finds_violations() {
         .filter(|id| violations.iter().any(|v| v.control_id == **id))
         .collect();
 
-    println!("[Test]   - Active rule engines: {}/{}", engines_with_violations.len(), 4);
+    println!(
+        "[Test]   - Active rule engines: {}/{}",
+        engines_with_violations.len(),
+        4
+    );
 
     for control_id in ["CC6.1", "CC6.7", "CC7.2", "A1.2"] {
         if violations.iter().any(|v| v.control_id == control_id) {
-            let count = violations.iter().filter(|v| v.control_id == control_id).count();
+            let count = violations
+                .iter()
+                .filter(|v| v.control_id == control_id)
+                .count();
             println!("[Test]   - {}: ✅ {} violations", control_id, count);
         } else {
             println!("[Test]   - {}: ⚠️ No violations detected", control_id);
@@ -497,7 +535,10 @@ fn test_scan_python_insecure_app_finds_violations() {
     let fixture = PathBuf::from("tests/fixtures/python-insecure-app");
 
     if !fixture.exists() {
-        eprintln!("Skipping test: python-insecure-app not found at {:?}", fixture);
+        eprintln!(
+            "Skipping test: python-insecure-app not found at {:?}",
+            fixture
+        );
         return;
     }
 
@@ -512,7 +553,10 @@ fn test_scan_python_insecure_app_finds_violations() {
 
     // Print breakdown by control
     for control_id in ["CC6.1", "CC6.7", "CC7.2", "A1.2"] {
-        let count = violations.iter().filter(|v| v.control_id == control_id).count();
+        let count = violations
+            .iter()
+            .filter(|v| v.control_id == control_id)
+            .count();
         println!("[Test]   {}: {} violations", control_id, count);
 
         // Print all violations for each control (for debugging)
@@ -522,7 +566,10 @@ fn test_scan_python_insecure_app_finds_violations() {
             .collect();
 
         for v in control_violations {
-            println!("[Test]     - {} ({}:{})", v.description, v.file_path, v.line_number);
+            println!(
+                "[Test]     - {} ({}:{})",
+                v.description, v.file_path, v.line_number
+            );
         }
     }
 
@@ -534,12 +581,12 @@ fn test_scan_python_insecure_app_finds_violations() {
     );
 
     // ASSERTION 2: CC6.7 should detect hardcoded SUPER_SECRET_TOKEN
-    let has_secret_token = violations.iter().any(|v|
-        v.control_id == "CC6.7" &&
-        v.file_path.contains("config.py") &&
-        (v.description.to_lowercase().contains("secret") ||
-         v.description.to_lowercase().contains("token"))
-    );
+    let has_secret_token = violations.iter().any(|v| {
+        v.control_id == "CC6.7"
+            && v.file_path.contains("config.py")
+            && (v.description.to_lowercase().contains("secret")
+                || v.description.to_lowercase().contains("token"))
+    });
 
     assert!(
         has_secret_token,
@@ -547,11 +594,11 @@ fn test_scan_python_insecure_app_finds_violations() {
     );
 
     // ASSERTION 3: A1.2 should detect requests.get() without timeout
-    let has_missing_timeout = violations.iter().any(|v|
-        v.control_id == "A1.2" &&
-        v.file_path.contains("main.py") &&
-        v.description.to_lowercase().contains("timeout")
-    );
+    let has_missing_timeout = violations.iter().any(|v| {
+        v.control_id == "A1.2"
+            && v.file_path.contains("main.py")
+            && v.description.to_lowercase().contains("timeout")
+    });
 
     assert!(
         has_missing_timeout,
@@ -567,11 +614,18 @@ fn test_scan_python_insecure_app_finds_violations() {
         .filter(|id| violations.iter().any(|v| v.control_id == **id))
         .collect();
 
-    println!("[Test]   - Active rule engines: {}/{}", engines_with_violations.len(), 4);
+    println!(
+        "[Test]   - Active rule engines: {}/{}",
+        engines_with_violations.len(),
+        4
+    );
 
     for control_id in ["CC6.1", "CC6.7", "CC7.2", "A1.2"] {
         if violations.iter().any(|v| v.control_id == control_id) {
-            let count = violations.iter().filter(|v| v.control_id == control_id).count();
+            let count = violations
+                .iter()
+                .filter(|v| v.control_id == control_id)
+                .count();
             println!("[Test]   - {}: ✅ {} violations", control_id, count);
         } else {
             println!("[Test]   - {}: ⚠️ No violations detected", control_id);
@@ -603,7 +657,10 @@ fn test_fastapi_framework_detected() {
     if detected == Some("fastapi".to_string()) {
         println!("[Test] ✅ FastAPI framework detected correctly!");
     } else if detected.is_some() {
-        println!("[Test] ℹ️ Detected framework: {:?} (expected fastapi)", detected);
+        println!(
+            "[Test] ℹ️ Detected framework: {:?} (expected fastapi)",
+            detected
+        );
     } else {
         println!("[Test] ℹ️ No framework detected (FastAPI detection may need implementation)");
     }
@@ -631,17 +688,24 @@ def admin_panel():     # Line 7
     return "Admin Panel"
 "#;
 
-    let cc61_violations = ryn::rules::CC61AccessControlRule::analyze(cc61_code, "app.py", scan_id).unwrap();
+    let cc61_violations =
+        ryn::rules::CC61AccessControlRule::analyze(cc61_code, "app.py", scan_id).unwrap();
 
     if !cc61_violations.is_empty() {
-        println!("[Test] CC6.1: Found violation at line {}", cc61_violations[0].line_number);
+        println!(
+            "[Test] CC6.1: Found violation at line {}",
+            cc61_violations[0].line_number
+        );
         // Flask route violations can be reported at decorator (line 6) or function def (line 7)
         assert!(
             cc61_violations[0].line_number >= 6 && cc61_violations[0].line_number <= 7,
             "CC6.1: Expected line 6-7 (Flask route declaration), got line {}",
             cc61_violations[0].line_number
         );
-        println!("[Test] ✅ CC6.1 line number accurate (line {}, decorator or function def)", cc61_violations[0].line_number);
+        println!(
+            "[Test] ✅ CC6.1 line number accurate (line {}, decorator or function def)",
+            cc61_violations[0].line_number
+        );
     } else {
         println!("[Test] ℹ️ CC6.1 detected no violations (may not detect /admin without @login_required)");
     }
@@ -657,7 +721,8 @@ password = "MyS3cr3tP@ssw0rd"  # Line 7 - This should be flagged
 db_host = os.getenv("DB_HOST")  # Line 8 - Should NOT be flagged
 "#;
 
-    let cc67_violations = ryn::rules::CC67SecretsRule::analyze(cc67_code, "config.py", scan_id).unwrap();
+    let cc67_violations =
+        ryn::rules::CC67SecretsRule::analyze(cc67_code, "config.py", scan_id).unwrap();
 
     println!("[Test] CC6.7: Found {} violations", cc67_violations.len());
     for v in &cc67_violations {
@@ -670,7 +735,10 @@ db_host = os.getenv("DB_HOST")  # Line 8 - Should NOT be flagged
         cc67_code
     );
 
-    println!("[Test] CC6.7: Found violation at line {}", cc67_violations[0].line_number);
+    println!(
+        "[Test] CC6.7: Found violation at line {}",
+        cc67_violations[0].line_number
+    );
     assert_eq!(
         cc67_violations[0].line_number, 7,
         "CC6.7: Expected line 7 (hardcoded password), got line {}",
@@ -689,10 +757,14 @@ def update_user_role(user_id, new_role):  # Line 4
     db.session.commit()
 "#;
 
-    let cc72_violations = ryn::rules::CC72LoggingRule::analyze(cc72_code, "auth.py", scan_id).unwrap();
+    let cc72_violations =
+        ryn::rules::CC72LoggingRule::analyze(cc72_code, "auth.py", scan_id).unwrap();
 
     if !cc72_violations.is_empty() {
-        println!("[Test] CC7.2: Found violation at line {}", cc72_violations[0].line_number);
+        println!(
+            "[Test] CC7.2: Found violation at line {}",
+            cc72_violations[0].line_number
+        );
         // CC7.2 might flag the function definition or the actual operation
         assert!(
             cc72_violations[0].line_number >= 4 && cc72_violations[0].line_number <= 8,
@@ -714,10 +786,14 @@ def fetch_user_data(user_id):  # Line 4
     return response.json()
 "#;
 
-    let a12_violations = ryn::rules::A12ResilienceRule::analyze(a12_code, "api.py", scan_id).unwrap();
+    let a12_violations =
+        ryn::rules::A12ResilienceRule::analyze(a12_code, "api.py", scan_id).unwrap();
 
     if !a12_violations.is_empty() {
-        println!("[Test] A1.2: Found violation at line {}", a12_violations[0].line_number);
+        println!(
+            "[Test] A1.2: Found violation at line {}",
+            a12_violations[0].line_number
+        );
         assert_eq!(
             a12_violations[0].line_number, 6,
             "A1.2: Expected line 6 (requests.get without error handling), got line {}",
@@ -748,10 +824,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")  # This is safe
 
     let violations = ryn::rules::CC67SecretsRule::analyze(test_code, "config.py", scan_id).unwrap();
 
-    assert!(
-        !violations.is_empty(),
-        "Should detect hardcoded secret"
-    );
+    assert!(!violations.is_empty(), "Should detect hardcoded secret");
 
     let snippet = &violations[0].code_snippet;
     println!("[Test] Extracted snippet: '{}'", snippet);
@@ -784,7 +857,8 @@ def process_payment(amount):
     stripe.charge(amount, api_key)
 "#;
 
-    let multiline_violations = ryn::rules::CC67SecretsRule::analyze(multiline_code, "payment.py", scan_id).unwrap();
+    let multiline_violations =
+        ryn::rules::CC67SecretsRule::analyze(multiline_code, "payment.py", scan_id).unwrap();
 
     if !multiline_violations.is_empty() {
         let multiline_snippet = &multiline_violations[0].code_snippet;
@@ -815,7 +889,10 @@ fn test_line_numbers_in_file_scanning() {
     let scan_id = 1;
     let violations = scan_python_files(&fixture, scan_id);
 
-    println!("[Test] Found {} total violations across all files", violations.len());
+    println!(
+        "[Test] Found {} total violations across all files",
+        violations.len()
+    );
 
     // ASSERTION 1: All violations have positive line numbers
     for v in &violations {
@@ -847,7 +924,10 @@ fn test_line_numbers_in_file_scanning() {
         );
     }
 
-    println!("[Test] ✅ All {} violations have valid line numbers and snippets", violations.len());
+    println!(
+        "[Test] ✅ All {} violations have valid line numbers and snippets",
+        violations.len()
+    );
 }
 
 // ============================================================================
@@ -874,7 +954,8 @@ def admin():
     return "Admin"
 "#;
 
-    let violations = ryn::rules::CC61AccessControlRule::analyze(code_6_lines_apart, "app.py", scan_id).unwrap();
+    let violations =
+        ryn::rules::CC61AccessControlRule::analyze(code_6_lines_apart, "app.py", scan_id).unwrap();
 
     if violations.is_empty() {
         println!("[Test] ⚠️ EDGE CASE FAIL: CC6.1 missed violation when decorator is 6 lines away");
@@ -892,7 +973,8 @@ def admin():
     return "Admin"
 "#;
 
-    let inline_violations = ryn::rules::CC61AccessControlRule::analyze(inline_auth, "app.py", scan_id).unwrap();
+    let inline_violations =
+        ryn::rules::CC61AccessControlRule::analyze(inline_auth, "app.py", scan_id).unwrap();
 
     if !inline_violations.is_empty() {
         println!("[Test] ⚠️ FALSE POSITIVE: CC6.1 flagged route with inline auth check");
@@ -918,9 +1000,13 @@ async def get_users():
     return await fetch_users()
 "#;
 
-    let violations = ryn::rules::CC61AccessControlRule::analyze(async_code, "api.py", scan_id).unwrap();
+    let violations =
+        ryn::rules::CC61AccessControlRule::analyze(async_code, "api.py", scan_id).unwrap();
 
-    println!("[Test] Async endpoint: Found {} violations", violations.len());
+    println!(
+        "[Test] Async endpoint: Found {} violations",
+        violations.len()
+    );
 
     // FastAPI with dependency injection
     let fastapi_depends = r#"
@@ -929,7 +1015,8 @@ async def admin_panel(user: User = Depends(get_current_user)):
     return {"admin": True}
 "#;
 
-    let depends_violations = ryn::rules::CC61AccessControlRule::analyze(fastapi_depends, "api.py", scan_id).unwrap();
+    let depends_violations =
+        ryn::rules::CC61AccessControlRule::analyze(fastapi_depends, "api.py", scan_id).unwrap();
 
     if !depends_violations.is_empty() {
         println!("[Test] ⚠️ FALSE POSITIVE: Flagged FastAPI route with Depends() auth");
@@ -958,7 +1045,8 @@ router.get('/admin',
 );
 "#;
 
-    let violations = ryn::rules::CC61AccessControlRule::analyze(express_chain, "routes.js", scan_id).unwrap();
+    let violations =
+        ryn::rules::CC61AccessControlRule::analyze(express_chain, "routes.js", scan_id).unwrap();
 
     if !violations.is_empty() {
         println!("[Test] ⚠️ FALSE POSITIVE: Flagged route with chained middleware");
@@ -976,7 +1064,8 @@ def settings():
     return render_template('settings.html')
 "#;
 
-    let flask_violations = ryn::rules::CC61AccessControlRule::analyze(flask_decorators, "app.py", scan_id).unwrap();
+    let flask_violations =
+        ryn::rules::CC61AccessControlRule::analyze(flask_decorators, "app.py", scan_id).unwrap();
 
     if !flask_violations.is_empty() {
         println!("[Test] ⚠️ EDGE CASE: Auth decorator above route decorator not recognized");
@@ -1006,7 +1095,8 @@ class TestAuth:
         assert login(password) == True
 "#;
 
-    let test_violations = ryn::rules::CC67SecretsRule::analyze(test_file_code, "test_auth.py", scan_id).unwrap();
+    let test_violations =
+        ryn::rules::CC67SecretsRule::analyze(test_file_code, "test_auth.py", scan_id).unwrap();
 
     if !test_violations.is_empty() {
         println!("[Test] ⚠️ FALSE POSITIVE: Flagged test file password");
@@ -1022,9 +1112,13 @@ API_KEY = "your_api_key_here"
 SECRET = "replace_with_your_secret"
 "#;
 
-    let example_violations = ryn::rules::CC67SecretsRule::analyze(example_code, "README.md", scan_id).unwrap();
+    let example_violations =
+        ryn::rules::CC67SecretsRule::analyze(example_code, "README.md", scan_id).unwrap();
 
-    println!("[Test] Example doc violations: {}", example_violations.len());
+    println!(
+        "[Test] Example doc violations: {}",
+        example_violations.len()
+    );
 
     // Should NOT flag: Environment variable placeholders
     let placeholder_code = r#"
@@ -1033,7 +1127,8 @@ API_TOKEN = "{{API_TOKEN}}"
 SECRET_KEY = "<your-secret-key>"
 "#;
 
-    let placeholder_violations = ryn::rules::CC67SecretsRule::analyze(placeholder_code, "config.py", scan_id).unwrap();
+    let placeholder_violations =
+        ryn::rules::CC67SecretsRule::analyze(placeholder_code, "config.py", scan_id).unwrap();
 
     if !placeholder_violations.is_empty() {
         println!("[Test] ⚠️ FALSE POSITIVE: Flagged placeholder values");
@@ -1064,9 +1159,13 @@ fn test_cc67_secrets_in_config_files() {
 }
 "#;
 
-    let json_violations = ryn::rules::CC67SecretsRule::analyze(json_config, "config.json", scan_id).unwrap();
+    let json_violations =
+        ryn::rules::CC67SecretsRule::analyze(json_config, "config.json", scan_id).unwrap();
 
-    println!("[Test] JSON config: Found {} violations", json_violations.len());
+    println!(
+        "[Test] JSON config: Found {} violations",
+        json_violations.len()
+    );
 
     if json_violations.is_empty() {
         println!("[Test] ⚠️ MISSED: Secrets in JSON not detected");
@@ -1082,9 +1181,13 @@ api:
   token: "live_token_abc123"
 "#;
 
-    let yaml_violations = ryn::rules::CC67SecretsRule::analyze(yaml_config, "config.yaml", scan_id).unwrap();
+    let yaml_violations =
+        ryn::rules::CC67SecretsRule::analyze(yaml_config, "config.yaml", scan_id).unwrap();
 
-    println!("[Test] YAML config: Found {} violations", yaml_violations.len());
+    println!(
+        "[Test] YAML config: Found {} violations",
+        yaml_violations.len()
+    );
 
     if yaml_violations.is_empty() {
         println!("[Test] ⚠️ MISSED: Secrets in YAML not detected");
@@ -1108,9 +1211,13 @@ API_KEY_B64 = "c2stbGl2ZV9wcm9kX2tleV9hYmMxMjNkZWY0NTY="
 password_encoded = "UHIwZHVjdDEwblBAc3N3MHJk"
 "#;
 
-    let base64_violations = ryn::rules::CC67SecretsRule::analyze(base64_code, "config.py", scan_id).unwrap();
+    let base64_violations =
+        ryn::rules::CC67SecretsRule::analyze(base64_code, "config.py", scan_id).unwrap();
 
-    println!("[Test] Base64 encoded: Found {} violations", base64_violations.len());
+    println!(
+        "[Test] Base64 encoded: Found {} violations",
+        base64_violations.len()
+    );
 
     if base64_violations.is_empty() {
         println!("[Test] ⚠️ LIMITATION: Base64 encoded secrets NOT detected");
@@ -1124,18 +1231,26 @@ password_encoded = "UHIwZHVjdDEwblBAc3N3MHJk"
 CONNECTION_STRING = "postgres://user:MyP%40ssw0rd@localhost/db"
 "#;
 
-    let url_violations = ryn::rules::CC67SecretsRule::analyze(url_encoded, "database.py", scan_id).unwrap();
+    let url_violations =
+        ryn::rules::CC67SecretsRule::analyze(url_encoded, "database.py", scan_id).unwrap();
 
-    println!("[Test] URL encoded: Found {} violations", url_violations.len());
+    println!(
+        "[Test] URL encoded: Found {} violations",
+        url_violations.len()
+    );
 
     // JWT token (common secret format)
     let jwt_code = r#"
 JWT_SECRET = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
 "#;
 
-    let jwt_violations = ryn::rules::CC67SecretsRule::analyze(jwt_code, "auth.py", scan_id).unwrap();
+    let jwt_violations =
+        ryn::rules::CC67SecretsRule::analyze(jwt_code, "auth.py", scan_id).unwrap();
 
-    println!("[Test] JWT token: Found {} violations", jwt_violations.len());
+    println!(
+        "[Test] JWT token: Found {} violations",
+        jwt_violations.len()
+    );
 
     if jwt_violations.is_empty() {
         println!("[Test] ⚠️ LIMITATION: JWT tokens NOT detected");
@@ -1174,12 +1289,18 @@ def delete_user(user_id):
     return True
 "#;
 
-    let violations = ryn::rules::CC72LoggingRule::analyze(decorator_logging_code, "views.py", scan_id).unwrap();
+    let violations =
+        ryn::rules::CC72LoggingRule::analyze(decorator_logging_code, "views.py", scan_id).unwrap();
 
-    println!("[Test] Decorator logging: Found {} violations", violations.len());
+    println!(
+        "[Test] Decorator logging: Found {} violations",
+        violations.len()
+    );
 
     // Check if CC7.2 detects logging in decorators (current implementation checks ±3 lines)
-    let has_missing_audit = violations.iter().any(|v| v.description.contains("without audit logging"));
+    let has_missing_audit = violations
+        .iter()
+        .any(|v| v.description.contains("without audit logging"));
 
     if has_missing_audit {
         println!("[Test] ⚠️ FALSE NEGATIVE: Logging in decorator NOT recognized");
@@ -1214,11 +1335,17 @@ def update_user_status(user_id):
         user.save()  # Sensitive operation
 "#;
 
-    let violations = ryn::rules::CC72LoggingRule::analyze(context_manager_code, "models.py", scan_id).unwrap();
+    let violations =
+        ryn::rules::CC72LoggingRule::analyze(context_manager_code, "models.py", scan_id).unwrap();
 
-    println!("[Test] Context manager logging: Found {} violations", violations.len());
+    println!(
+        "[Test] Context manager logging: Found {} violations",
+        violations.len()
+    );
 
-    let has_missing_audit = violations.iter().any(|v| v.description.contains("without audit logging"));
+    let has_missing_audit = violations
+        .iter()
+        .any(|v| v.description.contains("without audit logging"));
 
     if has_missing_audit {
         println!("[Test] ⚠️ FALSE NEGATIVE: Logging in context manager NOT recognized");
@@ -1255,11 +1382,17 @@ def delete_account(account_id):
     account.delete()  # Sensitive operation
 "#;
 
-    let violations = ryn::rules::CC72LoggingRule::analyze(json_logging_code, "account.py", scan_id).unwrap();
+    let violations =
+        ryn::rules::CC72LoggingRule::analyze(json_logging_code, "account.py", scan_id).unwrap();
 
-    println!("[Test] JSON structured logging: Found {} violations", violations.len());
+    println!(
+        "[Test] JSON structured logging: Found {} violations",
+        violations.len()
+    );
 
-    let has_missing_audit = violations.iter().any(|v| v.description.contains("without audit logging"));
+    let has_missing_audit = violations
+        .iter()
+        .any(|v| v.description.contains("without audit logging"));
 
     if has_missing_audit {
         println!("[Test] ⚠️ LIMITATION: JSON structured logging NOT recognized as logging");
@@ -1282,9 +1415,13 @@ def create_user(username):
     }))
 "#;
 
-    let logger_json_violations = ryn::rules::CC72LoggingRule::analyze(logger_json_code, "user.py", scan_id).unwrap();
+    let logger_json_violations =
+        ryn::rules::CC72LoggingRule::analyze(logger_json_code, "user.py", scan_id).unwrap();
 
-    println!("[Test] logger + JSON: Found {} violations", logger_json_violations.len());
+    println!(
+        "[Test] logger + JSON: Found {} violations",
+        logger_json_violations.len()
+    );
 
     if logger_json_violations.is_empty() {
         println!("[Test] ✅ logger.info(json.dumps()) recognized as logging");
@@ -1318,11 +1455,17 @@ def fetch_user_data(user_id):
     return response.json()
 "#;
 
-    let tiny_violations = ryn::rules::A12ResilienceRule::analyze(tiny_timeout_code, "api.py", scan_id).unwrap();
+    let tiny_violations =
+        ryn::rules::A12ResilienceRule::analyze(tiny_timeout_code, "api.py", scan_id).unwrap();
 
-    println!("[Test] Tiny timeout (1ms): Found {} violations", tiny_violations.len());
+    println!(
+        "[Test] Tiny timeout (1ms): Found {} violations",
+        tiny_violations.len()
+    );
 
-    let has_timeout_violation = tiny_violations.iter().any(|v| v.description.contains("timeout"));
+    let has_timeout_violation = tiny_violations
+        .iter()
+        .any(|v| v.description.contains("timeout"));
 
     if has_timeout_violation {
         println!("[Test] ⚠️ FALSE POSITIVE: 1ms timeout flagged (but timeout exists)");
@@ -1342,9 +1485,13 @@ def sync_data():
     return response.status_code
 "#;
 
-    let huge_violations = ryn::rules::A12ResilienceRule::analyze(huge_timeout_code, "sync.py", scan_id).unwrap();
+    let huge_violations =
+        ryn::rules::A12ResilienceRule::analyze(huge_timeout_code, "sync.py", scan_id).unwrap();
 
-    println!("[Test] Huge timeout (1 hour): Found {} violations", huge_violations.len());
+    println!(
+        "[Test] Huge timeout (1 hour): Found {} violations",
+        huge_violations.len()
+    );
 
     if huge_violations.is_empty() {
         println!("[Test] ℹ️ A1.2 does NOT validate timeout value reasonableness");
@@ -1380,12 +1527,17 @@ def api_call(endpoint):
     return response.json()
 "#;
 
-    let session_violations = ryn::rules::A12ResilienceRule::analyze(session_pooling_code, "client.py", scan_id).unwrap();
+    let session_violations =
+        ryn::rules::A12ResilienceRule::analyze(session_pooling_code, "client.py", scan_id).unwrap();
 
-    println!("[Test] Session pooling: Found {} violations", session_violations.len());
+    println!(
+        "[Test] Session pooling: Found {} violations",
+        session_violations.len()
+    );
 
     // Check for error handling violation (session.get without try/except)
-    let has_error_handling_violation = session_violations.iter()
+    let has_error_handling_violation = session_violations
+        .iter()
         .any(|v| v.description.contains("error handling"));
 
     if has_error_handling_violation {
@@ -1414,12 +1566,17 @@ def query_users():
     return result.fetchall()
 "#;
 
-    let db_pool_violations = ryn::rules::A12ResilienceRule::analyze(db_pooling_code, "database.py", scan_id).unwrap();
+    let db_pool_violations =
+        ryn::rules::A12ResilienceRule::analyze(db_pooling_code, "database.py", scan_id).unwrap();
 
-    println!("[Test] Database pooling: Found {} violations", db_pool_violations.len());
+    println!(
+        "[Test] Database pooling: Found {} violations",
+        db_pool_violations.len()
+    );
 
-    let has_db_error_violation = db_pool_violations.iter()
-        .any(|v| v.description.contains("error handling") || v.description.contains("Database operation"));
+    let has_db_error_violation = db_pool_violations.iter().any(|v| {
+        v.description.contains("error handling") || v.description.contains("Database operation")
+    });
 
     if has_db_error_violation {
         println!("[Test] ⚠️ Database connection pooling NOT recognized");

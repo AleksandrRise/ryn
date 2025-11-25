@@ -169,11 +169,11 @@ mod tests {
 
     #[test]
     fn test_extract_with_full_context() {
-        let content = "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n";
+        let content =
+            "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\n";
         let file = create_test_file(content);
 
-        let (snippet, relative_line) =
-            extract_code_block_with_context(file.path(), 5, 2).unwrap();
+        let (snippet, relative_line) = extract_code_block_with_context(file.path(), 5, 2).unwrap();
 
         // Should extract lines 3-7 (5 lines total: 2 before + target + 2 after)
         assert!(snippet.contains("line 3"));
@@ -186,8 +186,7 @@ mod tests {
         let content = "line 1\nline 2\nline 3\nline 4\nline 5\n";
         let file = create_test_file(content);
 
-        let (snippet, relative_line) =
-            extract_code_block_with_context(file.path(), 1, 2).unwrap();
+        let (snippet, relative_line) = extract_code_block_with_context(file.path(), 1, 2).unwrap();
 
         // Should extract lines 1-3 (can't go before line 1)
         assert!(snippet.contains("line 1"));
@@ -200,8 +199,7 @@ mod tests {
         let content = "line 1\nline 2\nline 3\nline 4\nline 5\n";
         let file = create_test_file(content);
 
-        let (snippet, relative_line) =
-            extract_code_block_with_context(file.path(), 5, 2).unwrap();
+        let (snippet, relative_line) = extract_code_block_with_context(file.path(), 5, 2).unwrap();
 
         // Should extract lines 3-5 (can't go past line 5)
         assert!(snippet.contains("line 3"));

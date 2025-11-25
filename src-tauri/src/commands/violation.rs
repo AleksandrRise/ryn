@@ -3,7 +3,7 @@
 //! Handles violation queries, filtering, and status updates
 
 use crate::db::{self, queries};
-use crate::models::{Violation, Control};
+use crate::models::{Control, Violation};
 use crate::utils::create_audit_event;
 use serde::{Deserialize, Serialize};
 
@@ -27,7 +27,10 @@ pub async fn get_violations(
     scan_id: i64,
     filters: Option<ViolationFilters>,
 ) -> Result<Vec<Violation>, String> {
-    println!("[ryn] get_violations called: scan_id={}, filters={:?}", scan_id, filters);
+    println!(
+        "[ryn] get_violations called: scan_id={}, filters={:?}",
+        scan_id, filters
+    );
 
     // Validate scan ID
     if scan_id <= 0 {
@@ -39,12 +42,11 @@ pub async fn get_violations(
     let conn = db::get_connection();
 
     // Get all violations for scan
-    let mut violations = queries::select_violations(&conn, scan_id)
-        .map_err(|e| {
-            let err_msg = format!("Failed to fetch violations: {}", e);
-            println!("[ryn] get_violations query failed: {}", err_msg);
-            err_msg
-        })?;
+    let mut violations = queries::select_violations(&conn, scan_id).map_err(|e| {
+        let err_msg = format!("Failed to fetch violations: {}", e);
+        println!("[ryn] get_violations query failed: {}", err_msg);
+        err_msg
+    })?;
 
     // Apply filters if provided
     if let Some(f) = filters {
@@ -90,7 +92,11 @@ pub async fn get_violations(
         }
     });
 
-    println!("[ryn] get_violations success: found {} violations for scan_id={}", violations.len(), scan_id);
+    println!(
+        "[ryn] get_violations success: found {} violations for scan_id={}",
+        violations.len(),
+        scan_id
+    );
     Ok(violations)
 }
 
@@ -106,7 +112,10 @@ pub async fn get_violation(violation_id: i64) -> Result<ViolationDetail, String>
 
     // Validate violation ID
     if violation_id <= 0 {
-        let err_msg = format!("Invalid violation ID: must be greater than 0, got {}", violation_id);
+        let err_msg = format!(
+            "Invalid violation ID: must be greater than 0, got {}",
+            violation_id
+        );
         println!("[ryn] get_violation validation failed: {}", err_msg);
         return Err(err_msg);
     }
@@ -135,12 +144,11 @@ pub async fn get_violation(violation_id: i64) -> Result<ViolationDetail, String>
         .map_err(|e| format!("Failed to fetch fix: {}", e))?;
 
     // Get related scan
-    let scan = queries::select_scan(&conn, violation.scan_id)
-        .map_err(|e| {
-            let err_msg = format!("Failed to fetch scan: {}", e);
-            println!("[ryn] get_violation scan query failed: {}", err_msg);
-            err_msg
-        })?;
+    let scan = queries::select_scan(&conn, violation.scan_id).map_err(|e| {
+        let err_msg = format!("Failed to fetch scan: {}", e);
+        println!("[ryn] get_violation scan query failed: {}", err_msg);
+        err_msg
+    })?;
 
     println!("[ryn] get_violation success: violation_id={}", violation_id);
     Ok(ViolationDetail {
@@ -161,11 +169,17 @@ pub async fn get_violation(violation_id: i64) -> Result<ViolationDetail, String>
 /// Returns: Success or error
 #[tauri::command]
 pub async fn dismiss_violation(violation_id: i64) -> Result<(), String> {
-    println!("[ryn] dismiss_violation called: violation_id={}", violation_id);
+    println!(
+        "[ryn] dismiss_violation called: violation_id={}",
+        violation_id
+    );
 
     // Validate violation ID
     if violation_id <= 0 {
-        let err_msg = format!("Invalid violation ID: must be greater than 0, got {}", violation_id);
+        let err_msg = format!(
+            "Invalid violation ID: must be greater than 0, got {}",
+            violation_id
+        );
         println!("[ryn] dismiss_violation validation failed: {}", err_msg);
         return Err(err_msg);
     }
@@ -186,12 +200,11 @@ pub async fn dismiss_violation(violation_id: i64) -> Result<(), String> {
         })?;
 
     // Update status to dismissed
-    queries::update_violation_status(&conn, violation_id, "dismissed")
-        .map_err(|e| {
-            let err_msg = format!("Failed to dismiss violation: {}", e);
-            println!("[ryn] dismiss_violation update failed: {}", err_msg);
-            err_msg
-        })?;
+    queries::update_violation_status(&conn, violation_id, "dismissed").map_err(|e| {
+        let err_msg = format!("Failed to dismiss violation: {}", e);
+        println!("[ryn] dismiss_violation update failed: {}", err_msg);
+        err_msg
+    })?;
 
     // Get scan and project info for audit
     let scan = queries::select_scan(&conn, violation.scan_id)
@@ -211,7 +224,10 @@ pub async fn dismiss_violation(violation_id: i64) -> Result<(), String> {
         }
     }
 
-    println!("[ryn] dismiss_violation success: violation_id={}", violation_id);
+    println!(
+        "[ryn] dismiss_violation success: violation_id={}",
+        violation_id
+    );
     Ok(())
 }
 
@@ -226,8 +242,8 @@ pub struct ViolationDetail {
 
 #[cfg(test)]
 mod tests {
-    use crate::db::test_helpers::TestDbGuard;
     use super::*;
+    use crate::db::test_helpers::TestDbGuard;
 
     fn create_test_violation(scan_id: i64) -> i64 {
         let violation = Violation {
@@ -325,8 +341,8 @@ mod tests {
                     confidence_score: None,
                     llm_reasoning: None,
                     regex_reasoning: None,
-                function_name: None,
-                class_name: None,
+                    function_name: None,
+                    class_name: None,
                 };
                 let _ = queries::insert_violation(&conn, &violation);
             }
@@ -373,8 +389,8 @@ mod tests {
                     confidence_score: None,
                     llm_reasoning: None,
                     regex_reasoning: None,
-                function_name: None,
-                class_name: None,
+                    function_name: None,
+                    class_name: None,
                 };
                 let _ = queries::insert_violation(&conn, &violation);
             }
@@ -507,8 +523,8 @@ mod tests {
                     confidence_score: None,
                     llm_reasoning: None,
                     regex_reasoning: None,
-                function_name: None,
-                class_name: None,
+                    function_name: None,
+                    class_name: None,
                 };
                 let _ = queries::insert_violation(&conn, &violation);
             }
@@ -555,8 +571,8 @@ mod tests {
                     confidence_score: None,
                     llm_reasoning: None,
                     regex_reasoning: None,
-                function_name: None,
-                class_name: None,
+                    function_name: None,
+                    class_name: None,
                 };
                 let _ = queries::insert_violation(&conn, &violation);
             }

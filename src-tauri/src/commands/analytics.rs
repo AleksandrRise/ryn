@@ -101,7 +101,8 @@ mod tests {
             let conn = db::get_connection();
 
             // Create parent project and scan first (required for foreign key constraint)
-            let project_id = queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
+            let project_id =
+                queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
             let scan_id = queries::insert_scan(&conn, project_id).unwrap();
 
             // Create a scan cost record
@@ -127,7 +128,8 @@ mod tests {
             let conn = db::get_connection();
 
             // Create parent project and scans first (required for foreign key constraint)
-            let project_id = queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
+            let project_id =
+                queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
             let scan_id_1 = queries::insert_scan(&conn, project_id).unwrap();
             let scan_id_2 = queries::insert_scan(&conn, project_id).unwrap();
 
@@ -161,7 +163,8 @@ mod tests {
             let conn = db::get_connection();
 
             // Create parent project and scans first (required for foreign key constraint)
-            let project_id = queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
+            let project_id =
+                queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
             let scan_id_1 = queries::insert_scan(&conn, project_id).unwrap();
             let scan_id_2 = queries::insert_scan(&conn, project_id).unwrap();
             let scan_id_3 = queries::insert_scan(&conn, project_id).unwrap();
@@ -196,7 +199,8 @@ mod tests {
             let conn = db::get_connection();
 
             // Create parent project and scans first (required for foreign key constraint)
-            let project_id = queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
+            let project_id =
+                queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
             let scan_id_1 = queries::insert_scan(&conn, project_id).unwrap();
             let scan_id_2 = queries::insert_scan(&conn, project_id).unwrap();
 

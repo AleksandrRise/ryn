@@ -50,8 +50,10 @@ pub async fn create_project(
     name: Option<String>,
     framework: Option<String>,
 ) -> Result<Project, String> {
-    println!("[ryn] create_project called: path={}, name={:?}, framework={:?}",
-             path, name, framework);
+    println!(
+        "[ryn] create_project called: path={}, name={:?}, framework={:?}",
+        path, name, framework
+    );
 
     // Validate path exists
     if !Path::new(&path).exists() {
@@ -65,10 +67,16 @@ pub async fn create_project(
 
     // Check if project already exists with this path
     if let Some(existing_project) = queries::select_project_by_path(&conn, &path)
-        .map_err(|e| format!("Failed to check for existing project: {}", e))? {
+        .map_err(|e| format!("Failed to check for existing project: {}", e))?
+    {
         // Project already exists - update framework if provided and return it
         if let Some(fw) = framework.as_deref() {
-            let _ = queries::update_project(&conn, existing_project.id, &existing_project.name, Some(fw));
+            let _ = queries::update_project(
+                &conn,
+                existing_project.id,
+                &existing_project.name,
+                Some(fw),
+            );
 
             // Fetch updated project
             return queries::select_project(&conn, existing_project.id)
@@ -80,12 +88,12 @@ pub async fn create_project(
     }
 
     // Get database connection
-    let conn = db::init_db()
-        .map_err(|e| format!("Failed to initialize database: {}", e))?;
+    let conn = db::init_db().map_err(|e| format!("Failed to initialize database: {}", e))?;
 
     // Check if project already exists with this path
     if let Some(existing_project) = queries::select_project_by_path(&conn, &path)
-        .map_err(|e| format!("Failed to check for existing project: {}", e))? {
+        .map_err(|e| format!("Failed to check for existing project: {}", e))?
+    {
         // Project already exists - update framework if provided and return it
         if let Some(fw) = framework.as_deref() {
             queries::update_project(&conn, existing_project.id, &existing_project.name, Some(fw))
@@ -120,12 +128,21 @@ pub async fn create_project(
         .ok_or_else(|| "Project was created but could not be retrieved".to_string())?;
 
     // Log audit event
-    if let Ok(event) = create_audit_event(&conn, "project_created", None, None, None,
-        &format!("Created project: {}", project_name)) {
+    if let Ok(event) = create_audit_event(
+        &conn,
+        "project_created",
+        None,
+        None,
+        None,
+        &format!("Created project: {}", project_name),
+    ) {
         let _ = queries::insert_audit_event(&conn, &event);
     }
 
-    println!("[ryn] create_project success: project_id={}, name={}", project.id, project.name);
+    println!(
+        "[ryn] create_project success: project_id={}, name={}",
+        project.id, project.name
+    );
     Ok(project)
 }
 
@@ -138,17 +155,18 @@ pub async fn get_projects() -> Result<Vec<Project>, String> {
 
     let conn = db::get_connection();
 
-    let projects = queries::select_projects(&conn)
-        .map_err(|e| {
-            let err_msg = format!("Failed to fetch projects: {}", e);
-            println!("[ryn] get_projects error: {}", err_msg);
-            err_msg
-        })?;
+    let projects = queries::select_projects(&conn).map_err(|e| {
+        let err_msg = format!("Failed to fetch projects: {}", e);
+        println!("[ryn] get_projects error: {}", err_msg);
+        err_msg
+    })?;
 
-    println!("[ryn] get_projects success: found {} projects", projects.len());
+    println!(
+        "[ryn] get_projects success: found {} projects",
+        projects.len()
+    );
     Ok(projects)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -309,11 +327,8 @@ mod tests {
         for (i, fw) in frameworks.iter().enumerate() {
             let dir = tempfile::TempDir::new().unwrap();
             let path = dir.path().to_string_lossy().to_string();
-            let result = create_project(
-                path,
-                Some(format!("project-{}", i)),
-                Some(fw.to_string()),
-            ).await;
+            let result =
+                create_project(path, Some(format!("project-{}", i)), Some(fw.to_string())).await;
             assert!(result.is_ok());
         }
 

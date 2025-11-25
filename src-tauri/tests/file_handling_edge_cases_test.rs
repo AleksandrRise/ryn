@@ -12,11 +12,11 @@
 
 mod common;
 
+use ryn::rules::CC67SecretsRule;
 use std::fs::{self, File, Permissions};
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use tempfile::TempDir;
-use ryn::rules::CC67SecretsRule;
 
 // ============================================================================
 // Phase 4.1: Non-UTF8 File Handling
@@ -40,11 +40,12 @@ fn test_non_utf8_file_encoding() {
     // Contains: café, niño, Müller with hardcoded secret
     let latin1_bytes: Vec<u8> = vec![
         // # Configuration file
-        0x23, 0x20, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x20, 0x66, 0x69, 0x6c, 0x65, 0x0a,
-        // # Author: José García
-        0x23, 0x20, 0x41, 0x75, 0x74, 0x68, 0x6f, 0x72, 0x3a, 0x20, 0x4a, 0x6f, 0x73, 0xe9, 0x20, 0x47, 0x61, 0x72, 0x63, 0xed, 0x61, 0x0a,
-        // API_KEY = "sk_live_café123"
-        0x41, 0x50, 0x49, 0x5f, 0x4b, 0x45, 0x59, 0x20, 0x3d, 0x20, 0x22, 0x73, 0x6b, 0x5f, 0x6c, 0x69, 0x76, 0x65, 0x5f, 0x63, 0x61, 0x66, 0xe9, 0x31, 0x32, 0x33, 0x22, 0x0a,
+        0x23, 0x20, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e,
+        0x20, 0x66, 0x69, 0x6c, 0x65, 0x0a, // # Author: José García
+        0x23, 0x20, 0x41, 0x75, 0x74, 0x68, 0x6f, 0x72, 0x3a, 0x20, 0x4a, 0x6f, 0x73, 0xe9, 0x20,
+        0x47, 0x61, 0x72, 0x63, 0xed, 0x61, 0x0a, // API_KEY = "sk_live_café123"
+        0x41, 0x50, 0x49, 0x5f, 0x4b, 0x45, 0x59, 0x20, 0x3d, 0x20, 0x22, 0x73, 0x6b, 0x5f, 0x6c,
+        0x69, 0x76, 0x65, 0x5f, 0x63, 0x61, 0x66, 0xe9, 0x31, 0x32, 0x33, 0x22, 0x0a,
     ];
 
     fs::write(&file_path, &latin1_bytes).expect("Failed to write Latin-1 file");
@@ -66,7 +67,10 @@ fn test_non_utf8_file_encoding() {
 
             match result {
                 Ok(violations) => {
-                    println!("[Test] Scan succeeded: {} violations found", violations.len());
+                    println!(
+                        "[Test] Scan succeeded: {} violations found",
+                        violations.len()
+                    );
                 }
                 Err(e) => {
                     println!("[Test] Scan failed gracefully: {}", e);
@@ -86,7 +90,10 @@ fn test_non_utf8_file_encoding() {
 
             match result {
                 Ok(violations) => {
-                    println!("[Test] Lossy scan succeeded: {} violations", violations.len());
+                    println!(
+                        "[Test] Lossy scan succeeded: {} violations",
+                        violations.len()
+                    );
                 }
                 Err(e) => {
                     println!("[Test] Lossy scan failed gracefully: {}", e);
@@ -177,10 +184,16 @@ fn test_binary_file_skipped() {
 
     // Create fake binary files
     let binary_files = vec![
-        ("compiled.pyc", vec![0x03, 0xF3, 0x0D, 0x0A, 0x00, 0x00, 0x00, 0x00]),  // Python bytecode header
-        ("library.so", vec![0x7F, 0x45, 0x4C, 0x46, 0x02, 0x01, 0x01]),          // ELF header
-        ("program.exe", vec![0x4D, 0x5A, 0x90, 0x00]),                            // PE header
-        ("image.jpg", vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46]),    // JPEG header
+        (
+            "compiled.pyc",
+            vec![0x03, 0xF3, 0x0D, 0x0A, 0x00, 0x00, 0x00, 0x00],
+        ), // Python bytecode header
+        ("library.so", vec![0x7F, 0x45, 0x4C, 0x46, 0x02, 0x01, 0x01]), // ELF header
+        ("program.exe", vec![0x4D, 0x5A, 0x90, 0x00]),                  // PE header
+        (
+            "image.jpg",
+            vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46],
+        ), // JPEG header
     ];
 
     for (filename, content) in &binary_files {
@@ -209,7 +222,10 @@ fn test_binary_file_skipped() {
 
         match result {
             Ok(violations) => {
-                println!("[Test]   Result: {} violations (binary data processed as text)", violations.len());
+                println!(
+                    "[Test]   Result: {} violations (binary data processed as text)",
+                    violations.len()
+                );
             }
             Err(e) => {
                 println!("[Test]   Result: Skipped/Failed - {}", e);
@@ -271,7 +287,11 @@ fn test_mixed_directory_with_binaries() {
         fs::write(&file_path, content).expect("Failed to write binary file");
     }
 
-    println!("[Test] Created {} Python files, {} binary files", python_files.len(), binary_files.len());
+    println!(
+        "[Test] Created {} Python files, {} binary files",
+        python_files.len(),
+        binary_files.len()
+    );
 
     // Scan all files
     let mut python_scanned = 0;
@@ -292,19 +312,37 @@ fn test_mixed_directory_with_binaries() {
 
             if result.is_ok() {
                 python_scanned += 1;
-                println!("[Test] ✓ Scanned: {}", path.file_name().unwrap().to_str().unwrap());
+                println!(
+                    "[Test] ✓ Scanned: {}",
+                    path.file_name().unwrap().to_str().unwrap()
+                );
             }
         } else {
             binaries_encountered += 1;
-            println!("[Test] - Skipped: {}", path.file_name().unwrap().to_str().unwrap());
+            println!(
+                "[Test] - Skipped: {}",
+                path.file_name().unwrap().to_str().unwrap()
+            );
         }
     }
 
-    println!("[Test] Python files scanned: {}/{}", python_scanned, python_files.len());
+    println!(
+        "[Test] Python files scanned: {}/{}",
+        python_scanned,
+        python_files.len()
+    );
     println!("[Test] Binary files encountered: {}", binaries_encountered);
 
-    assert_eq!(python_scanned, python_files.len(), "All Python files should be scanned");
-    assert_eq!(binaries_encountered, binary_files.len(), "All binary files should be encountered");
+    assert_eq!(
+        python_scanned,
+        python_files.len(),
+        "All Python files should be scanned"
+    );
+    assert_eq!(
+        binaries_encountered,
+        binary_files.len(),
+        "All binary files should be encountered"
+    );
 
     println!("[Test] ✅ Mixed directory handled correctly");
     println!("[Test] ✅ Only Python files processed");
@@ -341,7 +379,8 @@ fn test_large_file_timeout_enforcement() {
     writeln!(file, "data = [").unwrap();
 
     // Write ~15MB of array elements
-    let element = "    {'id': 12345, 'name': 'User Name', 'email': 'user@example.com', 'data': 'x' * 100},\n";
+    let element =
+        "    {'id': 12345, 'name': 'User Name', 'email': 'user@example.com', 'data': 'x' * 100},\n";
     let target_size = 15 * 1024 * 1024; // 15MB
     let element_size = element.len();
     let num_elements = target_size / element_size;
@@ -350,13 +389,19 @@ fn test_large_file_timeout_enforcement() {
         write!(file, "{}", element).unwrap();
 
         if i % 10000 == 0 {
-            print!("\r[Test] Progress: {:.1}MB", (i * element_size) as f64 / 1024.0 / 1024.0);
+            print!(
+                "\r[Test] Progress: {:.1}MB",
+                (i * element_size) as f64 / 1024.0 / 1024.0
+            );
             std::io::stdout().flush().unwrap();
         }
     }
 
     writeln!(file, "]").unwrap();
-    println!("\n[Test] Large file created: {:.2}MB", file.metadata().unwrap().len() as f64 / 1024.0 / 1024.0);
+    println!(
+        "\n[Test] Large file created: {:.2}MB",
+        file.metadata().unwrap().len() as f64 / 1024.0 / 1024.0
+    );
 
     let file_path_str = file_path.to_str().unwrap();
 
@@ -382,16 +427,27 @@ fn test_large_file_timeout_enforcement() {
                     assert!(violations.len() > 0, "Should detect hardcoded secret");
                 }
                 Err(e) => {
-                    println!("[Test] Scan failed in {:.2}s: {}", duration.as_secs_f64(), e);
+                    println!(
+                        "[Test] Scan failed in {:.2}s: {}",
+                        duration.as_secs_f64(),
+                        e
+                    );
                 }
             }
 
             // Verify scan didn't hang indefinitely
-            assert!(duration.as_secs() < 60, "Scan should complete within 60 seconds");
+            assert!(
+                duration.as_secs() < 60,
+                "Scan should complete within 60 seconds"
+            );
         }
         Err(e) => {
             let duration = start.elapsed();
-            println!("[Test] Failed to read large file in {:.2}s: {}", duration.as_secs_f64(), e);
+            println!(
+                "[Test] Failed to read large file in {:.2}s: {}",
+                duration.as_secs_f64(),
+                e
+            );
             println!("[Test] This is acceptable - file may be too large for memory");
         }
     }
@@ -425,14 +481,19 @@ fn test_unreadable_file_permissions() {
     let permissions = Permissions::from_mode(0o000);
     fs::set_permissions(&file_path, permissions).expect("Failed to set permissions");
 
-    println!("[Test] Created unreadable file (chmod 000): {:?}", file_path);
+    println!(
+        "[Test] Created unreadable file (chmod 000): {:?}",
+        file_path
+    );
 
     // Attempt to read file
     let read_result = fs::read_to_string(&file_path);
 
     match read_result {
         Ok(_) => {
-            println!("[Test] WARNING: File read succeeded despite chmod 000 (may be running as root)");
+            println!(
+                "[Test] WARNING: File read succeeded despite chmod 000 (may be running as root)"
+            );
             println!("[Test] Skipping permission test - not applicable in this environment");
         }
         Err(e) => {
@@ -440,8 +501,11 @@ fn test_unreadable_file_permissions() {
             println!("[Test] Error kind: {:?}", e.kind());
 
             // Verify it's a permission error
-            assert_eq!(e.kind(), std::io::ErrorKind::PermissionDenied,
-                       "Should be permission denied error");
+            assert_eq!(
+                e.kind(),
+                std::io::ErrorKind::PermissionDenied,
+                "Should be permission denied error"
+            );
         }
     }
 
@@ -492,19 +556,21 @@ fn test_permission_error_recovery() {
         let filename = file_path.file_name().unwrap().to_str().unwrap();
 
         match fs::read_to_string(file_path) {
-            Ok(content) => {
-                match CC67SecretsRule::analyze(&content, file_path_str, 1) {
-                    Ok(violations) => {
-                        scanned += 1;
-                        total_violations += violations.len();
-                        println!("[Test] ✓ Scanned {}: {} violations", filename, violations.len());
-                    }
-                    Err(e) => {
-                        failed += 1;
-                        println!("[Test] ✗ Scan failed {}: {}", filename, e);
-                    }
+            Ok(content) => match CC67SecretsRule::analyze(&content, file_path_str, 1) {
+                Ok(violations) => {
+                    scanned += 1;
+                    total_violations += violations.len();
+                    println!(
+                        "[Test] ✓ Scanned {}: {} violations",
+                        filename,
+                        violations.len()
+                    );
                 }
-            }
+                Err(e) => {
+                    failed += 1;
+                    println!("[Test] ✗ Scan failed {}: {}", filename, e);
+                }
+            },
             Err(e) => {
                 failed += 1;
                 println!("[Test] ✗ Read failed {}: {}", filename, e);
@@ -521,7 +587,10 @@ fn test_permission_error_recovery() {
 
     assert_eq!(scanned, 2, "Should scan 2 readable files");
     assert_eq!(failed, 1, "Should fail on 1 unreadable file");
-    assert_eq!(total_violations, 2, "Should find violations in readable files");
+    assert_eq!(
+        total_violations, 2,
+        "Should find violations in readable files"
+    );
 
     println!("[Test] ✅ Scan recovered from permission error");
     println!("[Test] ✅ Readable files processed successfully");
@@ -578,8 +647,11 @@ fn test_symlink_to_file() {
     println!("[Test] Symlink violations: {}", link_violations.len());
 
     // Both should have same violations (reading same content)
-    assert_eq!(real_violations.len(), link_violations.len(),
-               "Real file and symlink should have same violations");
+    assert_eq!(
+        real_violations.len(),
+        link_violations.len(),
+        "Real file and symlink should have same violations"
+    );
 
     println!("[Test] ✅ Symlink to file handled correctly");
     println!("[Test] ✅ Content read successfully through symlink");
@@ -609,7 +681,8 @@ fn test_symlink_to_directory() {
     // Create symlink to directory
     #[cfg(unix)]
     {
-        std::os::unix::fs::symlink(&real_dir, &link_dir).expect("Failed to create directory symlink");
+        std::os::unix::fs::symlink(&real_dir, &link_dir)
+            .expect("Failed to create directory symlink");
         println!("[Test] Created directory symlink: link_dir -> real_dir");
     }
 
@@ -671,7 +744,8 @@ fn test_broken_symlink() {
     // Create symlink to non-existent file
     #[cfg(unix)]
     {
-        std::os::unix::fs::symlink(&nonexistent, &broken_link).expect("Failed to create broken symlink");
+        std::os::unix::fs::symlink(&nonexistent, &broken_link)
+            .expect("Failed to create broken symlink");
         println!("[Test] Created broken symlink: broken_link.py -> nonexistent.py");
     }
 
@@ -682,7 +756,10 @@ fn test_broken_symlink() {
     }
 
     // Verify symlink exists but target doesn't
-    assert!(broken_link.symlink_metadata().is_ok(), "Symlink should exist");
+    assert!(
+        broken_link.symlink_metadata().is_ok(),
+        "Symlink should exist"
+    );
     assert!(!nonexistent.exists(), "Target should not exist");
 
     // Attempt to read through broken symlink
@@ -697,8 +774,11 @@ fn test_broken_symlink() {
             println!("[Test] Error kind: {:?}", e.kind());
 
             // Should be "not found" error
-            assert_eq!(e.kind(), std::io::ErrorKind::NotFound,
-                       "Should be file not found error");
+            assert_eq!(
+                e.kind(),
+                std::io::ErrorKind::NotFound,
+                "Should be file not found error"
+            );
         }
     }
 

@@ -35,13 +35,23 @@ fn test_fresh_db_migrates_to_v2() {
     assert!(project.table_exists("scan_costs").unwrap());
 
     // Verify v2 columns exist in violations table
-    assert!(project.column_exists("violations", "detection_method").unwrap());
-    assert!(project.column_exists("violations", "confidence_score").unwrap());
-    assert!(project.column_exists("violations", "llm_reasoning").unwrap());
-    assert!(project.column_exists("violations", "regex_reasoning").unwrap());
+    assert!(project
+        .column_exists("violations", "detection_method")
+        .unwrap());
+    assert!(project
+        .column_exists("violations", "confidence_score")
+        .unwrap());
+    assert!(project
+        .column_exists("violations", "llm_reasoning")
+        .unwrap());
+    assert!(project
+        .column_exists("violations", "regex_reasoning")
+        .unwrap());
 
     // Verify v3 columns exist in violations table
-    assert!(project.column_exists("violations", "function_name").unwrap());
+    assert!(project
+        .column_exists("violations", "function_name")
+        .unwrap());
     assert!(project.column_exists("violations", "class_name").unwrap());
 }
 
@@ -57,10 +67,12 @@ fn test_v1_to_v2_upgrade() {
         conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
 
         // Execute v1 schema
-        conn.execute_batch(include_str!("../src/db/schema.sql")).unwrap();
+        conn.execute_batch(include_str!("../src/db/schema.sql"))
+            .unwrap();
 
         // Create v1 indexes
-        conn.execute_batch("
+        conn.execute_batch(
+            "
             CREATE INDEX IF NOT EXISTS idx_violations_scan_id ON violations(scan_id);
             CREATE INDEX IF NOT EXISTS idx_violations_status ON violations(status);
             CREATE INDEX IF NOT EXISTS idx_fixes_violation_id ON fixes(violation_id);
@@ -69,7 +81,9 @@ fn test_v1_to_v2_upgrade() {
             CREATE INDEX IF NOT EXISTS idx_audit_events_project_id ON audit_events(project_id);
             CREATE INDEX IF NOT EXISTS idx_violations_file_path ON violations(file_path);
             CREATE INDEX IF NOT EXISTS idx_audit_events_created_at ON audit_events(created_at);
-        ").unwrap();
+        ",
+        )
+        .unwrap();
 
         // Set version to 1
         conn.execute("PRAGMA user_version = 1", []).unwrap();
@@ -78,14 +92,16 @@ fn test_v1_to_v2_upgrade() {
         conn.execute(
             "INSERT INTO projects (name, path) VALUES (?, ?)",
             ["Test Project", "/tmp/test"],
-        ).unwrap();
+        )
+        .unwrap();
 
         let project_id = conn.last_insert_rowid();
 
         conn.execute(
             "INSERT INTO scans (project_id, status) VALUES (?, ?)",
             [project_id.to_string().as_str(), "completed"],
-        ).unwrap();
+        )
+        .unwrap();
 
         let scan_id = conn.last_insert_rowid();
 
@@ -103,7 +119,8 @@ fn test_v1_to_v2_upgrade() {
                 "42",
                 "def view(): pass",
             ],
-        ).unwrap();
+        )
+        .unwrap();
     }
 
     // Reopen and run migrations
@@ -113,13 +130,17 @@ fn test_v1_to_v2_upgrade() {
         conn.execute("PRAGMA foreign_keys = ON", []).unwrap();
 
         // Run test migrations (will apply v2)
-        let current_version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).unwrap();
+        let current_version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
         assert_eq!(current_version, 1, "Should start at v1");
 
         // Apply v2 migration
         apply_v2_migration(&conn);
 
-        let new_version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).unwrap();
+        let new_version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
         assert_eq!(new_version, 3, "Should be upgraded to v3");
 
         // Verify scan_costs table exists
@@ -128,7 +149,10 @@ fn test_v1_to_v2_upgrade() {
             [],
             |row| row.get(0),
         ).unwrap();
-        assert!(table_exists, "scan_costs table should exist after v2 migration");
+        assert!(
+            table_exists,
+            "scan_costs table should exist after v2 migration"
+        );
 
         // Verify v2 columns exist
         let mut stmt = conn.prepare("PRAGMA table_info(violations)").unwrap();
@@ -144,19 +168,34 @@ fn test_v1_to_v2_upgrade() {
         assert!(columns.contains(&"regex_reasoning".to_string()));
 
         // Verify existing data survived migration
-        let project_count: i64 = conn.query_row("SELECT COUNT(*) FROM projects", [], |row| row.get(0)).unwrap();
-        assert_eq!(project_count, 1, "Existing project should survive migration");
+        let project_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM projects", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            project_count, 1,
+            "Existing project should survive migration"
+        );
 
-        let violation_count: i64 = conn.query_row("SELECT COUNT(*) FROM violations", [], |row| row.get(0)).unwrap();
-        assert_eq!(violation_count, 1, "Existing violation should survive migration");
+        let violation_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM violations", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            violation_count, 1,
+            "Existing violation should survive migration"
+        );
 
         // Verify default value for detection_method
-        let detection_method: String = conn.query_row(
-            "SELECT detection_method FROM violations LIMIT 1",
-            [],
-            |row| row.get(0),
-        ).unwrap();
-        assert_eq!(detection_method, "regex", "Default detection_method should be 'regex'");
+        let detection_method: String = conn
+            .query_row(
+                "SELECT detection_method FROM violations LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            detection_method, "regex",
+            "Default detection_method should be 'regex'"
+        );
 
         // Verify v2 indexes exist
         let mut stmt = conn.prepare(
@@ -191,7 +230,9 @@ fn test_migrations_idempotent() {
     // being non-idempotent. This test verifies that PRAGMA user_version prevents
     // re-running migrations.
 
-    let current_version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0)).unwrap();
+    let current_version: i64 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap();
     assert_eq!(current_version, 3, "Should still be at version 3");
 
     // Migration logic should skip v1 and v2 if already at v2
@@ -228,14 +269,13 @@ fn test_controls_seeded_after_migration() {
     assert_eq!(ids, vec!["A1.2", "CC6.1", "CC6.7", "CC7.2"]);
 
     // Verify controls have required fields
-    let mut stmt = conn.prepare("SELECT name, description, requirement, category FROM controls WHERE id = 'CC6.1'").unwrap();
+    let mut stmt = conn
+        .prepare("SELECT name, description, requirement, category FROM controls WHERE id = 'CC6.1'")
+        .unwrap();
     let (name, description, requirement, category): (String, String, String, String) = stmt
-        .query_row([], |row| Ok((
-            row.get(0)?,
-            row.get(1)?,
-            row.get(2)?,
-            row.get(3)?,
-        )))
+        .query_row([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })
         .unwrap();
 
     assert!(!name.is_empty());
@@ -308,7 +348,11 @@ fn test_detection_method_constraint() {
             None,
             None,
         );
-        assert!(result.is_ok(), "Should accept valid detection_method: {}", method);
+        assert!(
+            result.is_ok(),
+            "Should accept valid detection_method: {}",
+            method
+        );
     }
 
     // Test invalid detection method (should fail constraint check)
@@ -355,7 +399,11 @@ fn test_confidence_score_constraint() {
             Some("AI reasoning"),
             None,
         );
-        assert!(result.is_ok(), "Should accept valid confidence_score: {}", score);
+        assert!(
+            result.is_ok(),
+            "Should accept valid confidence_score: {}",
+            score
+        );
     }
 
     // Test NULL score (should be valid)
@@ -403,15 +451,16 @@ fn test_scan_costs_foreign_key() {
     let scan_id = project.insert_scan(project_id, "completed").unwrap();
 
     // Insert scan_cost with valid scan_id
-    let cost_id = project.insert_scan_cost(
-        scan_id,
-        10,   // files_analyzed
-        5000, // input_tokens
-        1000, // output_tokens
-        2000, // cache_read_tokens
-        500,  // cache_write_tokens
-        0.025, // total_cost_usd
-    ).unwrap();
+    let cost_id = project
+        .insert_scan_cost(
+            scan_id, 10,    // files_analyzed
+            5000,  // input_tokens
+            1000,  // output_tokens
+            2000,  // cache_read_tokens
+            500,   // cache_write_tokens
+            0.025, // total_cost_usd
+        )
+        .unwrap();
     assert!(cost_id > 0);
 
     // Try to insert scan_cost with non-existent scan_id (should fail)
@@ -424,7 +473,10 @@ fn test_scan_costs_foreign_key() {
         rusqlite::params![999, 10, 5000, 1000, 2000, 500, 0.025],
     );
 
-    assert!(result.is_err(), "Should reject scan_cost with non-existent scan_id");
+    assert!(
+        result.is_err(),
+        "Should reject scan_cost with non-existent scan_id"
+    );
 }
 
 /// Test that CASCADE DELETE works for scan_costs
@@ -436,22 +488,40 @@ fn test_scan_costs_cascade_delete() {
     let scan_id = project.insert_scan(project_id, "completed").unwrap();
 
     // Insert scan_cost
-    project.insert_scan_cost(scan_id, 10, 5000, 1000, 2000, 500, 0.025).unwrap();
+    project
+        .insert_scan_cost(scan_id, 10, 5000, 1000, 2000, 500, 0.025)
+        .unwrap();
 
     // Verify scan_cost exists
-    let cost_count_before: i64 = project.connection()
-        .query_row("SELECT COUNT(*) FROM scan_costs WHERE scan_id = ?", [scan_id], |row| row.get(0))
+    let cost_count_before: i64 = project
+        .connection()
+        .query_row(
+            "SELECT COUNT(*) FROM scan_costs WHERE scan_id = ?",
+            [scan_id],
+            |row| row.get(0),
+        )
         .unwrap();
     assert_eq!(cost_count_before, 1);
 
     // Delete scan
-    project.connection().execute("DELETE FROM scans WHERE id = ?", [scan_id]).unwrap();
+    project
+        .connection()
+        .execute("DELETE FROM scans WHERE id = ?", [scan_id])
+        .unwrap();
 
     // Verify scan_cost was cascade deleted
-    let cost_count_after: i64 = project.connection()
-        .query_row("SELECT COUNT(*) FROM scan_costs WHERE scan_id = ?", [scan_id], |row| row.get(0))
+    let cost_count_after: i64 = project
+        .connection()
+        .query_row(
+            "SELECT COUNT(*) FROM scan_costs WHERE scan_id = ?",
+            [scan_id],
+            |row| row.get(0),
+        )
         .unwrap();
-    assert_eq!(cost_count_after, 0, "scan_cost should be cascade deleted when scan is deleted");
+    assert_eq!(
+        cost_count_after, 0,
+        "scan_cost should be cascade deleted when scan is deleted"
+    );
 }
 
 // ============================================================================
@@ -465,26 +535,24 @@ fn apply_v2_migration(conn: &Connection) {
         "ALTER TABLE violations ADD COLUMN detection_method TEXT NOT NULL DEFAULT 'regex'
          CHECK(detection_method IN ('regex', 'llm', 'hybrid'))",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Add confidence_score column
     conn.execute(
         "ALTER TABLE violations ADD COLUMN confidence_score INTEGER
          CHECK(confidence_score IS NULL OR (confidence_score >= 0 AND confidence_score <= 100))",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Add llm_reasoning column
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN llm_reasoning TEXT",
-        [],
-    ).unwrap();
+    conn.execute("ALTER TABLE violations ADD COLUMN llm_reasoning TEXT", [])
+        .unwrap();
 
     // Add regex_reasoning column
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN regex_reasoning TEXT",
-        [],
-    ).unwrap();
+    conn.execute("ALTER TABLE violations ADD COLUMN regex_reasoning TEXT", [])
+        .unwrap();
 
     // Create scan_costs table
     conn.execute(
@@ -501,45 +569,47 @@ fn apply_v2_migration(conn: &Connection) {
             FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
         )",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Create scan_costs indexes
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_scan_costs_created_at ON scan_costs(created_at)",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_scan_costs_scan_id ON scan_costs(scan_id)",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Seed settings
     conn.execute(
         "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
         ["llm_scan_mode", "regex_only"],
-    ).unwrap();
+    )
+    .unwrap();
 
     conn.execute(
         "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
         ["cost_limit_per_scan", "1.0"],
-    ).unwrap();
+    )
+    .unwrap();
 
     conn.execute(
         "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))",
         ["onboarding_completed", "false"],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Apply v3 migration (tree-sitter context fields)
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN function_name TEXT",
-        [],
-    ).unwrap();
+    conn.execute("ALTER TABLE violations ADD COLUMN function_name TEXT", [])
+        .unwrap();
 
-    conn.execute(
-        "ALTER TABLE violations ADD COLUMN class_name TEXT",
-        [],
-    ).unwrap();
+    conn.execute("ALTER TABLE violations ADD COLUMN class_name TEXT", [])
+        .unwrap();
 
     // Update version
     conn.execute("PRAGMA user_version = 3", []).unwrap();

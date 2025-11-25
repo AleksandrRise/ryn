@@ -99,10 +99,14 @@ impl ScanCost {
         cache_read_tokens: i64,
         cache_write_tokens: i64,
     ) -> f64 {
-        let input_cost = (input_tokens as f64 / 1_000_000.0) * ClaudePricing::HAIKU_INPUT_PER_MILLION;
-        let output_cost = (output_tokens as f64 / 1_000_000.0) * ClaudePricing::HAIKU_OUTPUT_PER_MILLION;
-        let cache_read_cost = (cache_read_tokens as f64 / 1_000_000.0) * ClaudePricing::HAIKU_CACHE_READ_PER_MILLION;
-        let cache_write_cost = (cache_write_tokens as f64 / 1_000_000.0) * ClaudePricing::HAIKU_CACHE_WRITE_PER_MILLION;
+        let input_cost =
+            (input_tokens as f64 / 1_000_000.0) * ClaudePricing::HAIKU_INPUT_PER_MILLION;
+        let output_cost =
+            (output_tokens as f64 / 1_000_000.0) * ClaudePricing::HAIKU_OUTPUT_PER_MILLION;
+        let cache_read_cost =
+            (cache_read_tokens as f64 / 1_000_000.0) * ClaudePricing::HAIKU_CACHE_READ_PER_MILLION;
+        let cache_write_cost = (cache_write_tokens as f64 / 1_000_000.0)
+            * ClaudePricing::HAIKU_CACHE_WRITE_PER_MILLION;
 
         input_cost + output_cost + cache_read_cost + cache_write_cost
     }
@@ -320,8 +324,8 @@ mod tests {
         // Realistic scenario: Smart mode scan of 40 files
         // ~15k tokens per file average (input + output + cache)
         let scan_cost = ScanCost::new(
-            1,      // scan_id
-            40,     // files analyzed
+            1,       // scan_id
+            40,      // files analyzed
             200_000, // input tokens
             80_000,  // output tokens
             300_000, // cache read (reusing SOC2 controls prompt)
