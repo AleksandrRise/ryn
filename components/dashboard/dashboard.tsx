@@ -16,11 +16,18 @@ import {
   get_tracked_repos,
   check_repo_for_changes,
   scan_github_repo,
+  create_project,
+  detect_framework,
+  get_projects,
+  get_scan_progress,
+  get_settings,
   type GitHubConnectionStatus,
   type TrackedRepoWithDetails,
 } from "@/lib/tauri/commands"
+import { useProjectStore } from "@/lib/stores/project-store"
 import { GitHubOAuthModal } from "./github-oauth-modal"
 import { GitHubRepoManager } from "./github-repo-manager"
+import { useRouter } from "next/navigation"
 
 // Platform configuration
 const PLATFORMS = [
@@ -31,15 +38,29 @@ const PLATFORMS = [
 ] as const
 
 export function Dashboard() {
+  const router = useRouter()
+  const { setSelectedProject } = useProjectStore()
   const [connectionStatus, setConnectionStatus] = useState<GitHubConnectionStatus | null>(null)
   const [selectedPlatform, setSelectedPlatform] = useState<typeof PLATFORMS[number]>(PLATFORMS[0])
   const [platformDropdownOpen, setPlatformDropdownOpen] = useState(false)
   const [repoManagerOpen, setRepoManagerOpen] = useState(false)
   const [oauthModalOpen, setOauthModalOpen] = useState(false)
   const [trackedRepos, setTrackedRepos] = useState<TrackedRepoWithDetails[]>([])
+  const [repoFilter, setRepoFilter] = useState<"all" | "critical" | "healthy">("all")
   const [checkingRepos, setCheckingRepos] = useState<Set<number>>(new Set())
+  const [scanningRepos, setScanningRepos] = useState<Set<number>>(new Set())
   const [repoChanges, setRepoChanges] = useState<Map<number, boolean>>(new Map())
+  const [repoForProject, setRepoForProject] = useState<TrackedRepoWithDetails | null>(null)
+  const [projectModalError, setProjectModalError] = useState<string | null>(null)
+  const [projectModalLoading, setProjectModalLoading] = useState(false)
+  const [defaultScanMode, setDefaultScanMode] = useState<string>("smart")
+  const projectModalRunId = useRef(0)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const latestReposRef = useRef<TrackedRepoWithDetails[]>([])
+  const prevRepoIdsRef = useRef<Set<number>>(new Set())
+  const hasInitializedTrackedRef = useRef(false)
+  const checkingReposRef = useRef<Set<number>>(new Set())
+  const scanningReposRef = useRef<Set<number>>(new Set())
 
   // Check GitHub connection status on mount
   useEffect(() => {
@@ -52,6 +73,21 @@ export function Dashboard() {
       loadTrackedRepos()
     }
   }, [connectionStatus?.connected])
+
+  useEffect(() => {
+    const loadScanModeSetting = async () => {
+      try {
+        const settings = await get_settings()
+        const mode = settings.find((s) => s.key === "llm_scan_mode")?.value
+        if (mode) {
+          setDefaultScanMode(mode)
+        }
+      } catch (error) {
+        console.warn("Failed to load scan mode setting", error)
+      }
+    }
+    void loadScanModeSetting()
+  }, [])
 
   const checkConnection = async () => {
     try {
@@ -66,6 +102,7 @@ export function Dashboard() {
     try {
       const repos = await get_tracked_repos()
       setTrackedRepos(repos)
+      latestReposRef.current = repos
     } catch (error) {
       console.error("Failed to load tracked repos:", error)
     }
@@ -99,20 +136,82 @@ export function Dashboard() {
     loadTrackedRepos()
   }
 
+  const waitForScanCompletion = async (scanId: number) => {
+    const start = Date.now()
+    const timeoutMs = 120_000
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const progress = await get_scan_progress(scanId)
+        if (progress.status !== "in_progress" && progress.status !== "queued") {
+          return progress
+        }
+      } catch (err) {
+        console.warn(`Polling scan ${scanId} failed`, err)
+      }
+      await new Promise((res) => setTimeout(res, 1500))
+    }
+    throw new Error("Scan did not complete in time")
+  }
+
+  const runScanForRepo = async (repoId: number, reason: string, waitForCompletion = false) => {
+    setScanningRepos(prev => {
+      const next = new Set(prev)
+      next.add(repoId)
+      scanningReposRef.current = next
+      return next
+    })
+    try {
+      const scanId = await scan_github_repo(repoId, defaultScanMode)
+      if (waitForCompletion) {
+        await waitForScanCompletion(scanId)
+      }
+      setRepoChanges(prev => {
+        const next = new Map(prev)
+        next.delete(repoId)
+        return next
+      })
+      await loadTrackedRepos()
+      console.log(`Scan started for repo ${repoId} (${reason})`)
+      return scanId
+    } catch (error) {
+      console.error(`Failed to scan repo ${repoId} (${reason}):`, error)
+      throw error
+    } finally {
+      setScanningRepos(prev => {
+        const next = new Set(prev)
+        next.delete(repoId)
+        scanningReposRef.current = next
+        return next
+      })
+    }
+  }
+
+  const checkRepoAndFlag = async (repoId: number) => {
+    const hasChanges = await check_repo_for_changes(repoId)
+    setRepoChanges(prev => {
+      const next = new Map(prev)
+      next.set(repoId, hasChanges)
+      return next
+    })
+    return hasChanges
+  }
+
   const handleCheckForUpdates = async (repoId: number, e: React.MouseEvent) => {
     e.stopPropagation() // Prevent navigation
 
-    setCheckingRepos(prev => new Set(prev).add(repoId))
+    setCheckingRepos(prev => {
+      const next = new Set(prev)
+      next.add(repoId)
+      checkingReposRef.current = next
+      return next
+    })
 
     try {
-      const hasChanges = await check_repo_for_changes(repoId)
-      setRepoChanges(prev => new Map(prev).set(repoId, hasChanges))
-
-      // Reload repos to get updated last_checked_at timestamp
-      await loadTrackedRepos()
-
+      const hasChanges = await checkRepoAndFlag(repoId)
       if (hasChanges) {
-        console.log(`Repository ${repoId} has new commits`)
+        await runScanForRepo(repoId, "manual-check")
+      } else {
+        await loadTrackedRepos()
       }
     } catch (error) {
       console.error(`Failed to check repo ${repoId}:`, error)
@@ -120,6 +219,7 @@ export function Dashboard() {
       setCheckingRepos(prev => {
         const next = new Set(prev)
         next.delete(repoId)
+        checkingReposRef.current = next
         return next
       })
     }
@@ -129,19 +229,7 @@ export function Dashboard() {
     e.stopPropagation() // Prevent navigation
 
     try {
-      // Use default scan mode from settings, or 'smart' as fallback
-      const scanId = await scan_github_repo(repoId, "smart")
-      console.log(`Started scan ${scanId} for repo ${repoId}`)
-
-      // Clear the changes indicator
-      setRepoChanges(prev => {
-        const next = new Map(prev)
-        next.delete(repoId)
-        return next
-      })
-
-      // Reload repos to get updated scan info
-      await loadTrackedRepos()
+      await runScanForRepo(repoId, "manual-trigger")
     } catch (error) {
       console.error(`Failed to scan repo ${repoId}:`, error)
     }
@@ -156,6 +244,77 @@ export function Dashboard() {
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  // Keep latest repos reference for background polling
+  useEffect(() => {
+    latestReposRef.current = trackedRepos
+  }, [trackedRepos])
+
+  // Track repo id set for change detection (no auto-scan)
+  useEffect(() => {
+    if (!connectionStatus?.connected) {
+      return
+    }
+    if (!hasInitializedTrackedRef.current) {
+      prevRepoIdsRef.current = new Set(trackedRepos.map(r => r.id))
+      hasInitializedTrackedRef.current = true
+      return
+    }
+    prevRepoIdsRef.current = new Set(trackedRepos.map(r => r.id))
+  }, [trackedRepos, connectionStatus?.connected])
+
+  const ensureProjectAndNavigate = async (repo: TrackedRepoWithDetails) => {
+    const runId = ++projectModalRunId.current
+    setProjectModalError(null)
+    setProjectModalLoading(true)
+    try {
+      let currentRepo = repo
+
+      if (!currentRepo.local_path) {
+        await loadTrackedRepos()
+        if (runId !== projectModalRunId.current) return
+        const refreshed = latestReposRef.current.find(r => r.id === repo.id)
+        if (!refreshed || !refreshed.local_path) {
+          throw new Error("Latest scan not found for this repo. Run a scan first, then add as project.")
+        }
+        currentRepo = refreshed
+      }
+
+      const projects = await get_projects()
+      if (runId !== projectModalRunId.current) return
+      const localPath = currentRepo.local_path
+      if (!localPath) {
+        throw new Error("Local snapshot not available. Run a scan first.")
+      }
+
+      const existing = projects.find(p => p.path === localPath)
+      if (existing) {
+        setSelectedProject(existing)
+        router.push("/scan")
+        return
+      }
+
+      const project = await create_project(localPath, currentRepo.github_repo.name, undefined)
+      if (runId !== projectModalRunId.current) return
+      setSelectedProject(project)
+      router.push("/scan")
+    } catch (error) {
+      console.error("Failed to open project from repo:", error)
+      setProjectModalError(error instanceof Error ? error.message : String(error))
+    } finally {
+      if (runId === projectModalRunId.current) {
+        setProjectModalLoading(false)
+      }
+    }
+  }
+
+  const filteredTrackedRepos = trackedRepos.filter((repo) => {
+    const violations = repo.total_violations || 0
+    const critical = repo.critical_violations || 0
+    if (repoFilter === "critical") return critical > 0
+    if (repoFilter === "healthy") return violations === 0
+    return true
+  })
 
   const totalViolations = trackedRepos.reduce((sum, r) => sum + (r.total_violations || 0), 0)
   const criticalCount = trackedRepos.reduce((sum, r) => sum + (r.critical_violations || 0), 0)
@@ -482,104 +641,139 @@ export function Dashboard() {
                 <h2 className="text-sm font-medium">Tracked Repositories</h2>
                 {connectionStatus?.connected && trackedRepos.length > 0 && (
                   <div className="flex gap-1 text-xs">
-                    <button className="px-3 py-1.5 rounded-lg bg-white/[0.08]">All</button>
-                    <button className="px-3 py-1.5 rounded-lg text-white/40 hover:bg-white/[0.04] transition-colors">Critical</button>
-                    <button className="px-3 py-1.5 rounded-lg text-white/40 hover:bg-white/[0.04] transition-colors">Healthy</button>
+                    <button
+                      onClick={() => setRepoFilter("all")}
+                      className={`px-3 py-1.5 rounded-lg transition-colors ${repoFilter === "all" ? "bg-white/[0.12]" : "text-white/60 hover:bg-white/[0.04]"}`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setRepoFilter("critical")}
+                      className={`px-3 py-1.5 rounded-lg transition-colors ${repoFilter === "critical" ? "bg-red-500/15 text-red-300" : "text-white/60 hover:bg-white/[0.04]"}`}
+                    >
+                      Critical
+                    </button>
+                    <button
+                      onClick={() => setRepoFilter("healthy")}
+                      className={`px-3 py-1.5 rounded-lg transition-colors ${repoFilter === "healthy" ? "bg-emerald-500/15 text-emerald-300" : "text-white/60 hover:bg-white/[0.04]"}`}
+                    >
+                      Healthy
+                    </button>
                   </div>
                 )}
               </div>
 
-              {connectionStatus?.connected && trackedRepos.length > 0 ? (
-                <div className="px-2 pb-2">
-                  {trackedRepos.map((repo, index) => {
-                    const violations = repo.total_violations || 0
+              {connectionStatus?.connected ? (
+                filteredTrackedRepos.length > 0 ? (
+                  <div className="px-2 pb-2">
+                    {filteredTrackedRepos.map((repo, index) => {
+                      const violations = repo.total_violations || 0
                     const critical = repo.critical_violations || 0
                     const status = critical > 0 ? "critical" : violations > 0 ? "warning" : "clean"
                     const isChecking = checkingRepos.has(repo.id)
+                    const isScanning = scanningRepos.has(repo.id)
                     const hasChanges = repoChanges.get(repo.id) === true
+                    const scanModeLabel = repo.last_scan_mode
+                      ? repo.last_scan_mode.replace("_", " ")
+                      : "unknown"
 
                     return (
                       <div
                         key={repo.id}
                         className="px-4 py-3.5 flex items-center gap-4 hover:bg-white/[0.03] transition-all duration-200 rounded-xl mx-1 mb-1 animate-slideIn"
-                        style={{ animationDelay: `${index * 50}ms` }}
-                      >
-                        <div className={`w-2.5 h-2.5 rounded-full transition-all ${
-                          status === "critical" ? "bg-red-400" :
-                          status === "warning" ? "bg-amber-400" :
-                          "bg-emerald-400"
-                        }`} />
-                        <div className="flex-1 min-w-0">
+                          style={{ animationDelay: `${index * 50}ms` }}
+                          onClick={() => setRepoForProject(repo)}
+                        >
+                          <div className={`w-2.5 h-2.5 rounded-full transition-all ${
+                            status === "critical" ? "bg-red-400" :
+                            status === "warning" ? "bg-amber-400" :
+                            "bg-emerald-400"
+                          }`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{repo.github_repo.name}</span>
+                              <span className="text-xs text-white/30">{repo.github_repo.full_name}</span>
+                              {hasChanges && (
+                                <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-[10px] text-blue-400 font-medium">
+                                  New commits
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-0.5 text-xs text-white/40">
+                              {repo.github_repo.language && <span>{repo.github_repo.language}</span>}
+                              <span>{repo.github_repo.default_branch}</span>
+                              {repo.last_scanned_at && <span>Last scan: {new Date(repo.last_scanned_at).toLocaleDateString()}</span>}
+                              {repo.last_scan_mode && (
+                                <span className="px-2 py-0.5 rounded-md bg-white/[0.05] text-white/60 capitalize">
+                                  Mode: {scanModeLabel}
+                                </span>
+                              )}
+                              {/* Show last checked time */}
+                              {repo.last_checked_at && (
+                                <span className="text-white/30">
+                                  Checked: {new Date(repo.last_checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">{repo.github_repo.name}</span>
-                            <span className="text-xs text-white/30">{repo.github_repo.full_name}</span>
-                            {hasChanges && (
-                              <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-[10px] text-blue-400 font-medium">
-                                New commits
-                              </span>
+                            {critical > 0 && (
+                              <span className="px-2.5 py-1 rounded-lg bg-red-500/15 text-xs text-red-400">{critical} critical</span>
                             )}
-                          </div>
-                          <div className="flex items-center gap-3 mt-0.5 text-xs text-white/40">
-                            {repo.github_repo.language && <span>{repo.github_repo.language}</span>}
-                            <span>{repo.github_repo.default_branch}</span>
-                            {repo.last_scanned_at && <span>Last scan: {new Date(repo.last_scanned_at).toLocaleDateString()}</span>}
-                            {/* Show last checked time */}
-                            {repo.last_checked_at && (
-                              <span className="text-white/30">
-                                Checked: {new Date(repo.last_checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                              </span>
+                            {violations === 0 && !hasChanges && (
+                              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-xs text-emerald-400">Clean</span>
                             )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {critical > 0 && (
-                            <span className="px-2.5 py-1 rounded-lg bg-red-500/15 text-xs text-red-400">{critical} critical</span>
-                          )}
-                          {violations === 0 && !hasChanges && (
-                            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-xs text-emerald-400">Clean</span>
-                          )}
 
-                          {/* Check for Updates button */}
-                          <button
-                            onClick={(e) => handleCheckForUpdates(repo.id, e)}
-                            disabled={isChecking}
-                            className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Check for new commits"
-                          >
-                            {isChecking ? (
-                              <span className="flex items-center gap-1.5">
-                                <i className="las la-sync animate-spin"></i>
-                                Checking...
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-1.5">
-                                <i className="las la-sync"></i>
-                                Check
-                              </span>
-                            )}
-                          </button>
-
-                          {/* Scan button - shows when changes detected */}
-                          {hasChanges && (
+                            {/* Check for Updates button */}
                             <button
-                              onClick={(e) => handleScanRepo(repo.id, e)}
-                              className="px-3 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-xs text-blue-400 transition-colors"
+                              onClick={(e) => handleCheckForUpdates(repo.id, e)}
+                              disabled={isChecking || isScanning}
+                              className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Check for new commits"
                             >
-                              <span className="flex items-center gap-1.5">
-                                <i className="las la-radar"></i>
-                                Scan Now
-                              </span>
+                              {isChecking ? (
+                                <span className="flex items-center gap-1.5">
+                                  <i className="las la-sync animate-spin"></i>
+                                  Checking...
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1.5">
+                                  <i className="las la-sync"></i>
+                                  Check
+                                </span>
+                              )}
                             </button>
-                          )}
+
+                            {/* Scan button - shows when changes detected */}
+                            {hasChanges && (
+                              <button
+                                onClick={(e) => handleScanRepo(repo.id, e)}
+                                className="px-3 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-xs text-blue-400 transition-colors"
+                                disabled={isScanning}
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  <i className={`las la-radar ${isScanning ? "animate-spin" : ""}`}></i>
+                                  {isScanning ? "Scanning..." : "Scan Now"}
+                                </span>
+                              </button>
+                            )}
+                          </div>
+                          <div className="w-12 text-right">
+                            <div className="text-lg font-semibold">{violations}</div>
+                            <div className="text-[10px] text-white/30 uppercase">issues</div>
+                          </div>
                         </div>
-                        <div className="w-12 text-right">
-                          <div className="text-lg font-semibold">{violations}</div>
-                          <div className="text-[10px] text-white/30 uppercase">issues</div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="py-16 text-center">
+                    <div className="w-14 h-14 mx-auto rounded-2xl bg-white/[0.04] flex items-center justify-center mb-4">
+                      <i className="lab la-filter text-2xl text-white/20"></i>
+                    </div>
+                    <p className="text-sm text-white/40 mb-3">No repositories match this filter</p>
+                  </div>
+                )
               ) : (
                 <div className="py-16 text-center">
                   <div className="w-14 h-14 mx-auto rounded-2xl bg-white/[0.04] flex items-center justify-center mb-4">
@@ -614,6 +808,49 @@ export function Dashboard() {
           }}
           onClose={() => setRepoManagerOpen(false)}
         />
+      )}
+
+      {/* Add tracked repo as project modal */}
+      {repoForProject && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0f0f16] p-6 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 flex items-center justify-center">
+                <i className="las la-layer-group text-xl text-emerald-400"></i>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold mb-1">Add repository as project?</h3>
+                <p className="text-sm text-white/70 truncate">{repoForProject.github_repo.full_name}</p>
+                <p className="text-xs text-white/40 mt-2">
+                  This will open the repository snapshot as a project and take you to Scan Results.
+                </p>
+                {projectModalError && (
+                  <p className="text-xs text-red-400 mt-2">{projectModalError}</p>
+                )}
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                className="px-4 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-sm"
+                onClick={() => {
+                  projectModalRunId.current++
+                  setRepoForProject(null)
+                  setProjectModalError(null)
+                  setProjectModalLoading(false)
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-sm text-black font-semibold disabled:opacity-60"
+                onClick={() => ensureProjectAndNavigate(repoForProject)}
+                disabled={projectModalLoading}
+              >
+                {projectModalLoading ? "Opening..." : "Yes, open project"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <style jsx global>{`

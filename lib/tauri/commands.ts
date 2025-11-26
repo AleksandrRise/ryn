@@ -139,6 +139,14 @@ export async function get_projects(): Promise<Project[]> {
   return await invoke<Project[]>("get_projects")
 }
 
+export async function delete_project(id: number): Promise<void> {
+  await invoke<void>("delete_project", { projectId: id })
+}
+
+export async function delete_all_projects(): Promise<void> {
+  await invoke<void>("delete_all_projects")
+}
+
 // ============================================================================
 // SCAN COMMANDS
 // ============================================================================
@@ -421,6 +429,7 @@ export interface TrackedRepoWithDetails {
   total_violations?: number
   critical_violations?: number
   last_scan_status?: string
+  last_scan_mode?: string
 }
 
 /**

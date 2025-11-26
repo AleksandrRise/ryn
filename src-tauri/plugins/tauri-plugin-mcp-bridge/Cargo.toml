@@ -32,7 +32,8 @@ uuid = { version = "1.0", features = ["v4"] }
 base64 = "0.21"
 core-graphics = { version = "0.22", optional = true }
 objc2-app-kit = { version = "0.3", optional = true }
-core-foundation = { version = "0.10", optional = true }
+# Align with the version pulled in by core-graphics to avoid duplicate crate versions
+core-foundation = { version = "0.9", optional = true }
 core-foundation-sys = { version = "0.8", optional = true }
 
 # Screenshot capability

@@ -5393,12 +5393,8 @@ name = "tauri-plugin-mcp-bridge"
 version = "0.1.0"
 dependencies = [
  "base64 0.21.7",
- "core-foundation 0.10.1",
- "core-foundation-sys",
- "core-graphics 0.22.3",
  "image",
  "log",
- "objc2-app-kit",
  "screenshots",
  "serde",
  "serde_json",

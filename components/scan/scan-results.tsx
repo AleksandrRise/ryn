@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Play, RefreshCw, Clock3, Search, FolderTree, Sparkles, Check } from "lucide-react"
+import { Play, Clock3, Search, FolderTree, Sparkles, Check } from "lucide-react"
 import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
 import { ScanControls } from "@/components/scan/scan-controls"
 import { ScanProgressCard } from "@/components/scan/scan-progress-card"
@@ -244,15 +244,6 @@ export function ScanResults() {
           <p className="text-xs text-white/50">Project: {selectedProject.name}</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={reload}
-            disabled={isLoading}
-            className="gap-2"
-          >
-            <RefreshCw className="w-4 h-4" /> Refresh
-          </Button>
           <Button
             onClick={handleStartScan}
             disabled={isScanning || isLoading}
