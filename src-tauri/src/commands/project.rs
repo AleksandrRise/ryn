@@ -168,6 +168,30 @@ pub async fn get_projects() -> Result<Vec<Project>, String> {
     Ok(projects)
 }
 
+/// Delete a single project and all associated data
+#[tauri::command]
+pub async fn delete_project(project_id: i64) -> Result<(), String> {
+    println!("[ryn] delete_project called: {}", project_id);
+    let conn = db::get_connection();
+    queries::delete_project(&conn, project_id)
+        .map_err(|e| format!("Failed to delete project: {}", e))?;
+    Ok(())
+}
+
+/// Delete all projects and associated data
+#[tauri::command]
+pub async fn delete_all_projects() -> Result<(), String> {
+    println!("[ryn] delete_all_projects called");
+    let conn = db::get_connection();
+    let projects = queries::select_projects(&conn)
+        .map_err(|e| format!("Failed to load projects: {}", e))?;
+    for project in projects {
+        queries::delete_project(&conn, project.id)
+            .map_err(|e| format!("Failed to delete project {}: {}", project.id, e))?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

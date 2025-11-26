@@ -117,6 +117,9 @@ fn main() {
             github::get_tracked_repos,
             github::check_repo_for_changes,
             github::scan_github_repo,
+            // Project Delete Commands
+            project::delete_project,
+            project::delete_all_projects,
         ])
         .run(tauri::generate_context!())
     {

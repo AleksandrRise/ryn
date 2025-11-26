@@ -6,6 +6,7 @@ use once_cell::sync::Lazy;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use rusqlite::OptionalExtension;
 
 use crate::commands::scan;
 use crate::db::{self, queries};
@@ -397,6 +398,49 @@ pub async fn scan_github_repo<R: tauri::Runtime>(
     let client =
         GitHubClient::from_env().map_err(|e| format!("Failed to create GitHub client: {}", e))?;
 
+    // Capture the latest commit and reuse existing scan if nothing changed
+    let latest_sha = client
+        .get_latest_commit_sha(&access_token, &repo_owner, &repo_name, &repo_branch)
+        .await
+        .map_err(|e| format!("Failed to get latest commit: {}", e))?;
+
+    if tracked_repo.local_path.is_some()
+        && tracked_repo
+            .last_commit_sha
+            .as_deref()
+            .map(|sha| sha == latest_sha)
+            .unwrap_or(false)
+    {
+        let conn = db::get_connection();
+        let last_scan_id: Option<i64> = conn
+            .query_row(
+                "SELECT id FROM scans WHERE project_id = (
+                    SELECT id FROM projects WHERE path = ?1
+                 ) AND status = 'completed'
+                 ORDER BY started_at DESC
+                 LIMIT 1",
+                rusqlite::params![tracked_repo.local_path],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| format!("Failed to get latest scan id: {}", e))?;
+
+        if let Some(scan_id) = last_scan_id {
+            let now = chrono::Utc::now().to_rfc3339();
+            conn.execute(
+                "UPDATE tracked_repos SET last_checked_at = ?1 WHERE id = ?2",
+                rusqlite::params![now, tracked_repo_id],
+            )
+            .map_err(|e| format!("Failed to update last_checked_at: {}", e))?;
+
+            println!(
+                "[ryn] Reusing latest scan {} for repo {} (no new commits)",
+                scan_id, tracked_repo_id
+            );
+            return Ok(scan_id);
+        }
+    }
+
     // Build local snapshot so we can run the existing local scan pipeline
     let repo_dir = prepare_local_checkout(
         &client,
@@ -406,12 +450,6 @@ pub async fn scan_github_repo<R: tauri::Runtime>(
         &repo_branch,
     )
     .await?;
-
-    // Capture the latest commit so we can mark the repo as fresh after scanning
-    let latest_sha = client
-        .get_latest_commit_sha(&access_token, &repo_owner, &repo_name, &repo_branch)
-        .await
-        .map_err(|e| format!("Failed to get latest commit: {}", e))?;
 
     // Persist local path for subsequent change detection
     {

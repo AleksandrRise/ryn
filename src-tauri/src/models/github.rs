@@ -59,6 +59,7 @@ pub struct TrackedRepoWithDetails {
     pub total_violations: Option<i64>,
     pub critical_violations: Option<i64>,
     pub last_scan_status: Option<String>,
+    pub last_scan_mode: Option<String>,
 }
 
 /// GitHub Device Flow response for initiating OAuth

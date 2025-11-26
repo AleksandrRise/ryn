@@ -1097,16 +1097,27 @@ pub fn select_tracked_repos_with_details(conn: &Connection) -> Result<Vec<Tracke
                     COALESCE((
                         SELECT COUNT(*)
                         FROM violations v
-                        JOIN scans s ON v.scan_id = s.id
-                        JOIN projects p ON s.project_id = p.id
-                        WHERE p.path = tr.local_path
+                        WHERE v.scan_id = (
+                            SELECT s.id
+                            FROM scans s
+                            JOIN projects p ON s.project_id = p.id
+                            WHERE p.path = tr.local_path AND s.status = 'completed'
+                            ORDER BY s.started_at DESC
+                            LIMIT 1
+                        )
                     ), 0) AS total_violations,
                     COALESCE((
                         SELECT COUNT(*)
                         FROM violations v
-                        JOIN scans s ON v.scan_id = s.id
-                        JOIN projects p ON s.project_id = p.id
-                        WHERE p.path = tr.local_path AND v.severity = 'critical'
+                        WHERE v.scan_id = (
+                            SELECT s.id
+                            FROM scans s
+                            JOIN projects p ON s.project_id = p.id
+                            WHERE p.path = tr.local_path AND s.status = 'completed'
+                            ORDER BY s.started_at DESC
+                            LIMIT 1
+                        )
+                        AND v.severity = 'critical'
                     ), 0) AS critical_violations,
                     (
                         SELECT s.status
@@ -1115,7 +1126,15 @@ pub fn select_tracked_repos_with_details(conn: &Connection) -> Result<Vec<Tracke
                         WHERE p.path = tr.local_path
                         ORDER BY s.started_at DESC
                         LIMIT 1
-                    ) AS last_scan_status
+                    ) AS last_scan_status,
+                    (
+                        SELECT s.scan_mode
+                        FROM scans s
+                        JOIN projects p ON s.project_id = p.id
+                        WHERE p.path = tr.local_path AND s.status = 'completed'
+                        ORDER BY s.started_at DESC
+                        LIMIT 1
+                    ) AS last_scan_mode
              FROM tracked_repos tr
              JOIN github_repos gr ON tr.github_repo_id = gr.id
              WHERE tr.is_active = 1
@@ -1151,6 +1170,7 @@ pub fn select_tracked_repos_with_details(conn: &Connection) -> Result<Vec<Tracke
                 total_violations: row.get(20)?,
                 critical_violations: row.get(21)?,
                 last_scan_status: row.get(22)?,
+                last_scan_mode: row.get(23)?,
             })
         })
         .context("Failed to map tracked repos with details from query")?

@@ -2,10 +2,12 @@
 //!
 //! This module contains all Tauri commands for frontend-backend communication:
 //!
-//! Project Commands (3):
+//! Project Commands (5):
 //! - select_project_folder: Open file dialog to select project directory
 //! - create_project: Create a new project in the database
 //! - get_projects: Retrieve all projects
+//! - delete_project: Delete a single project and associated data
+//! - delete_all_projects: Delete all projects and associated data
 //!
 //! Scan Commands (4):
 //! - detect_framework: Identify project framework
@@ -64,7 +66,9 @@ pub use github::{
     track_repo, untrack_repo,
 };
 pub use logger::log_frontend_message;
-pub use project::{create_project, get_projects, select_project_folder};
+pub use project::{
+    create_project, delete_all_projects, delete_project, get_projects, select_project_folder,
+};
 pub use scan::{
     detect_framework, get_scan_progress, get_scans, scan_project, stop_watching, watch_project,
 };
