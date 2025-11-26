@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use image::ImageFormat;
 use screenshots::Screen;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "macos-window-capture"))]
 use core_graphics::{
     geometry::CGRect,
     window::{
@@ -13,13 +13,13 @@ use core_graphics::{
         kCGWindowImageNominalResolution, kCGWindowListOptionIncludingWindow,
     },
 };
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "macos-window-capture"))]
 use objc2_app_kit::NSWindow;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "macos-window-capture"))]
 use core_foundation::dictionary::CFDictionary;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "macos-window-capture"))]
 use core_foundation_sys::base::CFTypeRef;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "macos-window-capture"))]
 use core_foundation::base::TCFType;
 
 /// Capture a screenshot of the specified window
@@ -39,7 +39,7 @@ pub async fn capture<R: Runtime>(app: &AppHandle<R>, params: &Value) -> Result<V
     let window = super::get_window(app, label)?;
 
     // Try macOS window-based capture first (captures even if overlapped)
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "macos-window-capture"))]
     if let Ok(img) = capture_macos_window(&window) {
         return Ok(img);
     }
@@ -111,7 +111,7 @@ pub async fn capture<R: Runtime>(app: &AppHandle<R>, params: &Value) -> Result<V
     }))
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "macos-window-capture"))]
 fn capture_macos_window<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Result<Value, String> {
     let ns_win_ptr = window.ns_window().map_err(|e| format!("Failed to get ns_window: {}", e))?;
     let ns_win: &NSWindow = unsafe { (ns_win_ptr as *mut NSWindow).as_ref() }
@@ -126,7 +126,7 @@ fn capture_macos_window<R: Runtime>(window: &tauri::WebviewWindow<R>) -> Result<
     let first = info
         .get(0)
         .ok_or("No window info returned")?;
-    let dict: CFDictionary<CFTypeRef, CFTypeRef> = unsafe { CFDictionary::wrap_under_create_rule(first.as_CFTypeRef() as *mut _) };
+    let dict: CFDictionary<CFTypeRef, CFTypeRef> = unsafe { CFDictionary::wrap_under_create_rule(*first.as_ref() as *mut _) };
     let bounds_cf = dict.find(kCGWindowBounds).ok_or("Missing kCGWindowBounds")?;
     let bounds_dict = unsafe { CFDictionary::wrap_under_create_rule(bounds_cf as *mut _) };
     let rect = CGRect::from_dict_representation(&bounds_dict).ok_or("Failed to parse window bounds")?;
