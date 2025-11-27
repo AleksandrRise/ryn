@@ -60,15 +60,3 @@ export function showInfo(message: string): void {
     position: 'bottom-right',
   })
 }
-
-/**
- * Warning toast helper for non-critical warnings
- *
- * @param message - Warning message to display
- */
-export function showWarning(message: string): void {
-  toast.warning(message, {
-    duration: 4000,
-    position: 'bottom-right',
-  })
-}

@@ -1,10 +1,8 @@
 import type {
-  AuditEvent as ApiAuditEvent,
   ScanCost as ApiScanCost,
   ScanResult as ApiScanResult,
   Violation as ApiViolation,
 } from "@/lib/tauri/commands"
-import type { AuditEvent } from "@/lib/types/audit"
 import type { ScanCost, ScanMode, ScanSummary } from "@/lib/types/scan"
 import type { Violation, ViolationStatus } from "@/lib/types/violation"
 
@@ -68,18 +66,5 @@ export function toScanCost(cost: ApiScanCost | null): ScanCost | null {
     cacheWriteTokens: cost.cache_write_tokens,
     totalCostUsd: cost.total_cost_usd,
     createdAt: cost.created_at,
-  }
-}
-
-export function toAuditEvent(event: ApiAuditEvent): AuditEvent {
-  return {
-    id: event.id,
-    eventType: event.event_type,
-    projectId: event.project_id,
-    violationId: event.violation_id,
-    fixId: event.fix_id,
-    description: event.description,
-    metadata: event.metadata,
-    createdAt: event.created_at,
   }
 }

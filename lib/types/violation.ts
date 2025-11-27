@@ -20,13 +20,3 @@ export interface Violation {
   llmReasoning?: string     // AI explanation of why this is a violation
   regexReasoning?: string   // Pattern match explanation
 }
-
-export interface ScanResult {
-  id: number
-  projectId: number
-  startedAt: string
-  completedAt: string
-  filesScanned: number
-  violationsFound: number
-  status: "running" | "completed" | "failed"
-}

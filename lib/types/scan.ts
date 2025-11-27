@@ -1,5 +1,3 @@
-import type { Severity } from "@/lib/types/violation"
-
 export type ScanMode = "regex_only" | "smart" | "analyze_all"
 
 export interface ScanSummary {
@@ -37,5 +35,3 @@ export interface ScanProgress {
   filesScanned: number
   totalFiles: number
 }
-
-export type SeverityCounts = Record<Severity, number>
