@@ -21,6 +21,6 @@ pub use github::{
 };
 pub use project::Project;
 pub use scan::{Scan, ScanStatus};
-pub use scan_cost::{ClaudePricing, ScanCost};
+pub use scan_cost::{GrokPricing, ScanCost};
 pub use settings::Settings;
 pub use violation::{DetectionMethod, Severity, Violation, ViolationStatus};

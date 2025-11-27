@@ -184,7 +184,7 @@ describe('01 - Basic Scan Workflow', () => {
    *
    * Expected: Fix should be generated successfully with code changes
    *
-   * Note: This requires ANTHROPIC_API_KEY to be set in environment
+   * Note: This requires XAI_API_KEY to be set in environment
    */
   it('should generate AI fix for CC6.1 violation (missing @login_required)', async () => {
     // Find the first CC6.1 violation in the table
@@ -214,7 +214,7 @@ describe('01 - Basic Scan Workflow', () => {
     // Click "Generate Fix" button
     await fixGenerateButton.click();
 
-    console.log('Fix generation initiated, waiting for Claude API response...');
+    console.log('Fix generation initiated, waiting for Grok API response...');
 
     // Wait for fix generation to complete (max 30 seconds)
     const fixPreview = await browser.$('[data-testid="fix-preview"]');

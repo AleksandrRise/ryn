@@ -1,7 +1,7 @@
 //! Rate limiter for API calls to prevent excessive costs
 //!
 //! This module implements a token bucket rate limiter to control
-//! the frequency of API calls to Claude, preventing runaway costs.
+//! the frequency of API calls to Grok, preventing runaway costs.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

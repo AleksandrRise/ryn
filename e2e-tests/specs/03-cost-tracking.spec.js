@@ -83,7 +83,7 @@ describe('Cost Tracking E2E Tests', () => {
    * Expected:
    * - scan_costs table should have entries with token counts > 0
    * - Analytics page should display token usage breakdown
-   * - Total cost should be calculated based on Claude Haiku 4.5 pricing
+ * - Total cost should be calculated based on Grok Code Fast pricing
    */
   it('should track token usage during LLM scan', async () => {
     console.log('Starting LLM scan with cost tracking...');

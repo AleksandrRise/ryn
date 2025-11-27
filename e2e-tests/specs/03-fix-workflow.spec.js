@@ -6,10 +6,10 @@ import { fileURLToPath } from 'url';
  * E2E Test: Fix Workflow
  *
  * Tests the complete AI-powered fix generation and application workflow.
- * Verifies Claude API integration, backup creation, git operations, and database updates.
+ * Verifies Grok API integration, backup creation, git operations, and database updates.
  *
  * Test Coverage:
- * 1. Generate AI fix for violation (Claude API call)
+ * 1. Generate AI fix for violation (Grok API call)
  * 2. Verify fix has code changes + explanation
  * 3. Apply fix to file
  * 4. Verify backup file created in .ryn-backups/
@@ -74,8 +74,8 @@ describe('03 - Fix Workflow', () => {
     console.log(`✓ Setup complete: project=${projectId}, scan=${scanId}, test_violation=${testViolationId}`);
   });
 
-  it('should generate AI fix for violation (requires ANTHROPIC_API_KEY)', async () => {
-    // This test requires ANTHROPIC_API_KEY environment variable
+  it('should generate AI fix for violation (requires XAI_API_KEY)', async () => {
+    // This test requires XAI_API_KEY environment variable
     // Generate fix for the test violation
     const fix = await browser.execute(async (violationId) => {
       // @ts-ignore - Tauri API available in app context
@@ -89,8 +89,8 @@ describe('03 - Fix Workflow', () => {
     }, testViolationId);
 
     if (fix.error) {
-      if (fix.error.includes('ANTHROPIC_API_KEY')) {
-        console.log('⚠ Skipping test: ANTHROPIC_API_KEY not set');
+      if (fix.error.includes('XAI_API_KEY')) {
+        console.log('⚠ Skipping test: XAI_API_KEY not set');
         this.skip();
       } else {
         throw new Error(`Fix generation failed: ${fix.error}`);

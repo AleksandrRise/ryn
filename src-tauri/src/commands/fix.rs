@@ -77,9 +77,9 @@ fn normalize_fixed_code(raw: &str) -> String {
     result.trim_matches('\n').to_string()
 }
 
-/// Generate a fix for a violation using the AI agent (langchain-rust + Claude)
+/// Generate a fix for a violation using the Grok AI client
 ///
-/// Calls Claude API directly via langchain-rust to generate a fix for a specific violation,
+/// Calls Grok API to generate a fix for a specific violation,
 /// stores the fix in the database with trust_level = "review"
 ///
 /// # Arguments
@@ -131,9 +131,8 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
         .await
         .map_err(|e| format!("API rate limit: {}", e))?;
 
-    // Call Claude API to generate fix
-    let grok_client =
-        GrokClient::new().map_err(|e| format!("Failed to create Claude client: {}", e))?;
+    // Call Grok API to generate fix
+    let grok_client = GrokClient::new().map_err(|e| format!("Failed to create Grok client: {}", e))?;
 
     let framework_str = _project_framework.as_deref().unwrap_or("unknown");
 
@@ -147,7 +146,7 @@ pub async fn generate_fix(violation_id: i64) -> Result<Fix, String> {
             _violation.class_name.as_deref(),
         )
         .await
-        .map_err(|e| format!("Claude API error: {}", e))?;
+        .map_err(|e| format!("Grok API error: {}", e))?;
 
     // Strip Markdown fences (```lang ... ```) and keep only the inner code.
     let fixed_code = normalize_fixed_code(&fixed_code_raw);

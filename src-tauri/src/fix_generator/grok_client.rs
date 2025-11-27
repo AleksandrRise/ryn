@@ -91,11 +91,11 @@ impl UsageMetrics {
     ///
     /// Pricing (per million tokens):
     /// - Input: $0.20
-    /// - Output: $0.50
-    /// - Cached Input: $0.05
+    /// - Output: $1.50
+    /// - Cached Input: $0.02
     pub fn calculate_cost(&self) -> f64 {
         let input_cost = (self.prompt_tokens as f64) * 0.20 / 1_000_000.0;
-        let output_cost = (self.completion_tokens as f64) * 0.50 / 1_000_000.0;
+        let output_cost = (self.completion_tokens as f64) * 1.50 / 1_000_000.0;
 
         input_cost + output_cost
     }
@@ -504,13 +504,16 @@ impl GrokClient {
             Err(e) => {
                 // Try extracting array from a top-level object {"violations": [...]}
                 #[derive(Deserialize)]
-                struct Wrapper { violations: Option<Vec<ViolationDetection>> }
+                struct Wrapper {
+                    violations: Option<Vec<ViolationDetection>>,
+                }
 
                 if let Ok(wrapper) = serde_json::from_str::<Wrapper>(cleaned) {
                     if let Some(v) = wrapper.violations {
                         v
                     } else {
-                        return Err(e).context("Failed to parse LLM response as JSON (empty wrapper)");
+                        return Err(e)
+                            .context("Failed to parse LLM response as JSON (empty wrapper)");
                     }
                 } else {
                     return Err(e).context("Failed to parse LLM response as JSON");
@@ -633,7 +636,7 @@ mod tests {
         };
 
         let cost = metrics.calculate_cost();
-        assert!((cost - 0.70).abs() < 0.001);
+        assert!((cost - 1.70).abs() < 0.001);
     }
 
     #[test]

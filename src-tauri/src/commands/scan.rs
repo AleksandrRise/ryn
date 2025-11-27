@@ -387,7 +387,7 @@ pub async fn scan_project_internal<R: tauri::Runtime>(
     // Analyze collected files with LLM if any were selected (smart/analyze_all modes)
     let llm_violations_vec = if !files_for_llm_analysis.is_empty() {
         println!(
-            "[ryn] Analyzing {} files with Claude Haiku LLM (mode: {})",
+            "[ryn] Analyzing {} files with Grok (mode: {})",
             files_for_llm_analysis.len(),
             llm_scan_mode
         );
@@ -636,7 +636,7 @@ pub async fn stop_watching(
     Ok(format!("Stopped watching project {}", project_id))
 }
 
-/// Analyze collected files with Claude Haiku LLM
+/// Analyze collected files with Grok Code model
 ///
 /// Processes files concurrently (max 10 simultaneous) with 30-second timeout per file.
 /// Fetches existing regex violations for context and stores LLM-detected violations.
@@ -651,7 +651,7 @@ pub async fn stop_watching(
 /// # Implementation Details
 /// - Semaphore(10): Limits concurrent API requests to prevent rate limiting
 /// - 30-second timeout: Prevents hanging on slow/large files
-/// - Each task gets independent DB connection and Claude client
+/// - Each task gets independent DB connection and Grok client
 /// - Errors are logged but don't stop processing of other files
 async fn analyze_files_with_llm<R: tauri::Runtime>(
     scan_id: i64,
@@ -713,10 +713,10 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
                 // Acquire semaphore permit (blocks if 10 tasks already running)
                 let _permit = sem_clone.acquire().await.unwrap();
 
-                // Create Claude client for this task (reads API key from env)
+                // Create Grok client for this task (reads API key from env)
                 let client = match GrokClient::new() {
                     Ok(c) => c,
-                    Err(e) => return Err(format!("Failed to create Claude client: {}", e)),
+                    Err(e) => return Err(format!("Failed to create Grok client: {}", e)),
                 };
 
                 // Fetch existing regex violations for this file (provides context to LLM)
@@ -858,7 +858,7 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
 ///
 /// # Arguments
 /// * `regex_violations` - Violations detected by regex patterns
-/// * `llm_violations` - Violations detected by Claude Haiku analysis
+/// * `llm_violations` - Violations detected by Grok analysis
 ///
 /// # Returns
 /// Deduplicated vector with detection_method properly set
@@ -2061,7 +2061,7 @@ def update_user(user_id, data):
             42,
             "def admin(): pass".to_string(),
             85,
-            "Claude detected: endpoint allows unauthorized access".to_string(),
+            "Grok detected: endpoint allows unauthorized access".to_string(),
         )];
 
         let merged = merge_violations(regex_violations, llm_violations);
@@ -2106,7 +2106,7 @@ def update_user(user_id, data):
                 llm_line,
                 "password = 'secret'".to_string(),
                 90,
-                "Claude found hardcoded credentials".to_string(),
+                "Grok found hardcoded credentials".to_string(),
             );
 
             let merged = merge_violations(vec![regex_viol.clone()], vec![llm_viol]);

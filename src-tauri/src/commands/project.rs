@@ -183,8 +183,8 @@ pub async fn delete_project(project_id: i64) -> Result<(), String> {
 pub async fn delete_all_projects() -> Result<(), String> {
     println!("[ryn] delete_all_projects called");
     let conn = db::get_connection();
-    let projects = queries::select_projects(&conn)
-        .map_err(|e| format!("Failed to load projects: {}", e))?;
+    let projects =
+        queries::select_projects(&conn).map_err(|e| format!("Failed to load projects: {}", e))?;
     for project in projects {
         queries::delete_project(&conn, project.id)
             .map_err(|e| format!("Failed to delete project {}: {}", project.id, e))?;

@@ -53,7 +53,7 @@ pnpm tauri build
 Ryn uses Grok to generate fixes for compliance violations. You'll need an X.AI API key:
 
 1. **Get an API Key**:
-   - Sign up at [console.anthropic.com](https://console.anthropic.com)
+   - Sign up at [console.x.ai](https://console.x.ai)
    - Navigate to API Keys section
    - Create a new API key
 
@@ -65,16 +65,16 @@ Ryn uses Grok to generate fixes for compliance violations. You'll need an X.AI A
    cp .env.example .env
 
    # Edit .env and add your API key
-   XAI_API_KEY=sk-ant-api03-xxxxxxxxxxxxx
+   XAI_API_KEY=xai-xxxxxxxxxxxxxxxxxxxx
    ```
 
    **Option B: System Environment Variable**
    ```bash
    # macOS/Linux - Add to ~/.bashrc or ~/.zshrc
-   export XAI_API_KEY="sk-ant-api03-xxxxxxxxxxxxx"
+   export XAI_API_KEY="xai-xxxxxxxxxxxxxxxxxxxx"
 
    # Windows - Set via System Properties or PowerShell
-   [System.Environment]::SetEnvironmentVariable("XAI_API_KEY", "sk-ant-api03-xxxxxxxxxxxxx", "User")
+   [System.Environment]::SetEnvironmentVariable("XAI_API_KEY", "xai-xxxxxxxxxxxxxxxxxxxx", "User")
    ```
 
 3. **Restart the Application** after setting the API key
@@ -161,7 +161,7 @@ View detailed cost analytics in the **Analytics** dashboard.
 
 Violations are tagged with how they were detected:
 - Pattern: Found by regex patterns
-- AI: Found by Grok Haiku analysis
+- AI: Found by Grok Code Fast analysis
 - Hybrid: Found by both methods (highest confidence)
 
 Hybrid violations display both regex pattern explanations and AI reasoning.
@@ -187,7 +187,7 @@ Hybrid violations display both regex pattern explanations and AI reasoning.
 - Verify Git is installed if applying fixes
 
 **High API costs**
-- Ryn uses Grok Haiku by default (most cost-effective)
+- Ryn uses Grok Code Fast by default (most cost-effective)
 - Each fix generation costs approximately $0.001-0.003
 - Consider fixing violations in batches to reduce API calls
 
@@ -255,4 +255,4 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 ---
 
-Built with d using [Tauri](https://tauri.app), [Next.js](https://nextjs.org), and [Grok](https://anthropic.com)
+Built with d using [Tauri](https://tauri.app), [Next.js](https://nextjs.org), and [Grok](https://x.ai)

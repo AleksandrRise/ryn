@@ -17,7 +17,7 @@
   - **CC6.7**: Secrets Management (hardcoded passwords, API keys)
   - **CC7.2**: Logging (missing audit logs)
   - **A1.2**: Resilience (missing error handling, timeouts)
-- ✅ **Claude API Integration**: Fix generation with Haiku 4.5
+- ✅ **Grok API Integration**: Fix generation with Code Fast 1
 
 ### Fixed Issues
 - ✅ Parameter naming (camelCase vs snake_case)
@@ -110,7 +110,7 @@ export async function scan_project(
 
 ---
 
-### 2. Violation Detail Page with Claude ⏰ 3-4 hours
+### 2. Violation Detail Page with Grok ⏰ 3-4 hours
 
 **Current State**: "View details" link exists but page needs implementation.
 
@@ -335,8 +335,8 @@ export default function ViolationDetailPage({
 ┌─────────────────────────────────────────────────┐
 │ 1. GENERATE FIX (generate_fix command)          │
 │    - Fetch violation + control requirements     │
-│    - Build Claude prompt with context            │
-│    - Call Claude Haiku 4.5 API                   │
+│    - Build Grok prompt with context            │
+│    - Call Grok Code Fast 4.5 API                   │
 │    - Parse response for fixed code + explanation │
 │    - Validate fix (line count, syntax check)     │
 │    - Store in fixes table with trust_level       │
@@ -346,7 +346,7 @@ export default function ViolationDetailPage({
 ┌─────────────────────────────────────────────────┐
 │ 2. REVIEW FIX (User reviews in UI)              │
 │    - Show original vs fixed code diff           │
-│    - Display Claude's explanation                │
+│    - Display Grok's explanation                │
 │    - User can accept or reject                   │
 └──────────┬──────────────────────────────────────┘
            │
@@ -416,8 +416,8 @@ pub async fn revert_fix(fix_id: i64) -> Result<(), String> {
 
 #### Performance Optimizations
 
-1. **Rate Limiting**: Claude API limited to 50 req/min (already implemented)
-2. **Prompt Caching**: Enable Claude's prompt caching for repeated control descriptions
+1. **Rate Limiting**: Grok API limited to 50 req/min (already implemented)
+2. **Prompt Caching**: Enable Grok's prompt caching for repeated control descriptions
 3. **Batch Processing**: Allow generating fixes for multiple violations
 4. **Parallel Scans**: Use Rayon for parallel file processing (future)
 
@@ -489,7 +489,7 @@ def fetch_data():
 1. ✅ **DONE**: Fix infinite scan issue
 2. **NOW**: Test scanning on a real project to verify rules work
 3. **NEXT** (1-2 hours): Implement SOC 2 control filtering
-4. **NEXT** (3-4 hours): Build violation detail page with Claude integration
+4. **NEXT** (3-4 hours): Build violation detail page with Grok integration
 5. **FUTURE**: Batch fix generation
 6. **FUTURE**: Advanced diff viewer for fixes
 7. **FUTURE**: Rollback functionality
@@ -546,7 +546,7 @@ Expected results: **~8-10 violations** across all 4 controls.
 2. **No Infinite Loops**: All file walks use `WalkDir` iterator (proven safe)
 3. **Performance**: On 1000 files, scan completes in ~2-5 seconds
 4. **Git Safety**: Never runs `git push` or destructive operations automatically
-5. **Claude Integration**: Uses Haiku 4.5 (fast, cost-effective, prompt caching enabled)
+5. **Grok Integration**: Uses Code Fast 1 (fast, cost-effective, prompt caching enabled)
 
 ---
 
@@ -574,7 +574,7 @@ Expected results: **~8-10 violations** across all 4 controls.
 
 ---
 
-## 🤖 Claude Prompting Strategy
+## 🤖 Grok Prompting Strategy
 
 ```
 You are a security compliance expert helping fix SOC 2 violations in {language} code.
@@ -604,4 +604,4 @@ FIXED_CODE:
 [Complete fixed code snippet]
 ```
 
-This prompt maximizes Claude's effectiveness while staying within token limits.
+This prompt maximizes Grok's effectiveness while staying within token limits.

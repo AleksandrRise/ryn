@@ -11,12 +11,10 @@ pub const SKIP_DIRECTORIES: &[&str] = &[
     // Dependencies
     "node_modules",
     "vendor",
-
     // Bundled/static assets
     "assets",
     "public",
     "static",
-
     // Version control
     ".git",
     // Python virtual environments and caches

@@ -48,7 +48,7 @@ fn test_merge_identical_line_numbers() {
             "def admin(): pass",
             Some("llm"),
             Some(85), // 85% confidence
-            Some("Claude detected: endpoint allows unauthorized access"),
+            Some("Grok detected: endpoint allows unauthorized access"),
             None,
         )
         .unwrap();
@@ -142,7 +142,7 @@ fn test_merge_within_tolerance() {
                 "password = 'secret'",
                 Some("llm"),
                 Some(90),
-                Some("Claude found hardcoded credentials"),
+                Some("Grok found hardcoded credentials"),
                 None,
             )
             .unwrap();
@@ -292,7 +292,7 @@ fn test_hybrid_violation_structure() {
             "api_key = 'sk-1234567890'",
             Some("hybrid"), // Hybrid detection
             Some(92),       // Confidence from LLM
-            Some("Claude detected hardcoded credentials with high confidence"), // LLM reasoning
+            Some("Grok detected hardcoded credentials with high confidence"), // LLM reasoning
             Some("Pattern match at line 15: Hardcoded secret detected"), // Regex reasoning
         )
         .unwrap();
@@ -326,8 +326,8 @@ fn test_hybrid_violation_structure() {
     let regex_reason = regex_reasoning.unwrap();
 
     assert!(
-        llm_reason.contains("Claude"),
-        "LLM reasoning should mention Claude"
+        llm_reason.contains("Grok"),
+        "LLM reasoning should mention Grok"
     );
     assert!(
         llm_reason.contains("confidence"),

@@ -3,10 +3,10 @@
 //! Tauri commands for GitHub OAuth authentication and repository management.
 
 use once_cell::sync::Lazy;
+use rusqlite::OptionalExtension;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use rusqlite::OptionalExtension;
 
 use crate::commands::scan;
 use crate::db::{self, queries};
@@ -21,7 +21,7 @@ static DEVICE_CODE_STATE: Lazy<Mutex<Option<DeviceCodeState>>> = Lazy::new(|| Mu
 #[derive(Clone)]
 struct DeviceCodeState {
     device_code: String,
-    interval: i64,
+    _interval: i64,
 }
 
 /// Start GitHub OAuth Device Flow
@@ -49,7 +49,7 @@ pub async fn start_github_oauth() -> Result<DeviceCodeResponse, String> {
         let mut state = DEVICE_CODE_STATE.lock().unwrap();
         *state = Some(DeviceCodeState {
             device_code: response.device_code.clone(),
-            interval: response.interval,
+            _interval: response.interval,
         });
     }
 

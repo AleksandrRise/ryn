@@ -20,9 +20,9 @@ use common::TestProject;
 use std::fs;
 use std::path::Path;
 
-/// Helper: Check if ANTHROPIC_API_KEY is set
+/// Helper: Check if XAI_API_KEY is set
 fn has_api_key() -> bool {
-    std::env::var("ANTHROPIC_API_KEY").is_ok()
+    std::env::var("XAI_API_KEY").is_ok()
 }
 
 /// Helper: Create a vulnerable Python/Django file with multiple SOC 2 violations

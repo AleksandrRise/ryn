@@ -12,7 +12,10 @@ async fn main() -> anyhow::Result<()> {
     ryn::utils::env::load_env().ok();
 
     let mut args = std::env::args().skip(1);
-    let project_path = PathBuf::from(args.next().expect("usage: audit_scan <project_path> [mode...]"));
+    let project_path = PathBuf::from(
+        args.next()
+            .expect("usage: audit_scan <project_path> [mode...]"),
+    );
 
     if !project_path.exists() {
         anyhow::bail!("project path does not exist: {}", project_path.display());
@@ -26,7 +29,8 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Keep audit data isolated from the desktop app's normal DB.
-    let data_dir = std::env::var("RYN_DATA_DIR").unwrap_or_else(|_| "/tmp/ryn-audit-db".to_string());
+    let data_dir =
+        std::env::var("RYN_DATA_DIR").unwrap_or_else(|_| "/tmp/ryn-audit-db".to_string());
     println!("Using RYN_DATA_DIR={}", data_dir);
 
     let data_dir_path = PathBuf::from(&data_dir);
@@ -68,7 +72,13 @@ async fn main() -> anyhow::Result<()> {
         }
 
         let start = Instant::now();
-        let scan = match scan::scan_project(app.handle().clone(), channels_state.clone(), project_id).await {
+        let scan = match scan::scan_project(
+            app.handle().clone(),
+            channels_state.clone(),
+            project_id,
+        )
+        .await
+        {
             Ok(s) => s,
             Err(e) => {
                 println!("mode={} | scan failed: {}", mode, e);

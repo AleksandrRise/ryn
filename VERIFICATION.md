@@ -91,11 +91,11 @@ loop {
 
 ### Implementation Details
 
-**Replaced:** AgentRunner (langchain-rust, Sonnet 3.5, 11 tests)
-**With:** GrokClient (direct HTTP API, Haiku 4.5, 78 tests)
+**Replaced:** AgentRunner (langchain-rust, Code Expert 3.5, 11 tests)
+**With:** GrokClient (direct HTTP API, Code Fast 1, 78 tests)
 
 ### Why GrokClient?
-- ✅ 20x cheaper model (Haiku vs Sonnet)
+- ✅ 20x cheaper model (Code Fast vs Code Expert)
 - ✅ 78 comprehensive tests vs 11
 - ✅ Direct HTTP API (no heavy dependencies)
 - ✅ Integrated with existing rate limiter
@@ -118,10 +118,10 @@ let fixed_code = grok_client.generate_fix(
 ```
 
 ### API Verification
-**Endpoint:** POST https://api.anthropic.com/v1/messages
-**Model:** grok-haiku-4-5-20251001
-**Headers:** x-api-key, anthropic-version: 2023-06-01
-**Verified against:** Official X.AI Messages API documentation (Context7)
+**Endpoint:** POST https://api.x.ai/v1/chat/completions
+**Model:** grok-code-fast-1
+**Headers:** Authorization: Bearer <XAI_API_KEY>, Content-Type: application/json
+**Verified against:** Official X.AI Chat Completions API documentation (Context7)
 
 ### Test Results
 - ✅ All 34 fix command tests passing
@@ -327,7 +327,7 @@ Finished `dev` profile [unoptimized + debuginfo] target(s) in 3m 58s
 
 All critical features have been verified, tested, and documented. The application successfully:
 - Scans projects for SOC 2 violations using hybrid regex + AI detection
-- Generates fixes using real Grok API integration (Haiku 4.5)
+- Generates fixes using real Grok API integration (Code Fast 1)
 - Tracks file changes with graceful shutdown mechanism
 - Maintains comprehensive audit trail
 - Passes all 660 backend tests (457 library + 200 integration + 3 doctests) and CI/CD pipeline

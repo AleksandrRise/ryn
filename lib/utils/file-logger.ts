@@ -1,6 +1,6 @@
 /**
  * File logger that writes console output to a file for debugging
- * This allows Claude to see browser console errors without manual copy-paste
+ * This allows Grok-backed assistants to see browser console errors without manual copy-paste
  */
 
 import { writeTextFile, BaseDirectory } from '@tauri-apps/plugin-fs'

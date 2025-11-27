@@ -21,7 +21,7 @@
 //! - dismiss_violation: Mark violation as dismissed
 //!
 //! Fix Commands (2):
-//! - generate_fix: Call Claude API to generate a fix
+//! - generate_fix: Call Grok API to generate a fix
 //! - apply_fix: Apply fix to file and commit to git
 //!
 //! Audit Commands (1):

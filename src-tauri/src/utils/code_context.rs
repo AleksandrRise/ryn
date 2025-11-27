@@ -117,7 +117,7 @@ pub fn extract_code_block_with_context(
     Ok((snippet, relative_line))
 }
 
-/// Extract code block without line numbers (for Claude API)
+/// Extract code block without line numbers (for Grok API)
 ///
 /// # Arguments
 /// * `file_path` - Path to the source file

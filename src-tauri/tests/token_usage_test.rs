@@ -8,17 +8,17 @@
 mod common;
 
 use common::TestProject;
-use ryn::models::scan_cost::{ClaudePricing, ScanCost};
+use ryn::models::scan_cost::{GrokPricing, ScanCost};
 
-/// Test that scan cost calculation matches expected Claude pricing
+/// Test that scan cost calculation matches expected Grok pricing
 #[test]
 fn test_cost_calculation_accuracy() {
     // Test various realistic token usage scenarios
     let test_cases = vec![
         // (input, output, cache_read, cache_write, expected_cost)
-        (10_000, 2_000, 0, 0, 0.016), // Small scan, no caching
-        (50_000, 10_000, 0, 0, 0.08), // Medium scan, no caching
-        (100_000, 50_000, 200_000, 50_000, 0.346), // Large scan with caching
+        (10_000, 2_000, 0, 0, 0.005), // Small scan, no caching
+        (50_000, 10_000, 0, 0, 0.025), // Medium scan, no caching
+        (100_000, 50_000, 200_000, 50_000, 0.109), // Large scan with caching
         (0, 0, 0, 0, 0.0),            // Edge case: zero tokens
     ];
 
@@ -40,10 +40,10 @@ fn test_cost_calculation_accuracy() {
         );
 
         // Verify manual calculation matches
-        let manual_cost = (input as f64 / 1_000_000.0) * ClaudePricing::HAIKU_INPUT_PER_MILLION
-            + (output as f64 / 1_000_000.0) * ClaudePricing::HAIKU_OUTPUT_PER_MILLION
-            + (cache_read as f64 / 1_000_000.0) * ClaudePricing::HAIKU_CACHE_READ_PER_MILLION
-            + (cache_write as f64 / 1_000_000.0) * ClaudePricing::HAIKU_CACHE_WRITE_PER_MILLION;
+        let manual_cost = (input as f64 / 1_000_000.0) * GrokPricing::INPUT_PER_MILLION
+            + (output as f64 / 1_000_000.0) * GrokPricing::OUTPUT_PER_MILLION
+            + (cache_read as f64 / 1_000_000.0) * GrokPricing::CACHE_READ_PER_MILLION
+            + (cache_write as f64 / 1_000_000.0) * GrokPricing::CACHE_WRITE_PER_MILLION;
 
         assert!(
             (cost - manual_cost).abs() < 0.000001,
@@ -71,7 +71,7 @@ fn test_scan_cost_persistence() {
             60_000,  // output tokens
             250_000, // cache read tokens (reusing prompt)
             45_000,  // cache write tokens
-            0.373,   // total cost (calculated manually)
+            0.134,   // total cost (calculated manually)
         )
         .unwrap();
 
@@ -113,7 +113,7 @@ fn test_scan_cost_persistence() {
     assert_eq!(stored_output, 60_000);
     assert_eq!(stored_cache_read, 250_000);
     assert_eq!(stored_cache_write, 45_000);
-    assert!((stored_cost - 0.373).abs() < 0.001);
+    assert!((stored_cost - 0.134).abs() < 0.001);
 
     // Verify created_at timestamp exists
     let created_at: String = conn
@@ -144,7 +144,7 @@ fn test_cost_analytics_time_range_query() {
         .insert_scan_cost(
             scan1_id, 10, // files
             50_000, 10_000, 20_000, 5_000, // tokens
-            0.086, // cost
+            0.0264, // cost
         )
         .unwrap();
 
@@ -154,7 +154,7 @@ fn test_cost_analytics_time_range_query() {
         .insert_scan_cost(
             scan2_id, 20, // files
             100_000, 20_000, 40_000, 10_000, // tokens
-            0.172,  // cost
+            0.0528,  // cost
         )
         .unwrap();
 
@@ -164,7 +164,7 @@ fn test_cost_analytics_time_range_query() {
         .insert_scan_cost(
             scan3_id, 15, // files
             75_000, 15_000, 30_000, 7_500, // tokens
-            0.129, // cost
+            0.0396, // cost
         )
         .unwrap();
 
@@ -189,10 +189,10 @@ fn test_cost_analytics_time_range_query() {
         .unwrap();
 
     assert!(
-        (total_cost - 0.387).abs() < 0.001,
+        (total_cost - 0.1188).abs() < 0.001,
         "Total cost should be sum of all scans: ${} != ${}",
         total_cost,
-        0.387
+        0.1188
     );
 
     // Test: Calculate total files analyzed
@@ -258,8 +258,8 @@ fn test_cost_analytics_time_range_query() {
         .unwrap();
 
     assert!(
-        (avg_cost_per_scan - 0.129).abs() < 0.001,
-        "Average cost per scan should be ~$0.129"
+        (avg_cost_per_scan - 0.0396).abs() < 0.001,
+        "Average cost per scan should be ~$0.0396"
     );
 
     // Test: Get costs ordered by amount (descending)
@@ -285,17 +285,17 @@ fn test_cost_analytics_time_range_query() {
     let expensive_scans: Vec<(i64, f64)> = conn
         .prepare("SELECT id, total_cost_usd FROM scan_costs WHERE total_cost_usd >= ? ORDER BY total_cost_usd DESC")
         .unwrap()
-        .query_map([0.15], |row| Ok((row.get(0)?, row.get(1)?)))
+        .query_map([0.03], |row| Ok((row.get(0)?, row.get(1)?)))
         .unwrap()
         .filter_map(|r| r.ok())
         .collect();
 
     assert_eq!(
         expensive_scans.len(),
-        1,
-        "Should have 1 scan costing >= $0.15"
+        2,
+        "Should have 2 scans costing >= $0.03"
     );
-    assert!((expensive_scans[0].1 - 0.172).abs() < 0.001);
+    assert!((expensive_scans[0].1 - 0.0528).abs() < 0.001);
 
     // Test: Calculate cost efficiency (cost per file)
     let cost_efficiency: Vec<(i64, f64)> = conn
@@ -317,10 +317,10 @@ fn test_cost_analytics_time_range_query() {
         "Should calculate cost per file for 3 scans"
     );
 
-    // All scans should have cost per file between $0.008 and $0.01
+    // All scans should have cost per file between $0.002 and $0.003
     for (scan_id, cost_per_file) in cost_efficiency {
         assert!(
-            cost_per_file > 0.007 && cost_per_file < 0.01,
+            cost_per_file > 0.002 && cost_per_file < 0.003,
             "Scan {} has unexpected cost per file: ${}",
             scan_id,
             cost_per_file
@@ -338,7 +338,7 @@ fn test_scan_cost_cascade_delete() {
 
     // Insert scan cost
     let cost_id = project
-        .insert_scan_cost(scan_id, 10, 50_000, 10_000, 0, 0, 0.048)
+        .insert_scan_cost(scan_id, 10, 50_000, 10_000, 0, 0, 0.025)
         .unwrap();
 
     // Verify scan cost exists
@@ -389,7 +389,7 @@ fn test_zero_files_cost_tracking() {
         .insert_scan_cost(
             scan_id, 0, // zero files
             5_000, 1_000, 0, 0, // but some tokens used
-            0.008,
+            0.0025,
         )
         .unwrap();
 
@@ -406,7 +406,7 @@ fn test_zero_files_cost_tracking() {
         .unwrap();
 
     assert_eq!(files, 0);
-    assert!((cost - 0.008).abs() < 0.001);
+    assert!((cost - 0.0025).abs() < 0.001);
 
     // Create ScanCost model from this data to test helper methods
     let scan_cost = ScanCost::new(scan_id, 0, 5_000, 1_000, 0, 0);

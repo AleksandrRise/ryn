@@ -248,7 +248,7 @@ export async function dismiss_violation(
 // ============================================================================
 
 /**
- * Generate a fix for a violation using Claude API
+ * Generate a fix for a violation using Grok API
  */
 export async function generate_fix(
   violationId: number

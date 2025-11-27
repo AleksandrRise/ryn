@@ -126,7 +126,7 @@ export function ScanModeOnboarding({ open, onComplete }: ScanModeOnboardingProps
                     </div>
                     <p className="text-sm text-muted-foreground">
                       Combines regex patterns with AI analysis for security-relevant files.
-                      Analyzes ~30-40% of files using Claude Haiku for semantic understanding.
+                      Analyzes ~30-40% of files using Grok Code Fast for semantic understanding.
                     </p>
                     <div className="flex gap-4 text-xs text-muted-foreground">
                       <span>• Best balance</span>
@@ -182,7 +182,7 @@ export function ScanModeOnboarding({ open, onComplete }: ScanModeOnboardingProps
                   Cost Limit Per Scan
                 </Label>
                 <div className="text-xs text-muted-foreground">
-                  (AI analysis uses Claude Haiku)
+                  (AI analysis uses Grok Code Fast)
                 </div>
               </div>
               <div className="flex items-start gap-3">

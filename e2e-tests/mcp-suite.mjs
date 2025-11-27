@@ -139,6 +139,7 @@ async function run() {
 
   try {
     log(`using app port ${APP_PORT}`)
+    await ensureNoRunningRyn()
     startApp()
     await waitForSocket()
     await connectSocket()
@@ -179,6 +180,34 @@ async function run() {
     if (rowCount < 1) throw new Error('No violations found after scan')
     log(`violations detected: ${rowCount}`)
 
+    // Generate and apply a fix for the first violation (real Grok call; requires XAI_API_KEY)
+    const fixResult = await call('browser_eval', {
+      label: main,
+      code: `
+        const project = await window.__TAURI__.core.invoke('get_projects');
+        if (!project?.length) throw new Error('No projects found for fix flow');
+        const projectId = project[0].id;
+        const scans = await window.__TAURI__.core.invoke('get_scans', { projectId });
+        const latestScan = scans?.[0];
+        if (!latestScan) throw new Error('No scan found for project');
+        const violations = await window.__TAURI__.core.invoke('get_violations', { scanId: latestScan.id });
+        if (!violations?.length) throw new Error('No violations available to fix');
+        const violation = violations[0];
+        const fix = await window.__TAURI__.core.invoke('generate_fix', { violationId: violation.id });
+        await window.__TAURI__.core.invoke('apply_fix', { fixId: fix.id });
+        const updated = await window.__TAURI__.core.invoke('get_violation', { violationId: violation.id });
+        return { applied_at: updated?.fix?.applied_at || null, status: updated?.violation?.status };
+      `,
+    })
+
+    if (!fixResult || !fixResult.applied_at) {
+      throw new Error(`Fix apply failed via MCP: ${JSON.stringify(fixResult)}`)
+    }
+    if (fixResult.status && fixResult.status !== 'fixed') {
+      throw new Error(`Violation status not fixed: ${fixResult.status}`)
+    }
+    log('fix generation + apply succeeded via MCP')
+
     clearTimeout(globalTimer)
     await cleanup()
     log('MCP E2E suite passed')
@@ -194,6 +223,12 @@ async function run() {
 function cleanup() {
   return new Promise((resolve) => {
     try { if (socket && !socket.destroyed) socket.destroy() } catch {}
+    try {
+      if (child && !child.killed) {
+        // Kill process group (spawned detached)
+        process.kill(-child.pid, 'SIGTERM')
+      }
+    } catch {}
     resolve()
   })
 }

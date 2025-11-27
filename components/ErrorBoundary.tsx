@@ -53,7 +53,7 @@ ${new Date().toISOString()}
 `)
 
     // TODO: Replace with actual GitHub repository URL when available
-    const githubUrl = `https://github.com/anthropics/ryn/issues/new?title=${title}&body=${body}`
+    const githubUrl = `https://github.com/ryn-app/ryn/issues/new?title=${title}&body=${body}`
     window.open(githubUrl, "_blank")
   }
 

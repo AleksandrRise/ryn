@@ -117,21 +117,21 @@ async fn test_channel_single_use() {
     assert!(result2.is_err(), "Second response should fail");
 }
 
-/// Test 6: Cost calculation respects 2025 pricing
+/// Test 6: Cost calculation respects 2025 Grok pricing
 #[test]
 fn test_cost_calculation_2025_pricing() {
-    // 2025 Claude Haiku pricing:
-    // Input: $0.80/MTok, Output: $4.00/MTok
-    // Cache read: $0.08/MTok, Cache write: $1.00/MTok
+    // 2025 Grok Code Fast 1 pricing:
+    // Input: $0.20/MTok, Output: $1.50/MTok
+    // Cache read: $0.02/MTok, Cache write: $0.20/MTok
 
     let test_cases = vec![
         // (input, output, cache_read, cache_write, expected_cost)
-        (1_000_000, 0, 0, 0, 0.80), // 1M input tokens = $0.80
-        (0, 1_000_000, 0, 0, 4.00), // 1M output tokens = $4.00
-        (0, 0, 1_000_000, 0, 0.08), // 1M cache read = $0.08
-        (0, 0, 0, 1_000_000, 1.00), // 1M cache write = $1.00
-        (100_000, 50_000, 200_000, 50_000, 0.346), // Mixed usage
-        (10_000, 5_000, 0, 0, 0.028), // Small scan
+        (1_000_000, 0, 0, 0, 0.20), // 1M input tokens = $0.20
+        (0, 1_000_000, 0, 0, 1.50), // 1M output tokens = $1.50
+        (0, 0, 1_000_000, 0, 0.02), // 1M cache read = $0.02
+        (0, 0, 0, 1_000_000, 0.20), // 1M cache write = $0.20
+        (100_000, 50_000, 200_000, 50_000, 0.109), // Mixed usage
+        (10_000, 5_000, 0, 0, 0.0095), // Small scan
     ];
 
     for (input, output, cache_read, cache_write, expected) in test_cases {
@@ -151,7 +151,7 @@ fn test_cost_calculation_2025_pricing() {
         );
     }
 
-    println!("✓ Cost calculation matches 2025 Claude Haiku pricing");
+    println!("✓ Cost calculation matches 2025 Grok Code Fast pricing");
 }
 
 /// Test 7: Cost limit detection at correct threshold
@@ -211,9 +211,9 @@ fn test_cost_limit_detection() {
 fn test_cost_per_file_calculation() {
     let test_cases = vec![
         // (files, input, output, cache_read, cache_write, expected_cost_per_file)
-        (10, 50_000, 10_000, 20_000, 5_000, 0.0086), // $0.086 / 10 = $0.0086
-        (100, 500_000, 100_000, 200_000, 50_000, 0.0086), // Same per-file cost
-        (1, 10_000, 2_000, 0, 0, 0.016),             // Single file
+        (10, 50_000, 10_000, 20_000, 5_000, 0.00264), // $0.0264 / 10 = $0.00264
+        (100, 500_000, 100_000, 200_000, 50_000, 0.00264), // Same per-file cost
+        (1, 10_000, 2_000, 0, 0, 0.005),             // Single file
         (0, 10_000, 2_000, 0, 0, 0.0),               // Zero files (edge case)
     ];
 

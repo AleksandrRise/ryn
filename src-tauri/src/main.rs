@@ -4,16 +4,14 @@
 //! It registers all 15 Tauri IPC commands for frontend-backend communication.
 //!
 //! Phase 8: Complete Tauri Commands Implementation
-//! - All commands integrated with database, scanning, rules, and Claude API
+//! - All commands integrated with database, scanning, rules, and Grok API
 //! - 280+ production tests across all command modules
 //! - Real integration with all previous phases
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // Import command modules
-use ryn::commands::{
-    analytics, audit, fix, github, logger, project, scan, settings, violation
-};
+use ryn::commands::{analytics, audit, fix, github, logger, project, scan, settings, violation};
 use tauri_plugin_mcp_bridge;
 
 fn main() {

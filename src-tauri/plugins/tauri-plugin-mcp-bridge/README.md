@@ -1,6 +1,6 @@
 # Tauri Plugin MCP Bridge
 
-A Tauri 2.0 plugin that enables Model Context Protocol (MCP) integration for desktop application automation. Allows AI assistants like Claude to inspect and interact with your Tauri app.
+A Tauri 2.0 plugin that enables Model Context Protocol (MCP) integration for desktop application automation. Allows AI assistants like Grok (or any MCP-capable model) to inspect and interact with your Tauri app.
 
 ## Features
 

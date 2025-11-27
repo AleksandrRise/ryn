@@ -13,7 +13,7 @@ use std::path::Path;
 /// * `scan_mode` - Scanning mode (regex_only/smart/analyze_all)
 ///
 /// # Returns
-/// `true` if file should be sent to Claude for analysis
+/// `true` if file should be sent to Grok for analysis
 ///
 /// # Modes
 /// - `regex_only`: Always returns false (no LLM analysis)

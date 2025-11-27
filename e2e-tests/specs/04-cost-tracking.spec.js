@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 /**
  * E2E Test: Cost Tracking
  *
- * Tests the cost tracking and limit enforcement system for Claude API usage.
+ * Tests the cost tracking and limit enforcement system for Grok API usage.
  * Verifies token counting, cost calculation, limit prompts, and analytics.
  *
  * Test Coverage:
@@ -122,7 +122,7 @@ describe('04 - Cost Tracking', () => {
     // Verify cost is calculated
     expect(latestCost.total_cost_usd).toBeGreaterThan(0);
 
-    // Claude Haiku 4.5 pricing (approximate):
+    // Grok Code Fast 1 pricing (approximate):
     // Input: $0.25 per 1M tokens
     // Output: $1.25 per 1M tokens
     // Cache write: $0.30 per 1M tokens
