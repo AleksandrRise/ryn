@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef, type KeyboardEvent } from "react"
 import { Button } from "@/components/ui/button"
 import {
   start_github_oauth,
@@ -14,52 +14,75 @@ interface GitHubOAuthModalProps {
   onClose: () => void
 }
 
+const isActivationKey = (event: KeyboardEvent) => event.key === "Enter" || event.key === " "
+
 export function GitHubOAuthModal({ onSuccess, onClose }: GitHubOAuthModalProps) {
   const [step, setStep] = useState<"starting" | "waiting" | "polling" | "success" | "error">("starting")
   const [deviceCode, setDeviceCode] = useState<DeviceCodeResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  useEffect(() => {
-    startOAuth()
-  }, [])
-
-  const startOAuth = async () => {
+  const startOAuth = useCallback(async () => {
     try {
       const response = await start_github_oauth()
       setDeviceCode(response)
       setStep("waiting")
 
-      // Auto-open GitHub auth page
       await open(response.verification_uri)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       setStep("error")
     }
-  }
+  }, [])
 
-  const startPolling = async () => {
+  useEffect(() => {
+    // Starting OAuth on mount is intentional to avoid requiring an extra user click
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void startOAuth()
+  }, [startOAuth])
+
+  const startPolling = useCallback(() => {
+    if (!deviceCode) {
+      setError("Authorization device code missing. Please restart GitHub connect.")
+      setStep("error")
+      return
+    }
+
     setStep("polling")
 
-    const pollInterval = setInterval(async () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+    }
+
+    pollIntervalRef.current = setInterval(async () => {
       try {
         const completed = await poll_github_oauth()
         if (completed) {
-          clearInterval(pollInterval)
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current)
+          }
           setStep("success")
           setTimeout(() => {
             onSuccess()
           }, 1500)
         }
       } catch (err) {
-        clearInterval(pollInterval)
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current)
+        }
         setError(err instanceof Error ? err.message : String(err))
         setStep("error")
       }
-    }, (deviceCode?.interval || 5) * 1000)
+    }, (deviceCode.interval || 5) * 1000)
+  }, [deviceCode, onSuccess])
 
-    // Cleanup on unmount
-    return () => clearInterval(pollInterval)
-  }
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+      }
+    }
+  }, [])
 
   const copyCode = () => {
     if (deviceCode?.user_code) {
@@ -67,9 +90,28 @@ export function GitHubOAuthModal({ onSuccess, onClose }: GitHubOAuthModalProps) 
     }
   }
 
+  const canDismissOverlay = step === "error"
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fadeIn" onClick={step === "error" ? onClose : undefined} />
+      <div
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fadeIn"
+        onClick={canDismissOverlay ? onClose : undefined}
+        role={canDismissOverlay ? "button" : undefined}
+        tabIndex={canDismissOverlay ? 0 : undefined}
+        aria-label={canDismissOverlay ? "Close GitHub OAuth dialog" : undefined}
+        onKeyDown={
+          canDismissOverlay
+            ? (event) => {
+                if (isActivationKey(event)) {
+                  event.preventDefault()
+                  onClose()
+                }
+              }
+            : undefined
+        }
+        aria-hidden={!canDismissOverlay}
+      />
       <div className="relative w-full max-w-md bg-[#12121a] rounded-2xl shadow-2xl overflow-hidden animate-fadeIn">
         <div className="px-6 py-5 flex items-center justify-between border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
@@ -140,7 +182,7 @@ export function GitHubOAuthModal({ onSuccess, onClose }: GitHubOAuthModalProps) 
                 className="group relative w-full px-6 py-3 rounded-xl font-medium text-sm overflow-hidden transition-all hover:scale-[1.02]"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-cyan-500 opacity-90 group-hover:opacity-100 transition-opacity"></div>
-                <span className="relative text-white">I've authorized, continue</span>
+                <span className="relative text-white">I&apos;ve authorized, continue</span>
               </button>
             </div>
           )}

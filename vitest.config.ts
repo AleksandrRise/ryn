@@ -10,7 +10,8 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     exclude: [
       'node_modules/**',
-      'e2e-tests/**/*.spec.js', // WebDriverIO tests, not Vitest tests
+      // WebDriverIO scripts (not Vitest suites)
+      'e2e-tests/**/*.{spec,test}.{js,ts,mjs}',
       '.next/**',
       'out/**',
       'dist/**',

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, type KeyboardEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import {
@@ -24,6 +24,8 @@ interface GitHubRepoManagerProps {
   onScanCompleted?: (trackedRepoId: number) => void
 }
 
+const isActivationKey = (event: KeyboardEvent) => event.key === "Enter" || event.key === " "
+
 export function GitHubRepoManager({ onSuccess, onDisconnect, onClose, onScanStarted, onScanCompleted }: GitHubRepoManagerProps) {
   const [allRepos, setAllRepos] = useState<GitHubRepo[]>([])
   const [trackedRepos, setTrackedRepos] = useState<TrackedRepoWithDetails[]>([])
@@ -36,6 +38,13 @@ export function GitHubRepoManager({ onSuccess, onDisconnect, onClose, onScanStar
   // Initialize with currently tracked repo github_ids
   const [pendingSelections, setPendingSelections] = useState<Set<number>>(new Set())
   const [initialized, setInitialized] = useState(false)
+
+  const handleOverlayKeyDown = (event: KeyboardEvent) => {
+    if (isActivationKey(event)) {
+      event.preventDefault()
+      onClose()
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -225,10 +234,17 @@ export function GitHubRepoManager({ onSuccess, onDisconnect, onClose, onScanStar
   }
 
   const selectedCount = pendingSelections.size
-
+  
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fadeIn" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fadeIn"
+        onClick={onClose}
+        role="button"
+        tabIndex={0}
+        aria-label="Close repository manager"
+        onKeyDown={handleOverlayKeyDown}
+      />
       <div className="relative w-full max-w-2xl bg-[#12121a] rounded-2xl shadow-2xl overflow-hidden animate-fadeIn">
         <div className="px-6 py-5 flex items-center justify-between border-b border-white/[0.06]">
           <div className="flex items-center gap-3">

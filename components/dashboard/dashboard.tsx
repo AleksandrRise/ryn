@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
 import {
   Area,
   AreaChart,
@@ -17,7 +17,6 @@ import {
   check_repo_for_changes,
   scan_github_repo,
   create_project,
-  detect_framework,
   get_projects,
   get_scan_progress,
   get_settings,
@@ -38,6 +37,8 @@ const PLATFORMS = [
 ] as const
 
 const AUTO_POLL_INTERVAL_MS = 90_000
+const isActivationKey = (event: React.KeyboardEvent) =>
+  event.key === "Enter" || event.key === " "
 
 export function Dashboard() {
   const router = useRouter()
@@ -67,17 +68,36 @@ export function Dashboard() {
   const autoPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoPollingRef = useRef(false)
 
+  const checkConnection = useCallback(async () => {
+    try {
+      const status = await check_github_connection()
+      setConnectionStatus(status)
+    } catch (error) {
+      console.error("Failed to check GitHub connection:", error)
+    }
+  }, [])
+
+  const loadTrackedRepos = useCallback(async () => {
+    try {
+      const repos = await get_tracked_repos()
+      setTrackedRepos(repos)
+      latestReposRef.current = repos
+    } catch (error) {
+      console.error("Failed to load tracked repos:", error)
+    }
+  }, [])
+
   // Check GitHub connection status on mount
   useEffect(() => {
-    checkConnection()
-  }, [])
+    void checkConnection()
+  }, [checkConnection])
 
   // Load tracked repos when connected
   useEffect(() => {
     if (connectionStatus?.connected) {
-      loadTrackedRepos()
+      void loadTrackedRepos()
     }
-  }, [connectionStatus?.connected])
+  }, [connectionStatus?.connected, loadTrackedRepos])
 
   useEffect(() => {
     const loadScanModeSetting = async () => {
@@ -93,25 +113,6 @@ export function Dashboard() {
     }
     void loadScanModeSetting()
   }, [])
-
-  const checkConnection = async () => {
-    try {
-      const status = await check_github_connection()
-      setConnectionStatus(status)
-    } catch (error) {
-      console.error("Failed to check GitHub connection:", error)
-    }
-  }
-
-  const loadTrackedRepos = async () => {
-    try {
-      const repos = await get_tracked_repos()
-      setTrackedRepos(repos)
-      latestReposRef.current = repos
-    } catch (error) {
-      console.error("Failed to load tracked repos:", error)
-    }
-  }
 
   const handleDisconnect = async () => {
     try {
@@ -158,7 +159,7 @@ export function Dashboard() {
     throw new Error("Scan did not complete in time")
   }
 
-  const runScanForRepo = async (repoId: number, reason: string, waitForCompletion = false) => {
+  const runScanForRepo = useCallback(async (repoId: number, reason: string, waitForCompletion = false) => {
     setScanningRepos(prev => {
       const next = new Set(prev)
       next.add(repoId)
@@ -189,9 +190,9 @@ export function Dashboard() {
         return next
       })
     }
-  }
+  }, [defaultScanMode, loadTrackedRepos])
 
-  const checkRepoAndFlag = async (repoId: number) => {
+  const checkRepoAndFlag = useCallback(async (repoId: number) => {
     const hasChanges = await check_repo_for_changes(repoId)
     setRepoChanges(prev => {
       const next = new Map(prev)
@@ -199,7 +200,7 @@ export function Dashboard() {
       return next
     })
     return hasChanges
-  }
+  }, [])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -298,7 +299,7 @@ export function Dashboard() {
         clearTimeout(autoPollTimerRef.current)
       }
     }
-  }, [connectionStatus?.connected, defaultScanMode])
+  }, [connectionStatus?.connected, runScanForRepo, checkRepoAndFlag, loadTrackedRepos])
 
   // Track repo id set for change detection (no auto-scan)
   useEffect(() => {
@@ -520,6 +521,19 @@ export function Dashboard() {
                   : "bg-[#08080c]/80 border-white/[0.05]"
               }`}
               onClick={!connectionStatus?.connected ? handleConnectClick : undefined}
+              role={!connectionStatus?.connected ? "button" : undefined}
+              tabIndex={!connectionStatus?.connected ? 0 : undefined}
+              aria-label={!connectionStatus?.connected ? "Connect GitHub" : undefined}
+              onKeyDown={
+                !connectionStatus?.connected
+                  ? (event) => {
+                      if (isActivationKey(event)) {
+                        event.preventDefault()
+                        handleConnectClick()
+                      }
+                    }
+                  : undefined
+              }
             >
               {/* Shimmer animation background when not connected */}
               {!connectionStatus?.connected && (
@@ -763,12 +777,14 @@ export function Dashboard() {
                       : "unknown"
 
                     return (
-                      <div
+                      <button
                         key={repo.id}
-                        className="px-4 py-3.5 flex items-center gap-4 hover:bg-white/[0.03] transition-all duration-200 rounded-xl mx-1 mb-1 animate-slideIn"
-                          style={{ animationDelay: `${index * 50}ms` }}
-                          onClick={() => setRepoForProject(repo)}
-                        >
+                        type="button"
+                        className="w-full text-left px-4 py-3.5 flex items-center gap-4 hover:bg-white/[0.03] transition-all duration-200 rounded-xl mx-1 mb-1 animate-slideIn"
+                        style={{ animationDelay: `${index * 50}ms` }}
+                        onClick={() => setRepoForProject(repo)}
+                        aria-label={`Open ${repo.github_repo.full_name} snapshot`}
+                      >
                           <div className={`w-2.5 h-2.5 rounded-full transition-all ${
                             isScanning ? "bg-blue-400 animate-pulse" :
                             isChecking ? "bg-cyan-400 animate-pulse" :
@@ -856,7 +872,7 @@ export function Dashboard() {
                             <div className="text-lg font-semibold">{hasScan ? violations : "—"}</div>
                             <div className="text-[10px] text-white/30 uppercase">issues</div>
                           </div>
-                        </div>
+                        </button>
                       )
                     })}
                   </div>
