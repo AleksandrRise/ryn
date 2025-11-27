@@ -23,9 +23,12 @@ use tauri::{plugin::{Builder, TauriPlugin}, Manager, Runtime};
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("mcp-bridge")
         .setup(|app, _api| {
-            #[cfg(debug_assertions)]
-            {
-                // Only enable MCP bridge in debug builds for security
+            let mcp_enabled = cfg!(debug_assertions)
+                || std::env::var("TAURI_MCP_ENABLE")
+                    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+
+            if mcp_enabled {
                 println!("[MCP] Tauri MCP Bridge initializing...");
 
                 // Initialize and manage plugin state
@@ -41,12 +44,12 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     }
                 });
 
-                println!("[MCP] Socket server started");
-            }
-
-            #[cfg(not(debug_assertions))]
-            {
-                log::info!("[MCP] Bridge disabled in production builds");
+                println!(
+                    "[MCP] Socket server started ({} build)",
+                    if cfg!(debug_assertions) { "debug" } else { "release" }
+                );
+            } else {
+                log::info!("[MCP] Bridge disabled (set TAURI_MCP_ENABLE=1 to enable in release builds)");
             }
 
             Ok(())

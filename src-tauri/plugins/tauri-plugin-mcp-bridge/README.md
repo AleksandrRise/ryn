@@ -350,7 +350,7 @@ The plugin behavior differs between debug and release builds:
 
 **Release builds:**
 - Socket server disabled by default
-- Enable with `TAURI_MCP_ENABLE=1` environment variable
+- Enable with `TAURI_MCP_ENABLE=1` (or `true`) environment variable
 - Or use plugin configuration (future feature)
 
 ### Features
