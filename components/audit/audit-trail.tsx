@@ -26,6 +26,7 @@ export function AuditTrail() {
   const [selectedType, setSelectedType] = useState<string>("all")
   const [events, setEvents] = useState<DisplayEvent[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [visibleCount, setVisibleCount] = useState(15)
 
   // Fetch audit events from backend
   useEffect(() => {
@@ -38,15 +39,18 @@ export function AuditTrail() {
         const auditEvents = await get_audit_events(filters)
 
         // Map backend AuditEvent to DisplayEvent for UI
-        const displayEvents: DisplayEvent[] = auditEvents.map((event) => ({
-          id: event.id,
-          type: event.event_type,
-          description: event.description,
-          timestamp: formatTimestamp(event.created_at),
-          details: event.metadata || "",
-        }))
+        const displayEvents: DisplayEvent[] = auditEvents
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .map((event) => ({
+            id: event.id,
+            type: event.event_type,
+            description: event.description,
+            timestamp: formatTimestamp(event.created_at),
+            details: event.metadata || "",
+          }))
 
         setEvents(displayEvents)
+        setVisibleCount(15)
       } catch (error) {
         handleTauriError(error, "Failed to load audit events")
       } finally {
@@ -76,6 +80,8 @@ export function AuditTrail() {
   }
 
   const filteredEvents = selectedType === "all" ? events : events.filter(e => e.type === selectedType)
+  const visibleEvents = filteredEvents.slice(0, visibleCount)
+  const hasMore = filteredEvents.length > visibleCount
 
   // Calculate stats from real events
   const stats = {
@@ -84,6 +90,11 @@ export function AuditTrail() {
     violations: events.filter(e => e.type === "violation_detected").length,
     totalEvents: events.length,
   }
+
+  // Reset pagination when filter changes
+  useEffect(() => {
+    setVisibleCount(15)
+  }, [selectedType])
 
   // Handle export audit report
   const handleExportReport = async () => {
@@ -254,7 +265,7 @@ export function AuditTrail() {
 
             {/* Events */}
             <div className="space-y-6">
-              {filteredEvents.map((event) => (
+              {visibleEvents.map((event) => (
                 <div key={event.id} className="relative group">
                   {/* Timeline Dot */}
                   <div className={`absolute left-0 w-14 h-14 rounded-2xl border-2 ${getEventColor(event.type)} flex items-center justify-center backdrop-blur-sm group-hover:scale-110 transition-transform duration-300`}>
@@ -278,6 +289,18 @@ export function AuditTrail() {
                   </div>
                 </div>
               ))}
+
+              {hasMore && (
+                <div className="flex justify-center pt-4">
+                  <Button
+                    variant="outline"
+                    className="bg-white/5 hover:bg-white/10"
+                    onClick={() => setVisibleCount((prev) => prev + 20)}
+                  >
+                    Show More
+                  </Button>
+                </div>
+              )}
             </div>
           </>
         )}

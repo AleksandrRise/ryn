@@ -9,7 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 import {
   check_github_connection,
   disconnect_github,
@@ -37,6 +37,8 @@ const PLATFORMS = [
   { id: "gcp", name: "Google Cloud", laIcon: "lab la-google", available: false },
 ] as const
 
+const AUTO_POLL_INTERVAL_MS = 90_000
+
 export function Dashboard() {
   const router = useRouter()
   const { setSelectedProject } = useProjectStore()
@@ -53,6 +55,7 @@ export function Dashboard() {
   const [repoForProject, setRepoForProject] = useState<TrackedRepoWithDetails | null>(null)
   const [projectModalError, setProjectModalError] = useState<string | null>(null)
   const [projectModalLoading, setProjectModalLoading] = useState(false)
+  const [lastAutoCheck, setLastAutoCheck] = useState<Date | null>(null)
   const [defaultScanMode, setDefaultScanMode] = useState<string>("smart")
   const projectModalRunId = useRef(0)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -61,6 +64,8 @@ export function Dashboard() {
   const hasInitializedTrackedRef = useRef(false)
   const checkingReposRef = useRef<Set<number>>(new Set())
   const scanningReposRef = useRef<Set<number>>(new Set())
+  const autoPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoPollingRef = useRef(false)
 
   // Check GitHub connection status on mount
   useEffect(() => {
@@ -196,45 +201,6 @@ export function Dashboard() {
     return hasChanges
   }
 
-  const handleCheckForUpdates = async (repoId: number, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent navigation
-
-    setCheckingRepos(prev => {
-      const next = new Set(prev)
-      next.add(repoId)
-      checkingReposRef.current = next
-      return next
-    })
-
-    try {
-      const hasChanges = await checkRepoAndFlag(repoId)
-      if (hasChanges) {
-        await runScanForRepo(repoId, "manual-check")
-      } else {
-        await loadTrackedRepos()
-      }
-    } catch (error) {
-      console.error(`Failed to check repo ${repoId}:`, error)
-    } finally {
-      setCheckingRepos(prev => {
-        const next = new Set(prev)
-        next.delete(repoId)
-        checkingReposRef.current = next
-        return next
-      })
-    }
-  }
-
-  const handleScanRepo = async (repoId: number, e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent navigation
-
-    try {
-      await runScanForRepo(repoId, "manual-trigger")
-    } catch (error) {
-      console.error(`Failed to scan repo ${repoId}:`, error)
-    }
-  }
-
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -249,6 +215,90 @@ export function Dashboard() {
   useEffect(() => {
     latestReposRef.current = trackedRepos
   }, [trackedRepos])
+
+  // Background polling: keep data fresh and auto-scan when commits change
+  useEffect(() => {
+    if (!connectionStatus?.connected) {
+      if (autoPollTimerRef.current) {
+        clearTimeout(autoPollTimerRef.current)
+      }
+      autoPollingRef.current = false
+      return
+    }
+
+    let cancelled = false
+
+    const pollTrackedRepos = async () => {
+      if (cancelled || autoPollingRef.current) return
+      autoPollingRef.current = true
+
+      try {
+        const repos = latestReposRef.current
+        if (repos.length === 0) {
+          setLastAutoCheck(new Date())
+          return
+        }
+
+        let scanned = false
+
+        for (const repo of repos) {
+          if (cancelled) break
+          if (scanningReposRef.current.has(repo.id) || checkingReposRef.current.has(repo.id)) {
+            continue
+          }
+
+          setCheckingRepos(prev => {
+            const next = new Set(prev)
+            next.add(repo.id)
+            checkingReposRef.current = next
+            return next
+          })
+
+          try {
+            const hasChanges = await checkRepoAndFlag(repo.id)
+            if (cancelled) break
+
+            if (hasChanges) {
+              scanned = true
+              toast("Auto-scan started", {
+                description: `${repo.github_repo.full_name} has new commits. Running compliance scan...`,
+              })
+              await runScanForRepo(repo.id, "auto-change-detected", true)
+            }
+          } catch (error) {
+            console.warn(`Auto check failed for repo ${repo.id}`, error)
+          } finally {
+            setCheckingRepos(prev => {
+              const next = new Set(prev)
+              next.delete(repo.id)
+              checkingReposRef.current = next
+              return next
+            })
+          }
+        }
+
+        if (!scanned) {
+          await loadTrackedRepos()
+        }
+      } finally {
+        setLastAutoCheck(new Date())
+        autoPollingRef.current = false
+        if (!cancelled) {
+          autoPollTimerRef.current = setTimeout(pollTrackedRepos, AUTO_POLL_INTERVAL_MS)
+        }
+      }
+    }
+
+    // Kick off immediately
+    pollTrackedRepos()
+
+    return () => {
+      cancelled = true
+      if (autoPollTimerRef.current) {
+        clearTimeout(autoPollTimerRef.current)
+      }
+    }
+  }, [connectionStatus?.connected, defaultScanMode])
 
   // Track repo id set for change detection (no auto-scan)
   useEffect(() => {
@@ -308,23 +358,34 @@ export function Dashboard() {
     }
   }
 
+  const scannedRepos = trackedRepos.filter(r => !!r.last_scanned_at)
+
   const filteredTrackedRepos = trackedRepos.filter((repo) => {
-    const violations = repo.total_violations || 0
-    const critical = repo.critical_violations || 0
-    if (repoFilter === "critical") return critical > 0
-    if (repoFilter === "healthy") return violations === 0
+    const hasScan = !!repo.last_scanned_at
+    const violations = repo.total_violations ?? 0
+    const critical = repo.critical_violations ?? 0
+    if (repoFilter === "critical") return hasScan && critical > 0
+    if (repoFilter === "healthy") return hasScan && violations === 0
     return true
   })
 
-  const totalViolations = trackedRepos.reduce((sum, r) => sum + (r.total_violations || 0), 0)
-  const criticalCount = trackedRepos.reduce((sum, r) => sum + (r.critical_violations || 0), 0)
-  const healthyCount = trackedRepos.filter(r => (r.total_violations || 0) === 0).length
+  const totalViolations = scannedRepos.reduce((sum, r) => sum + (r.total_violations ?? 0), 0)
+  const criticalCount = scannedRepos.reduce((sum, r) => sum + (r.critical_violations ?? 0), 0)
+  const healthyCount = scannedRepos.filter(r => (r.total_violations ?? 0) === 0).length
 
-  const chartData = trackedRepos.map(repo => ({
+  // Build chart data - pad with baseline point if only one repo to show a line
+  const rawChartData = scannedRepos.map(repo => ({
     name: repo.github_repo.name,
-    violations: repo.total_violations || 0,
-    critical: repo.critical_violations || 0,
+    violations: repo.total_violations ?? 0,
+    critical: repo.critical_violations ?? 0,
   }))
+
+  // If only one data point, add a baseline to create a visible line
+  const chartData = rawChartData.length === 1
+    ? [{ name: "Baseline", violations: 0, critical: 0 }, ...rawChartData]
+    : rawChartData
+
+  const hasScanData = scannedRepos.length > 0
 
   const recentActivity = [...trackedRepos]
     .filter(r => r.last_scanned_at)
@@ -414,10 +475,11 @@ export function Dashboard() {
                   <div className="w-9 h-9 rounded-xl bg-amber-500/20 flex items-center justify-center">
                     <i className="las la-exclamation-triangle text-lg text-amber-400"></i>
                   </div>
+                  <span className="text-xs text-white/30 uppercase tracking-wider">Violations</span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold">{totalViolations}</span>
-                  {connectionStatus?.connected && <span className="text-xs text-emerald-400">-18%</span>}
+                  <span className="text-3xl font-bold">{hasScanData ? totalViolations : "—"}</span>
+                  {!hasScanData && <span className="text-xs text-white/40">Awaiting scans</span>}
                 </div>
               </div>
 
@@ -432,7 +494,7 @@ export function Dashboard() {
                   </div>
                   <span className="text-xs text-white/30 uppercase tracking-wider">Critical</span>
                 </div>
-                <div className="text-3xl font-bold">{criticalCount}</div>
+                <div className="text-3xl font-bold">{hasScanData ? criticalCount : "—"}</div>
               </div>
 
               {/* Healthy */}
@@ -444,8 +506,8 @@ export function Dashboard() {
                   <span className="text-xs text-white/30 uppercase tracking-wider">Healthy</span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold">{healthyCount}</span>
-                  {connectionStatus?.connected && <span className="text-xs text-white/30">/{trackedRepos.length}</span>}
+                  <span className="text-3xl font-bold">{hasScanData ? healthyCount : "—"}</span>
+                  {connectionStatus?.connected && hasScanData && <span className="text-xs text-white/30">/{trackedRepos.length}</span>}
                 </div>
               </div>
             </div>
@@ -637,8 +699,24 @@ export function Dashboard() {
 
             {/* Repositories Table */}
             <div className="col-span-8 bg-gradient-to-br from-white/[0.04] to-transparent rounded-2xl overflow-hidden border border-white/[0.04]">
-              <div className="px-5 py-4 flex items-center justify-between">
-                <h2 className="text-sm font-medium">Tracked Repositories</h2>
+              <div className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-sm font-medium">Tracked Repositories</h2>
+                  {connectionStatus?.connected && (
+                    <div className="flex items-center gap-2 text-[11px] text-white/50">
+                      <span className="px-2 py-1 rounded-md bg-white/[0.05] text-emerald-300 flex items-center gap-1">
+                        <i className="las la-broadcast-tower text-sm"></i>
+                        Auto-monitoring every {Math.round(AUTO_POLL_INTERVAL_MS / 1000)}s
+                      </span>
+                      <span className="text-white/40">
+                        {lastAutoCheck
+                          ? `Last check ${lastAutoCheck.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                          : "Checking soon"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
                 {connectionStatus?.connected && trackedRepos.length > 0 && (
                   <div className="flex gap-1 text-xs">
                     <button
@@ -667,9 +745,16 @@ export function Dashboard() {
                 filteredTrackedRepos.length > 0 ? (
                   <div className="px-2 pb-2">
                     {filteredTrackedRepos.map((repo, index) => {
-                      const violations = repo.total_violations || 0
-                    const critical = repo.critical_violations || 0
-                    const status = critical > 0 ? "critical" : violations > 0 ? "warning" : "clean"
+                    const hasScan = !!repo.last_scanned_at
+                    const violations = hasScan ? repo.total_violations ?? 0 : null
+                    const critical = hasScan ? repo.critical_violations ?? 0 : null
+                    const status = !hasScan
+                      ? "pending"
+                      : (critical ?? 0) > 0
+                        ? "critical"
+                        : (violations ?? 0) > 0
+                          ? "warning"
+                          : "clean"
                     const isChecking = checkingRepos.has(repo.id)
                     const isScanning = scanningRepos.has(repo.id)
                     const hasChanges = repoChanges.get(repo.id) === true
@@ -685,16 +770,31 @@ export function Dashboard() {
                           onClick={() => setRepoForProject(repo)}
                         >
                           <div className={`w-2.5 h-2.5 rounded-full transition-all ${
+                            isScanning ? "bg-blue-400 animate-pulse" :
+                            isChecking ? "bg-cyan-400 animate-pulse" :
                             status === "critical" ? "bg-red-400" :
                             status === "warning" ? "bg-amber-400" :
+                            status === "pending" ? "bg-white/40" :
                             "bg-emerald-400"
                           }`} />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="font-medium text-sm">{repo.github_repo.name}</span>
                               <span className="text-xs text-white/30">{repo.github_repo.full_name}</span>
-                              {hasChanges && (
-                                <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-[10px] text-blue-400 font-medium">
+                              {isScanning && (
+                                <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-[10px] text-blue-400 font-medium flex items-center gap-1">
+                                  <i className="las la-circle-notch animate-spin text-[8px]"></i>
+                                  Scanning
+                                </span>
+                              )}
+                              {isChecking && !isScanning && (
+                                <span className="px-2 py-0.5 rounded-md bg-cyan-500/15 text-[10px] text-cyan-400 font-medium flex items-center gap-1">
+                                  <i className="las la-sync animate-spin text-[8px]"></i>
+                                  Checking
+                                </span>
+                              )}
+                              {hasChanges && !isScanning && !isChecking && (
+                                <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-[10px] text-amber-400 font-medium">
                                   New commits
                                 </span>
                               )}
@@ -702,8 +802,14 @@ export function Dashboard() {
                             <div className="flex items-center gap-3 mt-0.5 text-xs text-white/40">
                               {repo.github_repo.language && <span>{repo.github_repo.language}</span>}
                               <span>{repo.github_repo.default_branch}</span>
-                              {repo.last_scanned_at && <span>Last scan: {new Date(repo.last_scanned_at).toLocaleDateString()}</span>}
-                              {repo.last_scan_mode && (
+                              {hasScan ? (
+                                <span>Last scan: {new Date(repo.last_scanned_at || 0).toLocaleDateString()}</span>
+                              ) : isScanning ? (
+                                <span className="text-blue-300">Running first scan...</span>
+                              ) : (
+                                <span className="text-white/50">Not yet scanned</span>
+                              )}
+                              {hasScan && repo.last_scan_mode && (
                                 <span className="px-2 py-0.5 rounded-md bg-white/[0.05] text-white/60 capitalize">
                                   Mode: {scanModeLabel}
                                 </span>
@@ -714,52 +820,40 @@ export function Dashboard() {
                                   Checked: {new Date(repo.last_checked_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                 </span>
                               )}
+                              <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-300">Auto</span>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {critical > 0 && (
+                            {hasScan && critical !== null && critical > 0 && (
                               <span className="px-2.5 py-1 rounded-lg bg-red-500/15 text-xs text-red-400">{critical} critical</span>
                             )}
-                            {violations === 0 && !hasChanges && (
+                            {hasScan && violations !== null && violations === 0 && !hasChanges && (
                               <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-xs text-emerald-400">Clean</span>
                             )}
-
-                            {/* Check for Updates button */}
-                            <button
-                              onClick={(e) => handleCheckForUpdates(repo.id, e)}
-                              disabled={isChecking || isScanning}
-                              className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Check for new commits"
-                            >
-                              {isChecking ? (
-                                <span className="flex items-center gap-1.5">
-                                  <i className="las la-sync animate-spin"></i>
-                                  Checking...
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1.5">
-                                  <i className="las la-sync"></i>
-                                  Check
-                                </span>
-                              )}
-                            </button>
-
-                            {/* Scan button - shows when changes detected */}
-                            {hasChanges && (
-                              <button
-                                onClick={(e) => handleScanRepo(repo.id, e)}
-                                className="px-3 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-xs text-blue-400 transition-colors"
-                                disabled={isScanning}
-                              >
-                                <span className="flex items-center gap-1.5">
-                                  <i className={`las la-radar ${isScanning ? "animate-spin" : ""}`}></i>
-                                  {isScanning ? "Scanning..." : "Scan Now"}
-                                </span>
-                              </button>
+                            {!hasScan && !isScanning && !isChecking && (
+                              <span className="px-2.5 py-1 rounded-lg bg-white/10 text-xs text-white/60">Not scanned</span>
+                            )}
+                            {isChecking && (
+                              <span className="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-xs text-cyan-300 flex items-center gap-1">
+                                <i className="las la-sync animate-spin"></i>
+                                Checking…
+                              </span>
+                            )}
+                            {isScanning && (
+                              <span className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-xs text-blue-300 flex items-center gap-1">
+                                <i className="las la-radar animate-spin"></i>
+                                Scanning…
+                              </span>
+                            )}
+                            {hasChanges && !isScanning && !isChecking && (
+                              <span className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-xs text-amber-300 flex items-center gap-1">
+                                <i className="las la-code-branch"></i>
+                                New commits
+                              </span>
                             )}
                           </div>
-                          <div className="w-12 text-right">
-                            <div className="text-lg font-semibold">{violations}</div>
+                          <div className="w-14 text-right">
+                            <div className="text-lg font-semibold">{hasScan ? violations : "—"}</div>
                             <div className="text-[10px] text-white/30 uppercase">issues</div>
                           </div>
                         </div>
@@ -807,6 +901,24 @@ export function Dashboard() {
             setRepoManagerOpen(false)
           }}
           onClose={() => setRepoManagerOpen(false)}
+          onScanStarted={(trackedRepoId) => {
+            setScanningRepos(prev => {
+              const next = new Set(prev)
+              next.add(trackedRepoId)
+              scanningReposRef.current = next
+              return next
+            })
+            loadTrackedRepos() // Refresh to show the new repo
+          }}
+          onScanCompleted={(trackedRepoId) => {
+            setScanningRepos(prev => {
+              const next = new Set(prev)
+              next.delete(trackedRepoId)
+              scanningReposRef.current = next
+              return next
+            })
+            loadTrackedRepos() // Refresh to show scan results
+          }}
         />
       )}
 

@@ -177,7 +177,11 @@ export function TopNav() {
               {projects.length > 0 ? (
                 projects.map((project) => (
                   <div key={project.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-white/5">
-                    <SelectItem value={String(project.id)} className="flex-1 rounded-lg px-0 py-0 hover:bg-transparent focus:bg-transparent">
+                    <SelectItem
+                      value={String(project.id)}
+                      textValue={project.name}
+                      className="flex-1 rounded-lg px-0 py-0 hover:bg-transparent focus:bg-transparent"
+                    >
                       <span className="flex flex-col items-start gap-1">
                         <span className="text-sm font-medium">{project.name}</span>
                         <span className="flex items-center gap-1.5">
