@@ -9,6 +9,7 @@ pub mod script;
 pub mod events;
 pub mod performance;
 pub mod testing;
+pub mod eval;
 
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 

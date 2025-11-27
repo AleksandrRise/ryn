@@ -24,14 +24,16 @@
     ],
     "security": {
       "csp": null,
-      "capabilities": [
-        {
-          "identifier": "main-capability",
-          "windows": ["main"],
-          "permissions": [
-            "core:event:allow-listen",
-            "core:event:allow-emit",
-            "core:event:allow-unlisten",
+        "capabilities": [
+          {
+            "identifier": "main-capability",
+            "windows": ["main"],
+            "permissions": [
+              "mcp-bridge:default",
+              "mcp-bridge:allow-js-callback",
+              "core:event:allow-listen",
+              "core:event:allow-emit",
+              "core:event:allow-unlisten",
             "core:webview:allow-internal-toggle-devtools",
             "dialog:allow-open",
             "dialog:allow-save",

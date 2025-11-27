@@ -189,6 +189,7 @@ async fn handle_request<R: Runtime>(
         "browser_state" => crate::commands::webview::state(app, params).await,
         "browser_execute" => crate::commands::webview::execute(app, params).await,
         "browser_tabs" => crate::commands::webview::tabs(app, params).await,
+        "browser_eval" => crate::commands::eval::eval(app, params).await,
 
         // DevTools commands (2)
         "devtools_open" => crate::commands::devtools::open(app, params).await,
