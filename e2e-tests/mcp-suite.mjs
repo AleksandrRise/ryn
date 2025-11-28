@@ -228,8 +228,8 @@ async function doFix(label, fixturePath, state) {
   const fixResult = await call('browser_eval', {
     label,
     code: `
-      const runFix = await import('/mcp-fix.js');
-      const fn = runFix.default || runFix;
+      const mod = await import('/mcp-fix.js');
+      const fn = mod.default || mod;
       return await fn(${entry.projectId});
     `,
   })

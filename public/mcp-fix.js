@@ -1,4 +1,4 @@
-(async (projectId) => {
+export default async (projectId) => {
   const gotoScan = async () => { try { await window.__TAURI__.core.invoke('open', { path: '/scan' }); } catch (_) {} };
   await gotoScan();
   const scans = await window.__TAURI__.core.invoke('get_scans', { projectId });
@@ -26,4 +26,4 @@
     }
   }
   return { skipped: true, reason: 'no_violation_matched_snippet' };
-});
+};
