@@ -1,5 +1,5 @@
 export default async (projectId) => {
-  const gotoScan = async () => { try { await window.__TAURI__.core.invoke('open', { path: '/scan' }); } catch (_) {} };
+  const gotoScan = async () => { try { await window.__TAURI__.core.invoke('open', { path: '/scan' }); } catch { /* ignore navigation errors */ } };
   await gotoScan();
   const scans = await window.__TAURI__.core.invoke('get_scans', { projectId });
   const latestScan = scans?.[0];
@@ -15,7 +15,7 @@ export default async (projectId) => {
       const basePath = (project?.path || '').replace(/\\/g, '/');
       const fullPath = basePath + '/' + pick.file_path;
       // Best-effort read for debugging; do not gate on substring match
-      try { await window.__TAURI__.fs.readTextFile(fullPath); } catch (_) {}
+      try { await window.__TAURI__.fs.readTextFile(fullPath); } catch { /* ignore read errors */ }
       let fix = null;
       for (let attempt = 1; attempt <= 4; attempt++) {
         try {
