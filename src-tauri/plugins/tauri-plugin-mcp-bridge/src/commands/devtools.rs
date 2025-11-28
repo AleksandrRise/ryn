@@ -2,8 +2,8 @@
 // Implements: devtools_open, devtools_close
 // Platform-specific: Only works on macOS 10.15+
 
-use tauri::{AppHandle, Runtime};
 use serde_json::Value;
+use tauri::{AppHandle, Runtime};
 
 #[cfg(any(debug_assertions, feature = "devtools"))]
 use serde_json::json;
@@ -11,7 +11,7 @@ use serde_json::json;
 /// Open DevTools for a webview
 /// Params: { label?: string }
 /// Platform: macOS only (10.15+)
-pub async fn open<R: Runtime>(_app: &AppHandle<R>, params: &Value) -> Result<Value, String> {
+pub async fn open<R: Runtime>(_app: &AppHandle<R>, _params: &Value) -> Result<Value, String> {
     #[cfg(any(debug_assertions, feature = "devtools"))]
     {
         #[cfg(target_os = "macos")]
@@ -42,7 +42,7 @@ pub async fn open<R: Runtime>(_app: &AppHandle<R>, params: &Value) -> Result<Val
 /// Close DevTools for a webview
 /// Params: { label?: string }
 /// Platform: macOS only (10.15+)
-pub async fn close<R: Runtime>(_app: &AppHandle<R>, params: &Value) -> Result<Value, String> {
+pub async fn close<R: Runtime>(_app: &AppHandle<R>, _params: &Value) -> Result<Value, String> {
     #[cfg(any(debug_assertions, feature = "devtools"))]
     {
         #[cfg(target_os = "macos")]
