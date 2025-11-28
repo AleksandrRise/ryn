@@ -228,49 +228,56 @@ async function doFix(label, fixturePath, state) {
   const fixResult = await call('browser_eval', {
     label,
     code: `
-      const projectId = ${entry.projectId};
-      const scans = await window.__TAURI__.core.invoke('get_scans', { projectId });
-      const latestScan = scans?.[0];
-      if (!latestScan) throw new Error('No scan found for project');
-      const violations = await window.__TAURI__.core.invoke('get_violations', { scanId: latestScan.id });
-      if (!violations?.length) throw new Error('No violations available to fix');
+      try {
+        const projectId = ${entry.projectId};
+        const scans = await window.__TAURI__.core.invoke('get_scans', { projectId });
+        const latestScan = scans?.[0];
+        if (!latestScan) throw new Error('No scan found for project');
+        const violations = await window.__TAURI__.core.invoke('get_violations', { scanId: latestScan.id });
+        if (!violations?.length) throw new Error('No violations available to fix');
 
-      for (const pick of violations) {
-        try {
-          // Verify snippet exists on disk before attempting apply
-          const projects = await window.__TAURI__.core.invoke('get_projects');
-          const project = projects.find(p => p.id === projectId);
-          const basePath = project?.path || '';
-          const normalizedBase = basePath.replace(/\\/g, '/');
-          const fullPath = normalizedBase + '/' + pick.file_path;
-          let content = null;
+        for (const pick of violations) {
           try {
-            content = await window.__TAURI__.fs.readTextFile(fullPath);
-          } catch (_) {}
-          if (!content || !content.includes(pick.code_snippet)) {
-            continue; // skip mismatched snippet
-          }
+            // Verify snippet exists on disk before attempting apply
+            const projects = await window.__TAURI__.core.invoke('get_projects');
+            const project = projects.find(p => p.id === projectId);
+            const basePath = project?.path || '';
+            const normalizedBase = basePath.replace(/\\/g, '/');
+            const fullPath = normalizedBase + '/' + pick.file_path;
+            let content = null;
+            try {
+              content = await window.__TAURI__.fs.readTextFile(fullPath);
+            } catch (_) {}
+            if (!content || !content.includes(pick.code_snippet)) {
+              continue; // skip mismatched snippet
+            }
 
-          const fix = await window.__TAURI__.core.invoke('generate_fix', { violationId: pick.id });
-          await window.__TAURI__.core.invoke('apply_fix', { fixId: fix.id });
-          const updated = await window.__TAURI__.core.invoke('get_violation', { violationId: pick.id });
-          return { applied_at: updated?.fix?.applied_at || null, status: updated?.violation?.status, fixed_violation_id: pick.id, remaining: violations.length, attempts: violations.length };
-        } catch (err) {
-          // Skip mismatch/snippet errors and try next violation
-          const msg = String(err?.message || err || '').toLowerCase();
-          if (msg.includes('original code not found') || msg.includes('failed to create grok client')) {
-            continue;
+            const fix = await window.__TAURI__.core.invoke('generate_fix', { violationId: pick.id });
+            await window.__TAURI__.core.invoke('apply_fix', { fixId: fix.id });
+            const updated = await window.__TAURI__.core.invoke('get_violation', { violationId: pick.id });
+            return { applied_at: updated?.fix?.applied_at || null, status: updated?.violation?.status, fixed_violation_id: pick.id, remaining: violations.length, attempts: violations.length };
+          } catch (err) {
+            // Skip mismatch/snippet errors and try next violation
+            const msg = String(err?.message || err || '').toLowerCase();
+            if (msg.includes('original code not found') || msg.includes('failed to create grok client')) {
+              continue;
+            }
+            // Propagate other errors
+            throw err;
           }
-          // Propagate other errors
-          throw err;
         }
+        return { skipped: true, reason: 'no_violation_matched_snippet' };
+      } catch (e) {
+        return { error: String(e?.message || e || '') };
       }
-      return { skipped: true, reason: 'no_violation_matched_snippet' };
     `,
   })
   if (fixResult?.skipped) {
     log(`fix skipped for ${fixturePath}: ${fixResult.reason}`)
     return fixResult
+  }
+  if (fixResult?.error) {
+    throw new Error(`Fix flow error: ${fixResult.error}`)
   }
   if (!fixResult || !fixResult.applied_at || (fixResult.status && fixResult.status !== 'fixed')) {
     throw new Error(`Fix apply failed via MCP after retries: ${JSON.stringify(fixResult)}`)
