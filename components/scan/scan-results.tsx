@@ -13,7 +13,7 @@ import { useProjectStore } from "@/lib/stores/project-store"
 import type { Severity } from "@/lib/types/violation"
 import { formatDateTime, formatRelativeTime } from "@/lib/utils/date"
 import { handleTauriError, showInfo, showSuccess } from "@/lib/utils/error-handler"
-import { generate_fix } from "@/lib/tauri/commands"
+import { apply_fix, generate_fix, type Fix } from "@/lib/tauri/commands"
 import { readTextFile } from "@tauri-apps/plugin-fs"
 
 export function ScanResults() {
@@ -69,7 +69,8 @@ export function ScanResults() {
   const [selectedViolationId, setSelectedViolationId] = useState<number | null>(null)
   const [fileSearch, setFileSearch] = useState("")
   const [isGeneratingFix, setIsGeneratingFix] = useState(false)
-  const [generatedFix, setGeneratedFix] = useState<string | null>(null)
+  const [generatedFix, setGeneratedFix] = useState<Fix | null>(null)
+  const [isApplyingFix, setIsApplyingFix] = useState(false)
   const [isCodeExpanded, setIsCodeExpanded] = useState(false)
   const [fullFileContent, setFullFileContent] = useState<string | null>(null)
   const [isLoadingFile, setIsLoadingFile] = useState(false)
@@ -190,12 +191,31 @@ export function ScanResults() {
     try {
       showInfo("Generating fix with Grok...")
       const fix = await generate_fix(selectedViolation.id)
-      setGeneratedFix(fix.fixed_code)
+      setGeneratedFix(fix)
       showSuccess("Fix generated successfully!")
     } catch (error) {
       handleTauriError(error, "Failed to generate fix")
     } finally {
       setIsGeneratingFix(false)
+    }
+  }
+
+  const handleApplyFix = async () => {
+    if (!generatedFix) return
+
+    setIsApplyingFix(true)
+    try {
+      showInfo("Applying fix...")
+      await apply_fix(generatedFix.id)
+      showSuccess("Fix applied successfully!")
+
+      // Reflect applied state locally and refresh violation list
+      setGeneratedFix((prev) => (prev ? { ...prev, applied_at: new Date().toISOString() } : null))
+      await reload()
+    } catch (error) {
+      handleTauriError(error, "Failed to apply fix")
+    } finally {
+      setIsApplyingFix(false)
     }
   }
 
@@ -493,7 +513,7 @@ export function ScanResults() {
                 <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
                   <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-400/90 mb-2">Suggested Fix</div>
                   <div className="rounded bg-[#0c0c0c] p-3 font-mono text-xs text-white/85 overflow-auto max-h-[300px]">
-                    <pre className="whitespace-pre-wrap">{generatedFix}</pre>
+                    <pre className="whitespace-pre-wrap">{generatedFix.fixed_code}</pre>
                   </div>
                 </div>
               )}
@@ -521,11 +541,12 @@ export function ScanResults() {
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled
-                  className="gap-2 opacity-50"
+                  onClick={handleApplyFix}
+                  disabled={!generatedFix || isApplyingFix || generatedFix.applied_at !== null}
+                  className="gap-2"
                 >
                   <Check className="w-4 h-4" />
-                  Apply Fix
+                  {generatedFix?.applied_at ? "Applied" : isApplyingFix ? "Applying..." : "Apply Fix"}
                 </Button>
               </div>
             </div>
