@@ -225,11 +225,13 @@ async function doCreateAndScan(label, fixturePath, state, scanMode = DEFAULT_SCA
 async function doFix(label, fixturePath, state) {
   const entry = state.get(fixturePath)
   if (!entry) throw new Error(`No state for fixture ${fixturePath} before fix`)
-  const fixSnippet = (projectId) => ` (async () => { const gotoScan = async () => { try { await window.__TAURI__.core.invoke('open', { path: '/scan' }); } catch (_) {} }; await gotoScan(); const pid = ${projectId}; const scans = await window.__TAURI__.core.invoke('get_scans', { projectId: pid }); const latestScan = scans?.[0]; if (!latestScan) return { error: 'No scan found for project' }; const violations = await window.__TAURI__.core.invoke('get_violations', { scanId: latestScan.id }); if (!violations?.length) return { error: 'No violations available to fix' }; for (const pick of violations) { try { const projects = await window.__TAURI__.core.invoke('get_projects'); const project = projects.find(p => p.id === pid); const basePath = (project?.path || '').replace(/\\/g, '/'); const fullPath = basePath + '/' + pick.file_path; let content = null; try { content = await window.__TAURI__.fs.readTextFile(fullPath); } catch (_) {} if (!content || !content.includes(pick.code_snippet)) continue; const fix = await window.__TAURI__.core.invoke('generate_fix', { violationId: pick.id }); await window.__TAURI__.core.invoke('apply_fix', { fixId: fix.id }); const updated = await window.__TAURI__.core.invoke('get_violation', { violationId: pick.id }); return { applied_at: updated?.fix?.applied_at || null, status: updated?.violation?.status, fixed_violation_id: pick.id, remaining: violations.length, attempts: violations.length }; } catch (err) { const msg = String(err?.message || err || '').toLowerCase(); if (msg.includes('original code not found') || msg.includes('failed to create grok client')) continue; return { error: msg }; } } return { skipped: true, reason: 'no_violation_matched_snippet' }; })();`;
-
   const fixResult = await call('browser_eval', {
     label,
-    code: fixSnippet(entry.projectId),
+    code: `
+      const runFix = await import('/mcp-fix.js');
+      const fn = runFix.default || runFix;
+      return await fn(${entry.projectId});
+    `,
   })
   if (fixResult?.skipped) {
     log(`fix skipped for ${fixturePath}: ${fixResult.reason}`)
