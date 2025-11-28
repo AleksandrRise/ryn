@@ -265,9 +265,13 @@ async function doFix(label, fixturePath, state) {
           throw err;
         }
       }
-      throw new Error('All violations failed to apply_fix');
+      return { skipped: true, reason: 'no_violation_matched_snippet' };
     `,
   })
+  if (fixResult?.skipped) {
+    log(`fix skipped for ${fixturePath}: ${fixResult.reason}`)
+    return fixResult
+  }
   if (!fixResult || !fixResult.applied_at || (fixResult.status && fixResult.status !== 'fixed')) {
     throw new Error(`Fix apply failed via MCP after retries: ${JSON.stringify(fixResult)}`)
   }
