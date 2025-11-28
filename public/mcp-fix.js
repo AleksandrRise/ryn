@@ -15,7 +15,21 @@ export default async (projectId) => {
       let content = null;
       try { content = await window.__TAURI__.fs.readTextFile(fullPath); } catch (_) {}
       if (!content || !content.includes(pick.code_snippet)) continue;
-      const fix = await window.__TAURI__.core.invoke('generate_fix', { violationId: pick.id });
+      let fix = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          fix = await window.__TAURI__.core.invoke('generate_fix', { violationId: pick.id });
+          break;
+        } catch (err) {
+          const msg = String(err?.message || err || '').toLowerCase();
+          if (msg.includes('rate limit')) {
+            await new Promise(r => setTimeout(r, 8000));
+            continue;
+          }
+          throw err;
+        }
+      }
+      if (!fix) continue;
       await window.__TAURI__.core.invoke('apply_fix', { fixId: fix.id });
       const updated = await window.__TAURI__.core.invoke('get_violation', { violationId: pick.id });
       return { applied_at: updated?.fix?.applied_at || null, status: updated?.violation?.status, fixed_violation_id: pick.id, remaining: violations.length, attempts: violations.length };
