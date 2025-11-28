@@ -1,0 +1,133 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Allow manual workflow dispatch for testing
+  workflow_dispatch:
+
+env:
+  # Anthropic API key for Claude integration tests (must be set in repository secrets)
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+jobs:
+  e2e-test:
+    name: End-to-End Testing
+    runs-on: ubuntu-latest
+
+    steps:
+      # ============================================
+      # STEP 1: Checkout Repository
+      # ============================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ============================================
+      # STEP 2: Setup Node.js 20
+      # ============================================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ============================================
+      # STEP 3: Setup pnpm 9
+      # ============================================
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      # ============================================
+      # STEP 4: Setup Rust Toolchain
+      # ============================================
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # ============================================
+      # STEP 5: Cache Rust Dependencies
+      # Speeds up subsequent builds by caching compiled dependencies
+      # ============================================
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # ============================================
+      # STEP 6: Install Linux Dependencies for Tauri
+      # Required packages for Tauri desktop app compilation and WebDriver testing:
+      # - libwebkit2gtk-4.1-dev: WebKit rendering engine
+      # - libayatana-appindicator3-dev: System tray support
+      # - webkit2gtk-driver: WebDriver protocol implementation for WebKit
+      # - xvfb: Virtual framebuffer for headless GUI testing
+      # ============================================
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            webkit2gtk-driver \
+            xvfb
+
+      # ============================================
+      # STEP 7: Install tauri-driver
+      # WebDriver server for Tauri applications
+      # --locked flag ensures reproducible builds using Cargo.lock
+      # ============================================
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+
+      # ============================================
+      # STEP 8: Install Node.js Dependencies
+      # Installs all dependencies including WebdriverIO testing framework
+      # ============================================
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ============================================
+      # STEP 9: Run Rust Unit Tests
+      # Execute before E2E tests to catch broken builds early
+      # ============================================
+      - name: Run Rust unit tests
+        run: |
+          cd src-tauri
+          cargo test --lib
+
+      # ============================================
+      # STEP 10: Run E2E Tests with xvfb-run
+      # Executes WebdriverIO tests in headless mode using virtual display
+      # --auto-servernum: Automatically allocate X display number
+      #
+      # Tests executed:
+      # - 01-scan-workflow.spec.js: Full scan workflow with AI fix generation
+      # - 02-file-watcher.spec.js: Real-time file change detection
+      # - 03-cost-tracking.spec.js: LLM cost tracking and limits
+      # - 04-hybrid-scanning.spec.js: Regex + LLM hybrid detection
+      # - 05-multi-framework.spec.js: Django/Flask/Express/Next.js detection
+      # ============================================
+      - name: Run E2E tests
+        run: xvfb-run --auto-servernum pnpm test:e2e
+        env:
+          # Ensure API key is available to tests
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      # ============================================
+      # STEP 11: Upload Test Artifacts on Failure
+      # Uploads test results, screenshots, and logs for debugging
+      # Only runs if E2E tests fail
+      # ============================================
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: |
+            e2e-tests/results/
+            e2e-tests/screenshots/
+            e2e-tests/*.log
+          retention-days: 7
