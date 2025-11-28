@@ -237,6 +237,20 @@ async function doFix(label, fixturePath, state) {
 
       for (const pick of violations) {
         try {
+          // Verify snippet exists on disk before attempting apply
+          const projects = await window.__TAURI__.core.invoke('get_projects');
+          const project = projects.find(p => p.id === projectId);
+          const basePath = project?.path || '';
+          const normalizedBase = basePath.replace(/\\/g, '/');
+          const fullPath = `${normalizedBase}/${pick.file_path}`;
+          let content = null;
+          try {
+            content = await window.__TAURI__.fs.readTextFile(fullPath);
+          } catch (_) {}
+          if (!content || !content.includes(pick.code_snippet)) {
+            continue; // skip mismatched snippet
+          }
+
           const fix = await window.__TAURI__.core.invoke('generate_fix', { violationId: pick.id });
           await window.__TAURI__.core.invoke('apply_fix', { fixId: fix.id });
           const updated = await window.__TAURI__.core.invoke('get_violation', { violationId: pick.id });
