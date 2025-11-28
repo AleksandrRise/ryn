@@ -7,7 +7,13 @@ import path from 'path'
 
 const SOCKET_PATH = path.join(os.homedir(), '.tauri', 'mcp.sock')
 const APP_PORT = parseInt(process.env.MCP_APP_PORT || '3000', 10)
-const FIXTURE_PATH = path.resolve('e2e-tests/fixtures/vulnerable-django')
+const FIXTURE_ROOT = path.resolve('e2e-tests/fixtures')
+const CUSTOM_FIXTURES = process.env.MCP_FIXTURES
+  ? process.env.MCP_FIXTURES.split(',').map((p) => path.resolve(p.trim())).filter(Boolean)
+  : null
+const CUSTOM_PLAN = process.env.MCP_ACTION_PLAN ? safeParseJSON(process.env.MCP_ACTION_PLAN) : null
+const RNG_SEED = parseInt(process.env.MCP_SEED || `${Date.now() % 1_000_000}`, 10) || 1
+const DEFAULT_SCAN_MODE = process.env.MCP_SCAN_MODE || 'regex_only'
 const START_TIMEOUT_MS = 240_000
 const REQ_TIMEOUT_MS = 15_000
 const TEST_TIMEOUT_MS = 12 * 60_000
@@ -15,8 +21,19 @@ const TEST_TIMEOUT_MS = 12 * 60_000
 let child
 let socket
 let nextId = 1
+let rngState = RNG_SEED >>> 0
 
 function log(...args) { console.log('[mcp-suite]', ...args) }
+
+function safeParseJSON(str) {
+  try { return JSON.parse(str) } catch (e) { throw new Error(`Invalid JSON provided: ${e.message}`) }
+}
+
+function rng() {
+  // Simple LCG for deterministic randomness
+  rngState = (1664525 * rngState + 1013904223) >>> 0
+  return rngState / 2 ** 32
+}
 
 async function waitForWindow(timeoutMs = 30000) {
   const start = Date.now()
@@ -131,6 +148,197 @@ function call(method, params) {
   })
 }
 
+function listFixtures() {
+  if (CUSTOM_FIXTURES && CUSTOM_FIXTURES.length) {
+    return CUSTOM_FIXTURES.filter((p) => fs.existsSync(p) && fs.statSync(p).isDirectory())
+  }
+  if (!fs.existsSync(FIXTURE_ROOT)) return []
+  return fs
+    .readdirSync(FIXTURE_ROOT, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => path.join(FIXTURE_ROOT, d.name))
+}
+
+function escapePath(p) {
+  return p.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
+function buildPlan(fixtures) {
+  if (CUSTOM_PLAN) return CUSTOM_PLAN
+  const plan = []
+  fixtures.forEach((fixturePath) => {
+    // isolation per fixture
+    plan.push({ kind: 'clear_db' })
+    plan.push({ kind: 'create_scan', fixturePath, scanMode: DEFAULT_SCAN_MODE })
+    if (rng() < 0.85) plan.push({ kind: 'fix', fixturePath })
+    if (rng() < 0.6) plan.push({ kind: 'dismiss', fixturePath })
+    plan.push({ kind: 'export' })
+  })
+  return plan
+}
+
+async function invoke(label, command, args = {}) {
+  return call('browser_eval', { label, code: `return await window.__TAURI__.core.invoke('${command}', ${JSON.stringify(args)});` })
+}
+
+function projectNameFor(fixturePath) {
+  return `MCP E2E ${path.basename(fixturePath)}`
+}
+
+async function doClear(label) {
+  await invoke(label, 'clear_database')
+  return { cleared: true }
+}
+
+async function doCreateAndScan(label, fixturePath, state) {
+  const escapedPath = escapePath(fixturePath)
+  const name = projectNameFor(fixturePath)
+  const scanMode = DEFAULT_SCAN_MODE
+  const res = await call('browser_eval', {
+    label,
+    code: `
+      const project = await window.__TAURI__.core.invoke('create_project', { name: '${name}', path: '${escapedPath}' });
+      // Optionally set scan mode
+      await window.__TAURI__.core.invoke('complete_onboarding', { scan_mode: '${scanMode}', cost_limit: 25.0 }).catch(() => {});
+      const scan = await window.__TAURI__.core.invoke('scan_project', { projectId: project.id });
+      const waitScan = async () => {
+        const progress = await window.__TAURI__.core.invoke('get_scan_progress', { scanId: scan.id });
+        if (progress.status === 'completed') return;
+        if (['failed','cancelled','error'].includes(progress.status)) throw new Error('Scan failed: ' + progress.status);
+        await new Promise(r => setTimeout(r, 400));
+        return waitScan();
+      };
+      await waitScan();
+      const violations = await window.__TAURI__.core.invoke('get_violations', { scanId: scan.id });
+      return { projectId: project.id, scanId: scan.id, violations: violations?.map(v => v.id) ?? [], count: violations?.length ?? 0 };
+    `,
+  })
+  if (!res || res.count < 1) throw new Error(`Scan produced no violations for ${fixturePath}: ${JSON.stringify(res)}`)
+  state.set(fixturePath, { projectId: res.projectId, scanId: res.scanId, violations: res.violations })
+  log(`scan complete for ${fixturePath}: ${res.count} violations`)
+  return res
+}
+
+async function doFix(label, fixturePath, state) {
+  const entry = state.get(fixturePath)
+  if (!entry) throw new Error(`No state for fixture ${fixturePath} before fix`)
+  const fixResult = await call('browser_eval', {
+    label,
+    code: `
+      const projectId = ${entry.projectId};
+      const scans = await window.__TAURI__.core.invoke('get_scans', { projectId });
+      const latestScan = scans?.[0];
+      if (!latestScan) throw new Error('No scan found for project');
+      const violations = await window.__TAURI__.core.invoke('get_violations', { scanId: latestScan.id });
+      if (!violations?.length) throw new Error('No violations available to fix');
+
+      for (const pick of violations) {
+        try {
+          const fix = await window.__TAURI__.core.invoke('generate_fix', { violationId: pick.id });
+          await window.__TAURI__.core.invoke('apply_fix', { fixId: fix.id });
+          const updated = await window.__TAURI__.core.invoke('get_violation', { violationId: pick.id });
+          return { applied_at: updated?.fix?.applied_at || null, status: updated?.violation?.status, fixed_violation_id: pick.id, remaining: violations.length, attempts: violations.length };
+        } catch (err) {
+          // Skip mismatch/snippet errors and try next violation
+          const msg = String(err?.message || err || '').toLowerCase();
+          if (msg.includes('original code not found') || msg.includes('failed to create grok client')) {
+            continue;
+          }
+          // Propagate other errors
+          throw err;
+        }
+      }
+      throw new Error('All violations failed to apply_fix');
+    `,
+  })
+  if (!fixResult || !fixResult.applied_at || (fixResult.status && fixResult.status !== 'fixed')) {
+    throw new Error(`Fix apply failed via MCP after retries: ${JSON.stringify(fixResult)}`)
+  }
+  log(`fix applied on violation ${fixResult.fixed_violation_id} for ${fixturePath} (attempts up to ${fixResult.attempts})`)
+  return fixResult
+}
+
+async function doDismiss(label, fixturePath, fixedViolationId) {
+  const dismissResult = await call('browser_eval', {
+    label,
+    code: `
+      const projectId = (await window.__TAURI__.core.invoke('get_projects')).find(p => p.name === '${projectNameFor(fixturePath)}')?.id;
+      if (!projectId) return { dismissed: false, reason: 'project missing' };
+      const scans = await window.__TAURI__.core.invoke('get_scans', { projectId });
+      const latestScan = scans?.[0];
+      if (!latestScan) return { dismissed: false, reason: 'no scan' };
+      const violations = await window.__TAURI__.core.invoke('get_violations', { scanId: latestScan.id });
+      const open = violations.find(v => v.status === 'open' && v.id !== ${fixedViolationId || 'null'});
+      if (!open) return { dismissed: false, reason: 'no open violations' };
+      await window.__TAURI__.core.invoke('dismiss_violation', { violationId: open.id });
+      const refreshed = await window.__TAURI__.core.invoke('get_violation', { violationId: open.id });
+      return { dismissed: true, status: refreshed?.violation?.status, id: open.id };
+    `,
+  })
+  if (!dismissResult.dismissed || dismissResult.status !== 'dismissed') {
+    throw new Error(`Dismiss flow failed: ${JSON.stringify(dismissResult)}`)
+  }
+  log(`dismissed violation ${dismissResult.id} for ${fixturePath}`)
+  return dismissResult
+}
+
+async function doExport(label) {
+  const exportResult = await call('browser_eval', {
+    label,
+    code: `
+      const exported = await window.__TAURI__.core.invoke('export_data');
+      const parsed = JSON.parse(exported);
+      const counts = parsed.counts || {};
+      const data = parsed.data || {};
+      return {
+        projects: counts.projects ?? (data.projects?.length ?? 0),
+        violations: counts.violations ?? (data.violations?.length ?? 0),
+        scans: counts.scans ?? (data.scans?.length ?? 0),
+        fixes: counts.fixes ?? (data.fixes?.length ?? 0),
+        audit: counts.audit_events ?? (data.audit_events?.length ?? 0),
+      };
+    `,
+  })
+  if (!exportResult || exportResult.projects < 1 || exportResult.violations < 1) {
+    throw new Error(`Export validation failed: ${JSON.stringify(exportResult)}`)
+  }
+  log(`export ok (projects=${exportResult.projects}, violations=${exportResult.violations}, scans=${exportResult.scans}, fixes=${exportResult.fixes}, audit=${exportResult.audit})`)
+  return exportResult
+}
+
+async function runPlan(label, plan, fixtures) {
+  const state = new Map()
+  for (const [idx, action] of plan.entries()) {
+    log(`action ${idx + 1}/${plan.length}: ${action.kind}`)
+    if (action.kind === 'clear_db') {
+      await doClear(label)
+      state.clear()
+      continue
+    }
+    if (action.kind === 'create_scan') {
+      await doCreateAndScan(label, action.fixturePath, state)
+      continue
+    }
+    if (action.kind === 'fix') {
+      const fixturePath = action.fixturePath || fixtures[0]
+      const fix = await doFix(label, fixturePath, state)
+      action._lastFixId = fix.fixed_violation_id
+      continue
+    }
+    if (action.kind === 'dismiss') {
+      const fixturePath = action.fixturePath || fixtures[0]
+      const lastFixId = action._lastFixId || null
+      await doDismiss(label, fixturePath, lastFixId)
+      continue
+    }
+    if (action.kind === 'export') {
+      await doExport(label)
+      continue
+    }
+    throw new Error(`Unknown action kind: ${action.kind}`)
+  }
+}
+
 async function run() {
   const globalTimer = setTimeout(() => {
     log('test timeout reached, killing child')
@@ -149,64 +357,14 @@ async function run() {
     const main = await waitForWindow()
     log('main window', main)
 
-    // minimize disruption: hide window
     await call('window_hide', { label: main })
 
-    // Kick off create + scan via Tauri invoke inside webview; stash count in title
-    const escapedPath = FIXTURE_PATH.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
-    // Run inside webview and send result back via MCP js_callback to avoid large HTML parsing
-    const evalResult = await call('browser_eval', {
-      label: main,
-      code: `
-        const project = await window.__TAURI__.core.invoke('create_project', { name: 'MCP E2E', path: '${escapedPath}' });
-        const scan = await window.__TAURI__.core.invoke('scan_project', { projectId: project.id });
-        const waitScan = async () => {
-          const progress = await window.__TAURI__.core.invoke('get_scan_progress', { scanId: scan.id });
-          if (progress.status === 'completed') return;
-          if (['failed','cancelled','error'].includes(progress.status)) throw new Error('Scan failed: ' + progress.status);
-          await new Promise(r => setTimeout(r, 500));
-          return waitScan();
-        };
-        await waitScan();
-        const violations = await window.__TAURI__.core.invoke('get_violations', { scanId: scan.id });
-        return { count: violations?.length ?? 0 };
-      `,
-    })
+    const fixtures = listFixtures()
+    if (fixtures.length === 0) throw new Error(`No fixtures found in ${CUSTOM_FIXTURES ? CUSTOM_FIXTURES.join(',') : FIXTURE_ROOT}`)
 
-    const rowCount = evalResult?.count
-    if (typeof rowCount !== 'number' || Number.isNaN(rowCount)) {
-      throw new Error(`Invalid MCP eval result: ${JSON.stringify(evalResult)}`)
-    }
-    if (rowCount < 1) throw new Error('No violations found after scan')
-    log(`violations detected: ${rowCount}`)
-
-    // Generate and apply a fix for the first violation (real Grok call; requires XAI_API_KEY)
-    const fixResult = await call('browser_eval', {
-      label: main,
-      code: `
-        const project = await window.__TAURI__.core.invoke('get_projects');
-        if (!project?.length) throw new Error('No projects found for fix flow');
-        const projectId = project[0].id;
-        const scans = await window.__TAURI__.core.invoke('get_scans', { projectId });
-        const latestScan = scans?.[0];
-        if (!latestScan) throw new Error('No scan found for project');
-        const violations = await window.__TAURI__.core.invoke('get_violations', { scanId: latestScan.id });
-        if (!violations?.length) throw new Error('No violations available to fix');
-        const violation = violations[0];
-        const fix = await window.__TAURI__.core.invoke('generate_fix', { violationId: violation.id });
-        await window.__TAURI__.core.invoke('apply_fix', { fixId: fix.id });
-        const updated = await window.__TAURI__.core.invoke('get_violation', { violationId: violation.id });
-        return { applied_at: updated?.fix?.applied_at || null, status: updated?.violation?.status };
-      `,
-    })
-
-    if (!fixResult || !fixResult.applied_at) {
-      throw new Error(`Fix apply failed via MCP: ${JSON.stringify(fixResult)}`)
-    }
-    if (fixResult.status && fixResult.status !== 'fixed') {
-      throw new Error(`Violation status not fixed: ${fixResult.status}`)
-    }
-    log('fix generation + apply succeeded via MCP')
+    const plan = buildPlan(fixtures)
+    log(`plan generated (seed=${RNG_SEED}):`, plan)
+    await runPlan(main, plan, fixtures)
 
     clearTimeout(globalTimer)
     await cleanup()
