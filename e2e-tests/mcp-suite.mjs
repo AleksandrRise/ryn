@@ -17,6 +17,7 @@ const DEFAULT_SCAN_MODE = process.env.MCP_SCAN_MODE || 'regex_only'
 const START_TIMEOUT_MS = 240_000
 const REQ_TIMEOUT_MS = 15_000
 const TEST_TIMEOUT_MS = 12 * 60_000
+const CANCEL_WAIT_MS = 25_000
 
 let child
 let socket
@@ -169,9 +170,11 @@ function buildPlan(fixtures) {
   fixtures.forEach((fixturePath) => {
     // isolation per fixture
     plan.push({ kind: 'clear_db' })
-    plan.push({ kind: 'create_scan', fixturePath, scanMode: DEFAULT_SCAN_MODE })
+    const mode = rng() < 0.35 ? 'smart' : DEFAULT_SCAN_MODE
+    plan.push({ kind: 'create_scan', fixturePath, scanMode: mode })
     if (rng() < 0.85) plan.push({ kind: 'fix', fixturePath })
     if (rng() < 0.6) plan.push({ kind: 'dismiss', fixturePath })
+    if (rng() < 0.4) plan.push({ kind: 'cancel_scan', fixturePath, scanMode: mode })
     plan.push({ kind: 'export' })
   })
   return plan
@@ -190,10 +193,10 @@ async function doClear(label) {
   return { cleared: true }
 }
 
-async function doCreateAndScan(label, fixturePath, state) {
-  const escapedPath = escapePath(fixturePath)
-  const name = projectNameFor(fixturePath)
-  const scanMode = DEFAULT_SCAN_MODE
+async function doCreateAndScan(label, fixturePath, state, scanMode = DEFAULT_SCAN_MODE) {
+  const resolved = path.resolve(fixturePath)
+  const escapedPath = escapePath(resolved)
+  const name = projectNameFor(resolved)
   const res = await call('browser_eval', {
     label,
     code: `
@@ -214,8 +217,8 @@ async function doCreateAndScan(label, fixturePath, state) {
     `,
   })
   if (!res || res.count < 1) throw new Error(`Scan produced no violations for ${fixturePath}: ${JSON.stringify(res)}`)
-  state.set(fixturePath, { projectId: res.projectId, scanId: res.scanId, violations: res.violations })
-  log(`scan complete for ${fixturePath}: ${res.count} violations`)
+  state.set(resolved, { projectId: res.projectId, scanId: res.scanId, violations: res.violations })
+  log(`scan complete for ${resolved}: ${res.count} violations`)
   return res
 }
 
@@ -256,6 +259,45 @@ async function doFix(label, fixturePath, state) {
   }
   log(`fix applied on violation ${fixResult.fixed_violation_id} for ${fixturePath} (attempts up to ${fixResult.attempts})`)
   return fixResult
+}
+
+async function doCancelScan(label, fixturePath, scanMode = DEFAULT_SCAN_MODE) {
+  const resolved = path.resolve(fixturePath)
+  const escapedPath = escapePath(resolved)
+  const name = `Cancel Test ${path.basename(resolved)}`
+  const result = await call('browser_eval', {
+    label,
+    code: `
+      try {
+        const project = await window.__TAURI__.core.invoke('create_project', { name: '${name}', path: '${escapedPath}' });
+        await window.__TAURI__.core.invoke('complete_onboarding', { scan_mode: '${scanMode}', cost_limit: 25.0 }).catch(() => {});
+        const scan = await window.__TAURI__.core.invoke('scan_project', { projectId: project.id });
+        await window.__TAURI__.core.invoke('cancel_scan', { scanId: scan.id });
+        const waitStatus = async (start = Date.now()) => {
+          try {
+            const progress = await window.__TAURI__.core.invoke('get_scan_progress', { scanId: scan.id });
+            if (progress.status === 'cancelled') return 'cancelled';
+            if (progress.status === 'failed' || progress.status === 'error') throw new Error('Scan failed after cancel: ' + progress.status);
+            if (Date.now() - start > ${CANCEL_WAIT_MS}) return progress.status;
+            await new Promise(r => setTimeout(r, 300));
+            return waitStatus(start);
+          } catch (e) {
+            return 'unknown';
+          }
+        };
+        const status = await waitStatus();
+        return { status };
+      } catch (e) {
+        return { status: 'error', message: String(e?.message || e || '') };
+      }
+    `,
+  })
+  const safeResult = result || { status: 'unknown' }
+  if (safeResult.status !== 'cancelled' && safeResult.status !== 'completed' && safeResult.status !== 'unknown') {
+    throw new Error(`Cancel scan did not finish cleanly: ${JSON.stringify(result)}`)
+  }
+  log(`cancel scan status=${safeResult.status} for ${fixturePath}`)
+  return safeResult
 }
 
 async function doDismiss(label, fixturePath, fixedViolationId) {
@@ -308,7 +350,13 @@ async function doExport(label) {
 
 async function runPlan(label, plan, fixtures) {
   const state = new Map()
-  for (const [idx, action] of plan.entries()) {
+  const normalizedPlan = plan.map((action) =>
+    action.fixturePath
+      ? { ...action, fixturePath: path.resolve(action.fixturePath) }
+      : action
+  )
+
+  for (const [idx, action] of normalizedPlan.entries()) {
     log(`action ${idx + 1}/${plan.length}: ${action.kind}`)
     if (action.kind === 'clear_db') {
       await doClear(label)
@@ -316,7 +364,7 @@ async function runPlan(label, plan, fixtures) {
       continue
     }
     if (action.kind === 'create_scan') {
-      await doCreateAndScan(label, action.fixturePath, state)
+      await doCreateAndScan(label, action.fixturePath, state, action.scanMode)
       continue
     }
     if (action.kind === 'fix') {
@@ -329,6 +377,10 @@ async function runPlan(label, plan, fixtures) {
       const fixturePath = action.fixturePath || fixtures[0]
       const lastFixId = action._lastFixId || null
       await doDismiss(label, fixturePath, lastFixId)
+      continue
+    }
+    if (action.kind === 'cancel_scan') {
+      await doCancelScan(label, action.fixturePath, action.scanMode)
       continue
     }
     if (action.kind === 'export') {
