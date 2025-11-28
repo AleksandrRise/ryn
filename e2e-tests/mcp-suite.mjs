@@ -229,6 +229,7 @@ async function doFix(label, fixturePath, state) {
     label,
     code: `
       try {
+        await window.__TAURI__.core.invoke('open', { path: '/scan' }).catch(() => {});
         const projectId = ${entry.projectId};
         const scans = await window.__TAURI__.core.invoke('get_scans', { projectId });
         const latestScan = scans?.[0];
