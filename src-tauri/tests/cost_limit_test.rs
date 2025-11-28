@@ -213,8 +213,8 @@ fn test_cost_per_file_calculation() {
         // (files, input, output, cache_read, cache_write, expected_cost_per_file)
         (10, 50_000, 10_000, 20_000, 5_000, 0.00264), // $0.0264 / 10 = $0.00264
         (100, 500_000, 100_000, 200_000, 50_000, 0.00264), // Same per-file cost
-        (1, 10_000, 2_000, 0, 0, 0.005),             // Single file
-        (0, 10_000, 2_000, 0, 0, 0.0),               // Zero files (edge case)
+        (1, 10_000, 2_000, 0, 0, 0.005),              // Single file
+        (0, 10_000, 2_000, 0, 0, 0.0),                // Zero files (edge case)
     ];
 
     for (files, input, output, cache_read, cache_write, expected_per_file) in test_cases {

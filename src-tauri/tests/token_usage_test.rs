@@ -16,10 +16,10 @@ fn test_cost_calculation_accuracy() {
     // Test various realistic token usage scenarios
     let test_cases = vec![
         // (input, output, cache_read, cache_write, expected_cost)
-        (10_000, 2_000, 0, 0, 0.005), // Small scan, no caching
+        (10_000, 2_000, 0, 0, 0.005),  // Small scan, no caching
         (50_000, 10_000, 0, 0, 0.025), // Medium scan, no caching
         (100_000, 50_000, 200_000, 50_000, 0.109), // Large scan with caching
-        (0, 0, 0, 0, 0.0),            // Edge case: zero tokens
+        (0, 0, 0, 0, 0.0),             // Edge case: zero tokens
     ];
 
     for (input, output, cache_read, cache_write, expected) in test_cases {
@@ -143,7 +143,7 @@ fn test_cost_analytics_time_range_query() {
     project
         .insert_scan_cost(
             scan1_id, 10, // files
-            50_000, 10_000, 20_000, 5_000, // tokens
+            50_000, 10_000, 20_000, 5_000,  // tokens
             0.0264, // cost
         )
         .unwrap();
@@ -154,7 +154,7 @@ fn test_cost_analytics_time_range_query() {
         .insert_scan_cost(
             scan2_id, 20, // files
             100_000, 20_000, 40_000, 10_000, // tokens
-            0.0528,  // cost
+            0.0528, // cost
         )
         .unwrap();
 
@@ -163,7 +163,7 @@ fn test_cost_analytics_time_range_query() {
     project
         .insert_scan_cost(
             scan3_id, 15, // files
-            75_000, 15_000, 30_000, 7_500, // tokens
+            75_000, 15_000, 30_000, 7_500,  // tokens
             0.0396, // cost
         )
         .unwrap();
