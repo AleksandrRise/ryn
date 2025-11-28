@@ -6,7 +6,9 @@ export default async (projectId) => {
   if (!latestScan) return { error: 'No scan found for project' };
   const violations = await window.__TAURI__.core.invoke('get_violations', { scanId: latestScan.id });
   if (!violations?.length) return { error: 'No violations available to fix' };
-  for (const pick of violations) {
+  const candidates = violations.filter(v => Boolean(v?.code_snippet) && Boolean(v?.file_path));
+  if (!candidates.length) return { error: 'No violations with code snippet' };
+  for (const pick of candidates) {
     try {
       const projects = await window.__TAURI__.core.invoke('get_projects');
       const project = projects.find(p => p.id === projectId);
@@ -16,14 +18,14 @@ export default async (projectId) => {
       try { content = await window.__TAURI__.fs.readTextFile(fullPath); } catch (_) {}
       if (!content || !content.includes(pick.code_snippet)) continue;
       let fix = null;
-      for (let attempt = 1; attempt <= 3; attempt++) {
+      for (let attempt = 1; attempt <= 4; attempt++) {
         try {
           fix = await window.__TAURI__.core.invoke('generate_fix', { violationId: pick.id });
           break;
         } catch (err) {
           const msg = String(err?.message || err || '').toLowerCase();
           if (msg.includes('rate limit')) {
-            await new Promise(r => setTimeout(r, 8000));
+            await new Promise(r => setTimeout(r, 15000));
             continue;
           }
           throw err;
