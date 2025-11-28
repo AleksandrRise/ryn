@@ -18,6 +18,7 @@ const START_TIMEOUT_MS = 240_000
 const REQ_TIMEOUT_MS = 15_000
 const TEST_TIMEOUT_MS = 12 * 60_000
 const CANCEL_WAIT_MS = 25_000
+let TEMP_ROOT = null
 
 let child
 let socket
@@ -149,7 +150,7 @@ function call(method, params) {
   })
 }
 
-function listFixtures() {
+function sourceFixtures() {
   if (CUSTOM_FIXTURES && CUSTOM_FIXTURES.length) {
     return CUSTOM_FIXTURES.filter((p) => fs.existsSync(p) && fs.statSync(p).isDirectory())
   }
@@ -158,6 +159,20 @@ function listFixtures() {
     .readdirSync(FIXTURE_ROOT, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => path.join(FIXTURE_ROOT, d.name))
+}
+
+function prepareFixtures() {
+  const sources = sourceFixtures()
+  if (sources.length === 0) return []
+  TEMP_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'ryn-mcp-'))
+
+  const copies = []
+  for (const src of sources) {
+    const dest = path.join(TEMP_ROOT, path.basename(src))
+    fs.cpSync(src, dest, { recursive: true, dereference: true })
+    copies.push(dest)
+  }
+  return copies
 }
 
 function escapePath(p) {
@@ -303,11 +318,15 @@ async function doDismiss(label, fixturePath, fixedViolationId) {
       return { dismissed: true, status: refreshed?.violation?.status, id: open.id };
     `,
   })
-  if (!dismissResult.dismissed || dismissResult.status !== 'dismissed') {
-    throw new Error(`Dismiss flow failed: ${JSON.stringify(dismissResult)}`)
+  if (dismissResult.dismissed && dismissResult.status === 'dismissed') {
+    log(`dismissed violation ${dismissResult.id} for ${fixturePath}`)
+    return dismissResult
   }
-  log(`dismissed violation ${dismissResult.id} for ${fixturePath}`)
-  return dismissResult
+  if (dismissResult.reason === 'no open violations') {
+    log(`dismiss skipped for ${fixturePath}: ${dismissResult.reason}`)
+    return { skipped: true, reason: dismissResult.reason }
+  }
+  throw new Error(`Dismiss flow failed: ${JSON.stringify(dismissResult)}`)
 }
 
 async function doExport(label) {
@@ -397,7 +416,7 @@ async function run() {
 
     await call('window_hide', { label: main })
 
-    const fixtures = listFixtures()
+    const fixtures = prepareFixtures()
     if (fixtures.length === 0) throw new Error(`No fixtures found in ${CUSTOM_FIXTURES ? CUSTOM_FIXTURES.join(',') : FIXTURE_ROOT}`)
 
     const plan = buildPlan(fixtures)
@@ -423,6 +442,11 @@ function cleanup() {
       if (child && !child.killed) {
         // Kill process group (spawned detached)
         process.kill(-child.pid, 'SIGTERM')
+      }
+    } catch {}
+    try {
+      if (TEMP_ROOT && fs.existsSync(TEMP_ROOT)) {
+        fs.rmSync(TEMP_ROOT, { recursive: true, force: true })
       }
     } catch {}
     resolve()

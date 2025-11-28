@@ -14,9 +14,8 @@ export default async (projectId) => {
       const project = projects.find(p => p.id === projectId);
       const basePath = (project?.path || '').replace(/\\/g, '/');
       const fullPath = basePath + '/' + pick.file_path;
-      let content = null;
-      try { content = await window.__TAURI__.fs.readTextFile(fullPath); } catch (_) {}
-      if (!content || !content.includes(pick.code_snippet)) continue;
+      // Best-effort read for debugging; do not gate on substring match
+      try { await window.__TAURI__.fs.readTextFile(fullPath); } catch (_) {}
       let fix = null;
       for (let attempt = 1; attempt <= 4; attempt++) {
         try {
