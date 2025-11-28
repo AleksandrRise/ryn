@@ -242,7 +242,7 @@ async function doFix(label, fixturePath, state) {
           const project = projects.find(p => p.id === projectId);
           const basePath = project?.path || '';
           const normalizedBase = basePath.replace(/\\/g, '/');
-          const fullPath = `${normalizedBase}/${pick.file_path}`;
+          const fullPath = normalizedBase + '/' + pick.file_path;
           let content = null;
           try {
             content = await window.__TAURI__.fs.readTextFile(fullPath);
