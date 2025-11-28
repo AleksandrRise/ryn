@@ -29,7 +29,7 @@ export default async (projectId) => {
           throw err;
         }
       }
-      if (!fix) continue;
+      if (!fix) return { error: 'fix_generate_failed' };
       await window.__TAURI__.core.invoke('apply_fix', { fixId: fix.id });
       const updated = await window.__TAURI__.core.invoke('get_violation', { violationId: pick.id });
       return { applied_at: updated?.fix?.applied_at || null, status: updated?.violation?.status, fixed_violation_id: pick.id, remaining: violations.length, attempts: violations.length };
