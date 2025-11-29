@@ -7,7 +7,7 @@
     "tauri": "tauri",
     "dev:static": "next build && node dev-static-server.mjs",
     "dev:static:tauri": "next build && node dev-static-server.mjs",
-    "dev": "next dev --webpack -p 3000",
+    "dev": "next dev --turbo -p 3000",
     "lint": "eslint .",
     "start": "next start",
     "test": "vitest --exclude \"e2e-tests/*.mjs\"",
