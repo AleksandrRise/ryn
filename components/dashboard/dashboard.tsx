@@ -18,6 +18,7 @@ import {
   scan_github_repo,
   create_project,
   get_projects,
+  select_project_folder,
   get_scan_progress,
   get_settings,
   type GitHubConnectionStatus,
@@ -312,6 +313,50 @@ export function Dashboard() {
     prevRepoIdsRef.current = new Set(trackedRepos.map(r => r.id))
   }, [trackedRepos, connectionStatus?.connected])
 
+  const handlePlatformSelect = useCallback(
+    async (platform: typeof PLATFORMS[number]) => {
+      if (!platform.available) return
+      setSelectedPlatform(platform)
+      setPlatformDropdownOpen(false)
+
+      if (platform.id === "github") {
+        handleConnectClick()
+        return
+      }
+
+      try {
+        toast("Opening local folder picker…")
+        const folder = await select_project_folder()
+        if (!folder) {
+          toast("No folder selected")
+          return
+        }
+
+        const projects = await get_projects()
+        const existing = projects.find((p) => p.path === folder)
+        const project =
+          existing ??
+          (await create_project(
+            folder,
+            folder.split(/[\\/]/).filter(Boolean).pop() ?? "Local project",
+          ))
+
+        setSelectedProject(project)
+        router.push("/scan")
+        toast.success("Local project ready", {
+          description: project.path,
+        })
+      } catch (error) {
+        console.error("Failed to add local project", error)
+        toast.error("Could not open local folder", {
+          description:
+            error instanceof Error ? error.message : "Unexpected error",
+        })
+      }
+    },
+    [handleConnectClick, router, setSelectedProject],
+  )
+
   const ensureProjectAndNavigate = async (repo: TrackedRepoWithDetails) => {
     const runId = ++projectModalRunId.current
     setProjectModalError(null)
@@ -412,19 +457,14 @@ export function Dashboard() {
                 </button>
 
                 {platformDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-56 bg-black/90 backdrop-blur-2xl rounded-xl shadow-2xl overflow-hidden z-50 animate-fadeIn border border-white/8">
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-neutral-900 rounded-xl shadow-[0_24px_70px_rgba(0,0,0,0.6)] overflow-hidden z-50 animate-fadeIn border border-white/12">
                     <div className="p-1.5">
                       {PLATFORMS.map((platform) => {
                         const isSelected = platform.id === selectedPlatform.id
                         return (
                           <button
                             key={platform.id}
-                            onClick={() => {
-                              if (platform.available) {
-                                setSelectedPlatform(platform)
-                                setPlatformDropdownOpen(false)
-                              }
-                            }}
+                            onClick={() => void handlePlatformSelect(platform)}
                             disabled={!platform.available}
                             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                               isSelected ? "bg-white/10" : platform.available ? "hover:bg-white/[0.06]" : "opacity-40 cursor-not-allowed"

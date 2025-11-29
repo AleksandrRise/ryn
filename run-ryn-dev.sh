@@ -11,9 +11,10 @@ if [ -f ".env" ]; then
 fi
 
 DEV_PORT=3000
+DEV_CMD="pnpm dev" # Turbopack with HMR (localhost)
 
 # Start Next.js dev server with HMR (uses script from package.json)
-pnpm dev &
+$DEV_CMD &
 NEXT_PID=$!
 
 # Ensure cleanup on exit
