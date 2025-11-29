@@ -327,20 +327,22 @@ export function ScanResults() {
       </div>
 
       {/* Meta line + filters */}
-      <div className="flex flex-wrap items-center gap-3 text-xs text-white/65 animate-fade-in-up delay-100">
-        <span className="flex items-center gap-1">
-          <Clock3 className="w-3.5 h-3.5" />
-          {lastCompletedDisplay}
-          {lastCompletedRelative && <span className="text-white/45">({lastCompletedRelative})</span>}
-        </span>
-        <span className="text-white/60">·</span>
-        <span>Mode: {lastMode === "regex_only" ? "Pattern only" : lastMode === "smart" ? "Smart" : "Analyze all"}</span>
-        <span className="text-white/60">·</span>
-        <span>Files: {lastScanStats.filesScanned || 0}</span>
-        <span className="text-white/60">·</span>
-        <span>Violations: {lastScanStats.violationsFound || 0}</span>
-        <span className="text-white/60">·</span>
-        <span>Cost: {lastCostDisplay}</span>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-white/65 animate-fade-in-up delay-100">
+        <div className="flex flex-wrap items-center gap-2 max-w-[65vw]">
+          <span className="flex items-center gap-1">
+            <Clock3 className="w-3.5 h-3.5" />
+            {lastCompletedDisplay}
+            {lastCompletedRelative && <span className="text-white/45">({lastCompletedRelative})</span>}
+          </span>
+          <span className="text-white/60">·</span>
+          <span>Mode: {lastMode === "regex_only" ? "Pattern only" : lastMode === "smart" ? "Smart" : "Analyze all"}</span>
+          <span className="text-white/60">·</span>
+          <span>Files: {lastScanStats.filesScanned || 0}</span>
+          <span className="text-white/60">·</span>
+          <span>Violations: {lastScanStats.violationsFound || 0}</span>
+          <span className="text-white/60">·</span>
+          <span>Cost: {lastCostDisplay}</span>
+        </div>
         <div className="ml-auto flex items-center gap-3">
           <ScanControls selectedControls={selectedControls} onToggle={toggleControl} />
           <div className="flex items-center gap-2">

@@ -36,7 +36,7 @@ export default function RootLayout({
           <div className="fixed inset-0 bg-black/78 backdrop-blur-[2px] z-[5]" />
           <div className="relative z-10">
             <TopNav />
-            <div className="pt-10">{children}</div>
+            <div className="pt-16 md:pt-18">{children}</div>
           </div>
           <Toaster theme="dark" richColors />
         </ErrorBoundary>

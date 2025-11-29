@@ -42,7 +42,7 @@ const isActivationKey = (event: React.KeyboardEvent) =>
 
 export function Dashboard() {
   const router = useRouter()
-  const { setSelectedProject } = useProjectStore()
+  const { setSelectedProject, selectedProject } = useProjectStore()
   const [connectionStatus, setConnectionStatus] = useState<GitHubConnectionStatus | null>(null)
   const [selectedPlatform, setSelectedPlatform] = useState<typeof PLATFORMS[number]>(PLATFORMS[0])
   const [platformDropdownOpen, setPlatformDropdownOpen] = useState(false)
@@ -68,6 +68,8 @@ export function Dashboard() {
   const scanningReposRef = useRef<Set<number>>(new Set())
   const autoPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoPollingRef = useRef(false)
+  const isLocalMode = selectedPlatform.id === "local"
+  const hasLocalProject = Boolean(selectedProject)
 
   const checkConnection = useCallback(async () => {
     try {
@@ -390,6 +392,17 @@ export function Dashboard() {
     [handleConnectClick, router, setSelectedProject],
   )
 
+  const handlePrimaryConnect = useCallback(() => {
+    if (selectedPlatform.id === "local") {
+      const localPlatform = PLATFORMS.find((p) => p.id === "local")
+      if (localPlatform) {
+        void handlePlatformSelect(localPlatform)
+      }
+      return
+    }
+    handleConnectClick()
+  }, [handleConnectClick, handlePlatformSelect, selectedPlatform.id])
+
   const ensureProjectAndNavigate = async (repo: TrackedRepoWithDetails) => {
     const runId = ++projectModalRunId.current
     setProjectModalError(null)
@@ -542,7 +555,13 @@ export function Dashboard() {
               <div>
                 <h1 className="text-xl font-semibold tracking-tight">Compliance Overview</h1>
                 <p className="text-xs text-white/40 mt-0.5">
-                  {connectionStatus?.connected ? `${trackedRepos.length} repositories monitored` : "Connect to start monitoring"}
+                  {connectionStatus?.connected
+                    ? `${trackedRepos.length} repositories monitored`
+                    : hasLocalProject
+                      ? `Local project ready: ${selectedProject?.name ?? "Project"}`
+                      : isLocalMode
+                        ? "Open a local project to start scanning"
+                        : "Connect to start monitoring"}
                 </p>
               </div>
             </div>
@@ -610,26 +629,28 @@ export function Dashboard() {
             <div
               className={`col-span-9 relative rounded-2xl overflow-hidden transition-all duration-300 border ${
                 !connectionStatus?.connected
-                  ? "bg-gradient-to-br from-emerald-400/[0.12] via-emerald-500/[0.04] to-transparent border-emerald-500/10 hover:border-emerald-500/25 cursor-pointer group/card"
+                  ? isLocalMode
+                    ? "bg-[#0a0b10]/90 border-white/10 cursor-pointer group/card"
+                    : "bg-gradient-to-br from-emerald-400/[0.12] via-emerald-500/[0.04] to-transparent border-emerald-500/10 hover:border-emerald-500/25 cursor-pointer group/card"
                   : "bg-[#08080c]/80 border-white/[0.05]"
               }`}
-              onClick={!connectionStatus?.connected ? handleConnectClick : undefined}
+              onClick={!connectionStatus?.connected ? handlePrimaryConnect : undefined}
               role={!connectionStatus?.connected ? "button" : undefined}
               tabIndex={!connectionStatus?.connected ? 0 : undefined}
-              aria-label={!connectionStatus?.connected ? "Connect GitHub" : undefined}
+              aria-label={!connectionStatus?.connected ? (isLocalMode ? "Open local project" : "Connect GitHub") : undefined}
               onKeyDown={
                 !connectionStatus?.connected
                   ? (event) => {
                       if (isActivationKey(event)) {
                         event.preventDefault()
-                        handleConnectClick()
+                        handlePrimaryConnect()
                       }
                     }
                   : undefined
               }
             >
               {/* Shimmer animation background when not connected */}
-              {!connectionStatus?.connected && (
+              {!connectionStatus?.connected && !isLocalMode && (
                 <>
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-400/[0.08] to-transparent shimmer-bg" />
                   <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-400/[0.1] rounded-full blur-[100px] pointer-events-none transition-all duration-500 group-hover/card:bg-emerald-400/[0.15]" />
@@ -729,6 +750,55 @@ export function Dashboard() {
                         <div className="text-lg font-semibold text-emerald-400">{trackedRepos.filter(r => !!r.last_scanned_at).length}</div>
                         <div className="text-[10px] text-white/40 uppercase tracking-wider">Scanned</div>
                       </div>
+                    </div>
+                  </div>
+                ) : hasLocalProject ? (
+                  <div className="h-full min-h-[300px] flex items-center justify-center">
+                    <div className="flex flex-col items-center justify-center text-center w-full transition-transform duration-300 group-hover/card:scale-[1.02]">
+                      <div className="relative w-14 h-14 mb-4 mx-auto">
+                        <div className="absolute inset-0 rounded-xl bg-white/12 blur-lg transition-all duration-300 group-hover/card:bg-white/16" />
+                        <div className="relative w-full h-full rounded-xl bg-white/08 border border-white/15 flex items-center justify-center transition-all duration-300 group-hover/card:border-white/25">
+                          <i className="las la-folder-open text-2xl text-white/80"></i>
+                        </div>
+                      </div>
+                      <h3 className="text-lg font-semibold mb-1.5">{selectedProject?.name ?? "Local project"}</h3>
+                      <p className="text-sm text-white/50 mb-5 leading-relaxed max-w-xs mx-auto truncate">{selectedProject?.path}</p>
+                      <div className="flex gap-2">
+                        <button
+                          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-white/12 hover:bg-white/16 border border-white/18 text-sm font-medium text-white transition-all duration-300 shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
+                          onClick={() => router.push("/scan")}
+                        >
+                          <i className="las la-search text-lg"></i>
+                          View Scans
+                        </button>
+                        <button
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white/6 hover:bg-white/10 border border-white/14 text-sm font-medium text-white transition-all duration-300"
+                          onClick={() => handlePlatformSelect(PLATFORMS.find((p) => p.id === "local")!)}
+                        >
+                          <i className="las la-folder-open text-lg"></i>
+                          Change Folder
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : isLocalMode ? (
+                  <div className="h-full min-h-[300px] flex items-center justify-center">
+                    <div className="flex flex-col items-center justify-center text-center w-full transition-transform duration-300 group-hover/card:scale-[1.02]">
+                      <div className="relative w-14 h-14 mb-4 mx-auto">
+                        <div className="absolute inset-0 rounded-xl bg-white/12 blur-lg transition-all duration-300 group-hover/card:bg-white/16" />
+                        <div className="relative w-full h-full rounded-xl bg-white/08 border border-white/15 flex items-center justify-center transition-all duration-300 group-hover/card:border-white/25">
+                          <i className="las la-folder-open text-2xl text-white/80"></i>
+                        </div>
+                      </div>
+                      <h3 className="text-lg font-semibold mb-1.5">Open a local project</h3>
+                      <p className="text-sm text-white/50 mb-5 leading-relaxed max-w-xs mx-auto">Select a folder to scan locally.</p>
+                      <button
+                        className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-white/12 hover:bg-white/16 border border-white/18 text-sm font-medium text-white transition-all duration-300 shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
+                        onClick={() => handlePlatformSelect(PLATFORMS.find((p) => p.id === "local")!)}
+                      >
+                        <i className="las la-folder-open text-lg"></i>
+                        Choose Folder
+                      </button>
                     </div>
                   </div>
                 ) : (
@@ -985,7 +1055,7 @@ export function Dashboard() {
                   </div>
                   <p className="text-sm text-white/40 mb-3">No repositories tracked</p>
                   <button onClick={handleConnectClick} className="text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
-                    Connect GitHub to get started
+                    {selectedPlatform.id === "local" ? "Open a local project" : "Connect GitHub to get started"}
                   </button>
                 </div>
               )}
