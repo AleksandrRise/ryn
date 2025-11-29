@@ -282,7 +282,7 @@ export function ScanResults() {
     return (
       <div className="px-8 py-8 max-w-[1800px] mx-auto">
         <div className="mb-4">
-          <h1 className="text-5xl font-bold leading-none tracking-tight mb-2">Scan Results</h1>
+          <h1 className="text-5xl font-bold leading-none tracking-tight mb-2">Scans</h1>
           <p className="text-white/60">Select a project from the header to view and run scans.</p>
         </div>
         <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -297,7 +297,7 @@ export function ScanResults() {
       {/* Top bar: title + primary actions */}
       <div className="flex flex-wrap items-center justify-between gap-4 animate-fade-in-up">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Scan Results</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Scans</h1>
           <p className="text-xs text-white/50 flex items-center gap-2">
             <span>Project: {selectedProject.name}</span>
             {selectedProject.path.includes("ryn-github-cache") ? (

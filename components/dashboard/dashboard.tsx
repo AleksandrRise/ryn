@@ -29,6 +29,8 @@ import { useProjectStore } from "@/lib/stores/project-store"
 import { GitHubOAuthModal } from "./github-oauth-modal"
 import { GitHubRepoManager } from "./github-repo-manager"
 import { useRouter } from "next/navigation"
+import { useScanData } from "@/components/scan/hooks/use-scan-data"
+import { formatRelativeTime } from "@/lib/utils/date"
 
 // Platform configuration
 const PLATFORMS = [
@@ -71,6 +73,19 @@ export function Dashboard() {
   const isLocalMode = selectedPlatform.id === "local"
   const hasLocalProject = Boolean(selectedProject)
 
+  // Fetch local project scan data
+  const {
+    violations: localViolations,
+    lastScan: localLastScan,
+    lastScanStats: localScanStats,
+  } = useScanData(selectedProject?.id)
+
+  // Calculate local project stats
+  const localTotalViolations = localViolations.length
+  const localCriticalCount = localViolations.filter(v => v.severity === "critical").length
+  const localHighCount = localViolations.filter(v => v.severity === "high").length
+  const hasLocalScanData = !!localLastScan
+
   const checkConnection = useCallback(async () => {
     try {
       const status = await check_github_connection()
@@ -101,6 +116,15 @@ export function Dashboard() {
       void loadTrackedRepos()
     }
   }, [connectionStatus?.connected, loadTrackedRepos])
+
+  // Sync platform tab to match loaded project on initial hydration
+  const hasInitializedPlatformRef = useRef(false)
+  useEffect(() => {
+    if (selectedProject && !hasInitializedPlatformRef.current) {
+      hasInitializedPlatformRef.current = true
+      setSelectedPlatform(PLATFORMS.find(p => p.id === "local")!)
+    }
+  }, [selectedProject])
 
   useEffect(() => {
     const loadScanModeSetting = async () => {
@@ -571,15 +595,20 @@ export function Dashboard() {
           <div className="grid grid-cols-12 gap-5 mb-5 animate-fade-in-up delay-100">
             {/* Stats Column - Vertical stack */}
             <div className="col-span-3 flex flex-col gap-3">
-              {/* Repositories */}
+              {/* Files Scanned (local) / Repositories (github) */}
               <div className="flex-1 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent rounded-2xl p-5 border border-white/[0.04] hover:border-blue-500/20 transition-colors">
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                    <i className="las la-layer-group text-lg text-blue-400"></i>
+                    <i className={`las ${isLocalMode ? "la-file-code" : "la-layer-group"} text-lg text-blue-400`}></i>
                   </div>
-                  <span className="text-xs text-white/30 uppercase tracking-wider">Repos</span>
+                  <span className="text-xs text-white/30 uppercase tracking-wider">{isLocalMode ? "Files" : "Repos"}</span>
                 </div>
-                <div className="text-3xl font-bold">{trackedRepos.length}</div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold">
+                    {isLocalMode ? (hasLocalScanData ? localScanStats.filesScanned : "—") : trackedRepos.length}
+                  </span>
+                  {isLocalMode && !hasLocalScanData && <span className="text-xs text-white/40">No scans yet</span>}
+                </div>
               </div>
 
               {/* Violations */}
@@ -591,14 +620,16 @@ export function Dashboard() {
                   <span className="text-xs text-white/30 uppercase tracking-wider">Violations</span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold">{hasScanData ? totalViolations : "—"}</span>
-                  {!hasScanData && <span className="text-xs text-white/40">Awaiting scans</span>}
+                  <span className="text-3xl font-bold">
+                    {isLocalMode ? (hasLocalScanData ? localTotalViolations : "—") : (hasScanData ? totalViolations : "—")}
+                  </span>
+                  {(isLocalMode ? !hasLocalScanData : !hasScanData) && <span className="text-xs text-white/40">Awaiting scans</span>}
                 </div>
               </div>
 
               {/* Critical */}
               <div className="flex-1 bg-gradient-to-br from-red-500/10 via-transparent to-transparent rounded-2xl p-5 border border-white/[0.04] hover:border-red-500/20 transition-colors relative">
-                {connectionStatus?.connected && criticalCount > 0 && (
+                {((isLocalMode && hasLocalScanData && localCriticalCount > 0) || (connectionStatus?.connected && criticalCount > 0)) && (
                   <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                 )}
                 <div className="flex items-center justify-between mb-3">
@@ -607,20 +638,24 @@ export function Dashboard() {
                   </div>
                   <span className="text-xs text-white/30 uppercase tracking-wider">Critical</span>
                 </div>
-                <div className="text-3xl font-bold">{hasScanData ? criticalCount : "—"}</div>
+                <div className="text-3xl font-bold">
+                  {isLocalMode ? (hasLocalScanData ? localCriticalCount : "—") : (hasScanData ? criticalCount : "—")}
+                </div>
               </div>
 
-              {/* Healthy */}
+              {/* High (local) / Healthy (github) */}
               <div className="flex-1 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent rounded-2xl p-5 border border-white/[0.04] hover:border-emerald-500/20 transition-colors">
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-9 h-9 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                    <i className="las la-shield-alt text-lg text-emerald-400"></i>
+                    <i className={`las ${isLocalMode ? "la-exclamation-circle" : "la-shield-alt"} text-lg ${isLocalMode ? "text-orange-400" : "text-emerald-400"}`}></i>
                   </div>
-                  <span className="text-xs text-white/30 uppercase tracking-wider">Healthy</span>
+                  <span className="text-xs text-white/30 uppercase tracking-wider">{isLocalMode ? "High" : "Healthy"}</span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold">{hasScanData ? healthyCount : "—"}</span>
-                  {connectionStatus?.connected && hasScanData && <span className="text-xs text-white/30">/{trackedRepos.length}</span>}
+                  <span className="text-3xl font-bold">
+                    {isLocalMode ? (hasLocalScanData ? localHighCount : "—") : (hasScanData ? healthyCount : "—")}
+                  </span>
+                  {!isLocalMode && connectionStatus?.connected && hasScanData && <span className="text-xs text-white/30">/{trackedRepos.length}</span>}
                 </div>
               </div>
             </div>
@@ -753,33 +788,89 @@ export function Dashboard() {
                     </div>
                   </div>
                 ) : hasLocalProject ? (
-                  <div className="h-full min-h-[300px] flex items-center justify-center">
-                    <div className="flex flex-col items-center justify-center text-center w-full transition-transform duration-300 group-hover/card:scale-[1.02]">
-                      <div className="relative w-14 h-14 mb-4 mx-auto">
-                        <div className="absolute inset-0 rounded-xl bg-white/12 blur-lg transition-all duration-300 group-hover/card:bg-white/16" />
-                        <div className="relative w-full h-full rounded-xl bg-white/08 border border-white/15 flex items-center justify-center transition-all duration-300 group-hover/card:border-white/25">
-                          <i className="las la-folder-open text-2xl text-white/80"></i>
+                  <div className="h-full min-h-[300px] p-6">
+                    {hasLocalScanData ? (
+                      <div className="h-full flex flex-col">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                              <i className="las la-folder-open text-xl text-blue-400"></i>
+                            </div>
+                            <div>
+                              <h3 className="text-base font-semibold">{selectedProject?.name ?? "Local Project"}</h3>
+                              <p className="text-xs text-white/40">Last scanned {formatRelativeTime(localScanStats.completedAt)}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-white/60 hover:text-white transition-all border border-white/[0.04]"
+                              onClick={() => router.push("/scan")}
+                            >
+                              <i className="las la-search"></i>
+                              <span>View Details</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Violation breakdown by severity */}
+                        <div className="flex-1 flex items-center justify-center">
+                          <div className="grid grid-cols-4 gap-6 w-full max-w-lg">
+                            <div className="text-center p-4 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+                              <div className="text-2xl font-bold text-red-400">{localCriticalCount}</div>
+                              <div className="text-[10px] text-white/40 uppercase tracking-wider mt-1">Critical</div>
+                            </div>
+                            <div className="text-center p-4 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+                              <div className="text-2xl font-bold text-orange-400">{localHighCount}</div>
+                              <div className="text-[10px] text-white/40 uppercase tracking-wider mt-1">High</div>
+                            </div>
+                            <div className="text-center p-4 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+                              <div className="text-2xl font-bold text-yellow-400">{localViolations.filter(v => v.severity === "medium").length}</div>
+                              <div className="text-[10px] text-white/40 uppercase tracking-wider mt-1">Medium</div>
+                            </div>
+                            <div className="text-center p-4 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+                              <div className="text-2xl font-bold text-white/60">{localViolations.filter(v => v.severity === "low").length}</div>
+                              <div className="text-[10px] text-white/40 uppercase tracking-wider mt-1">Low</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Bottom summary */}
+                        <div className="mt-4 pt-4 border-t border-white/[0.04] flex items-center justify-between text-xs text-white/40">
+                          <span>{localScanStats.filesScanned} files scanned</span>
+                          <span>{localTotalViolations} total violation{localTotalViolations !== 1 ? "s" : ""}</span>
                         </div>
                       </div>
-                      <h3 className="text-lg font-semibold mb-1.5">{selectedProject?.name ?? "Local project"}</h3>
-                      <p className="text-sm text-white/50 mb-5 leading-relaxed max-w-xs mx-auto truncate">{selectedProject?.path}</p>
-                      <div className="flex gap-2">
-                        <button
-                          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-white/12 hover:bg-white/16 border border-white/18 text-sm font-medium text-white transition-all duration-300 shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
-                          onClick={() => router.push("/scan")}
-                        >
-                          <i className="las la-search text-lg"></i>
-                          View Scans
-                        </button>
-                        <button
-                          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white/6 hover:bg-white/10 border border-white/14 text-sm font-medium text-white transition-all duration-300"
-                          onClick={() => handlePlatformSelect(PLATFORMS.find((p) => p.id === "local")!)}
-                        >
-                          <i className="las la-folder-open text-lg"></i>
-                          Change Folder
-                        </button>
+                    ) : (
+                      <div className="h-full flex items-center justify-center">
+                        <div className="flex flex-col items-center justify-center text-center w-full">
+                          <div className="relative w-14 h-14 mb-4 mx-auto">
+                            <div className="absolute inset-0 rounded-xl bg-white/12 blur-lg" />
+                            <div className="relative w-full h-full rounded-xl bg-white/08 border border-white/15 flex items-center justify-center">
+                              <i className="las la-folder-open text-2xl text-white/80"></i>
+                            </div>
+                          </div>
+                          <h3 className="text-lg font-semibold mb-1.5">{selectedProject?.name ?? "Local project"}</h3>
+                          <p className="text-sm text-white/50 mb-5 leading-relaxed max-w-xs mx-auto truncate">{selectedProject?.path}</p>
+                          <div className="flex gap-2">
+                            <button
+                              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-sm font-medium text-white transition-all duration-300 shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
+                              onClick={() => router.push("/scan")}
+                            >
+                              <i className="las la-play text-lg"></i>
+                              Start First Scan
+                            </button>
+                            <button
+                              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white/6 hover:bg-white/10 border border-white/14 text-sm font-medium text-white transition-all duration-300"
+                              onClick={() => handlePlatformSelect(PLATFORMS.find((p) => p.id === "local")!)}
+                            >
+                              <i className="las la-folder-open text-lg"></i>
+                              Change
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ) : isLocalMode ? (
                   <div className="h-full min-h-[300px] flex items-center justify-center">
@@ -1114,7 +1205,7 @@ export function Dashboard() {
                 <h3 className="text-base font-semibold mb-1">Add repository as project?</h3>
                 <p className="text-sm text-white/70 truncate">{repoForProject.github_repo.full_name}</p>
                 <p className="text-xs text-white/40 mt-2">
-                  This will open the repository snapshot as a project and take you to Scan Results.
+                  This will open the repository snapshot as a project and take you to Scans.
                 </p>
                 {projectModalError && (
                   <p className="text-xs text-red-400 mt-2">{projectModalError}</p>

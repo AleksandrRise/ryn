@@ -34,7 +34,7 @@ export function TopNav() {
 
   const links = [
     { href: "/", label: "Dashboard" },
-    { href: "/scan/", label: "Scan Results" },
+    { href: "/scan/", label: "Scans" },
     { href: "/audit/", label: "Audit Trail" },
     { href: "/settings/", label: "Settings" },
   ]

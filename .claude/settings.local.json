@@ -24,5 +24,6 @@
     "additionalDirectories": [
       "/Users/seane/test-repos/vulnerable-flask"
     ]
-  }
+  },
+  "outputStyle": "Beginner"
 }
