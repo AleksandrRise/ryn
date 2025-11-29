@@ -103,7 +103,7 @@ mod tests {
             // Create parent project and scan first (required for foreign key constraint)
             let project_id =
                 queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
-            let scan_id = queries::insert_scan(&conn, project_id).unwrap();
+            let scan_id = queries::insert_scan(&conn, project_id, "regex_only").unwrap();
 
             // Create a scan cost record
             let scan_cost = ScanCost::new(scan_id, 10, 10_000, 2_000, 5_000, 3_000);
@@ -130,8 +130,8 @@ mod tests {
             // Create parent project and scans first (required for foreign key constraint)
             let project_id =
                 queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
-            let scan_id_1 = queries::insert_scan(&conn, project_id).unwrap();
-            let scan_id_2 = queries::insert_scan(&conn, project_id).unwrap();
+            let scan_id_1 = queries::insert_scan(&conn, project_id, "regex_only").unwrap();
+            let scan_id_2 = queries::insert_scan(&conn, project_id, "regex_only").unwrap();
 
             // Create a recent scan cost (within 24h)
             let recent_cost = ScanCost::new(scan_id_1, 10, 10_000, 2_000, 0, 0);
@@ -165,9 +165,9 @@ mod tests {
             // Create parent project and scans first (required for foreign key constraint)
             let project_id =
                 queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
-            let scan_id_1 = queries::insert_scan(&conn, project_id).unwrap();
-            let scan_id_2 = queries::insert_scan(&conn, project_id).unwrap();
-            let scan_id_3 = queries::insert_scan(&conn, project_id).unwrap();
+            let scan_id_1 = queries::insert_scan(&conn, project_id, "regex_only").unwrap();
+            let scan_id_2 = queries::insert_scan(&conn, project_id, "regex_only").unwrap();
+            let scan_id_3 = queries::insert_scan(&conn, project_id, "regex_only").unwrap();
 
             // Create costs at different times
             let recent = ScanCost::new(scan_id_1, 10, 10_000, 2_000, 0, 0);
@@ -201,8 +201,8 @@ mod tests {
             // Create parent project and scans first (required for foreign key constraint)
             let project_id =
                 queries::insert_project(&conn, "Test Project", "/tmp/test", None).unwrap();
-            let scan_id_1 = queries::insert_scan(&conn, project_id).unwrap();
-            let scan_id_2 = queries::insert_scan(&conn, project_id).unwrap();
+            let scan_id_1 = queries::insert_scan(&conn, project_id, "regex_only").unwrap();
+            let scan_id_2 = queries::insert_scan(&conn, project_id, "regex_only").unwrap();
 
             // Create costs at different times
             let recent = ScanCost::new(scan_id_1, 10, 10_000, 2_000, 0, 0);

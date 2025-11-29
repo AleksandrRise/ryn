@@ -1,6 +1,6 @@
 use crate::models::Control;
 use anyhow::{Context, Result};
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 
 const SCHEMA_SQL: &str = include_str!("schema.sql");
 

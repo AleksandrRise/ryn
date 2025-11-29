@@ -1292,7 +1292,7 @@ mod tests {
         let project_id = insert_project(&conn, "test", "/path", None).unwrap();
 
         // Create scan
-        let scan_id = insert_scan(&conn, project_id).unwrap();
+        let scan_id = insert_scan(&conn, project_id, "regex_only").unwrap();
         assert!(scan_id > 0);
 
         // Read
@@ -1321,7 +1321,7 @@ mod tests {
         let (_temp_dir, conn) = setup_test_db();
 
         let project_id = insert_project(&conn, "test", "/path", None).unwrap();
-        let scan_id = insert_scan(&conn, project_id).unwrap();
+        let scan_id = insert_scan(&conn, project_id, "regex_only").unwrap();
 
         let violation = Violation::new(
             scan_id,

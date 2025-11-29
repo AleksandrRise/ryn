@@ -271,7 +271,7 @@ mod tests {
 
     fn create_test_scan(project_id: i64) -> i64 {
         let conn = db::get_connection();
-        queries::insert_scan(&conn, project_id).unwrap()
+        queries::insert_scan(&conn, project_id, "regex_only").unwrap()
     }
 
     fn create_test_project() -> i64 {

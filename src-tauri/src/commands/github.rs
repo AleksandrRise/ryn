@@ -572,7 +572,7 @@ mod tests {
             let mut guard = DEVICE_CODE_STATE.lock().unwrap();
             *guard = Some(DeviceCodeState {
                 device_code: "test".to_string(),
-                interval: 5,
+                _interval: 5,
             });
         }
 
