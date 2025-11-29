@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState, useRef, useEffect, useCallback } from "react"
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react"
+import { createPortal } from "react-dom"
 import {
   Area,
   AreaChart,
@@ -59,6 +60,7 @@ export function Dashboard() {
   const [defaultScanMode, setDefaultScanMode] = useState<string>("smart")
   const projectModalRunId = useRef(0)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number; width: number }>({ left: 0, top: 0, width: 0 })
   const latestReposRef = useRef<TrackedRepoWithDetails[]>([])
   const prevRepoIdsRef = useRef<Set<number>>(new Set())
   const hasInitializedTrackedRef = useRef(false)
@@ -123,13 +125,13 @@ export function Dashboard() {
     }
   }
 
-  const handleConnectClick = () => {
+  const handleConnectClick = useCallback(() => {
     if (connectionStatus?.connected) {
       setRepoManagerOpen(true)
     } else {
       setOauthModalOpen(true)
     }
-  }
+  }, [connectionStatus?.connected])
 
   const handleOAuthSuccess = async () => {
     await checkConnection()
@@ -215,6 +217,14 @@ export function Dashboard() {
   useEffect(() => {
     latestReposRef.current = trackedRepos
   }, [trackedRepos])
+
+  useLayoutEffect(() => {
+    if (!platformDropdownOpen) return
+    const node = dropdownRef.current
+    if (!node) return
+    const rect = node.getBoundingClientRect()
+    setMenuPos({ left: rect.left, top: rect.bottom + 8, width: rect.width })
+  }, [platformDropdownOpen])
 
   // Background polling: keep data fresh and auto-scan when commits change
   useEffect(() => {
@@ -320,37 +330,35 @@ export function Dashboard() {
       setPlatformDropdownOpen(false)
 
       if (platform.id === "github") {
+        console.log("[platform-select] github chosen")
         handleConnectClick()
         return
       }
 
       try {
+        console.log("[platform-select] local chosen -> opening picker")
         toast("Opening local folder picker…")
         const folder = await select_project_folder()
-        if (!folder) {
-          toast("No folder selected")
+        if (!folder || folder === "/path/to/project") {
+          console.log("[platform-select] local picker cancelled or placeholder path", folder)
           return
         }
 
         const projects = await get_projects()
         const existing = projects.find((p) => p.path === folder)
-        const project =
-          existing ??
-          (await create_project(
-            folder,
-            folder.split(/[\\/]/).filter(Boolean).pop() ?? "Local project",
-          ))
+        const name = folder.split(/[\\/]/).filter(Boolean).pop() ?? "Local project"
+        const project = existing ?? (await create_project(folder, name))
 
         setSelectedProject(project)
         router.push("/scan")
         toast.success("Local project ready", {
-          description: project.path,
+          description: name,
         })
+        console.log("[platform-select] local project ready", project.path)
       } catch (error) {
         console.error("Failed to add local project", error)
         toast.error("Could not open local folder", {
-          description:
-            error instanceof Error ? error.message : "Unexpected error",
+          description: error instanceof Error ? error.message : "Unexpected error",
         })
       }
     },
@@ -446,8 +454,8 @@ export function Dashboard() {
               {/* Platform Selector */}
               <div className="relative" ref={dropdownRef}>
                 <button
-                  onClick={() => setPlatformDropdownOpen(!platformDropdownOpen)}
-                  className="flex items-center gap-3 pl-3 pr-4 py-2.5 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl transition-all"
+                  onClick={() => setPlatformDropdownOpen((open) => !open)}
+                  className="flex items-center gap-3 pl-3 pr-4 py-2.5 bg-white/[0.07] hover:bg-white/[0.12] rounded-xl transition-all border border-white/10"
                 >
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-white/10 to-white/5 flex items-center justify-center">
                     <i className={`${selectedPlatform.laIcon} text-lg`}></i>
@@ -456,30 +464,52 @@ export function Dashboard() {
                   <i className={`las la-angle-down text-xs text-white/40 ml-1 transition-transform ${platformDropdownOpen ? "rotate-180" : ""}`}></i>
                 </button>
 
-                {platformDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-56 bg-neutral-900 rounded-xl shadow-[0_24px_70px_rgba(0,0,0,0.6)] overflow-hidden z-50 animate-fadeIn border border-white/12">
-                    <div className="p-1.5">
-                      {PLATFORMS.map((platform) => {
-                        const isSelected = platform.id === selectedPlatform.id
-                        return (
-                          <button
-                            key={platform.id}
-                            onClick={() => void handlePlatformSelect(platform)}
-                            disabled={!platform.available}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                              isSelected ? "bg-white/10" : platform.available ? "hover:bg-white/[0.06]" : "opacity-40 cursor-not-allowed"
-                            }`}
-                          >
-                            <i className={`${platform.laIcon} text-base`}></i>
-                            <span className="flex-1 text-left">{platform.name}</span>
-                            {!platform.available && <span className="text-[10px] text-white/30 uppercase tracking-wider">Soon</span>}
-                            {isSelected && <i className="las la-check text-emerald-400 text-sm"></i>}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+                {platformDropdownOpen &&
+                  typeof document !== "undefined" &&
+                  createPortal(
+                    <div
+                      className="fixed inset-0 z-[4000]"
+                      onMouseDown={() => setPlatformDropdownOpen(false)}
+                    >
+                      <div
+                        className="absolute rounded-2xl overflow-hidden border border-white/10 bg-black pointer-events-auto"
+                        style={{
+                          left: menuPos.left,
+                          top: menuPos.top,
+                          width: menuPos.width || 224,
+                          boxShadow: "0 32px 90px rgba(0,0,0,0.9)",
+                          backgroundColor: "rgba(0,0,0,1)",
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                      >
+                        <div className="p-1.5 space-y-1">
+                          {PLATFORMS.map((platform) => {
+                            const isSelected = platform.id === selectedPlatform.id
+                            return (
+                              <button
+                                key={platform.id}
+                                onClick={() => void handlePlatformSelect(platform)}
+                                disabled={!platform.available}
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                                  isSelected
+                                    ? "bg-neutral-900 border border-white/15 ring-1 ring-white/10"
+                                    : platform.available
+                                      ? "hover:bg-white/10"
+                                      : "opacity-40 cursor-not-allowed"
+                                }`}
+                              >
+                                <i className={`${platform.laIcon} text-base`}></i>
+                                <span className="flex-1 text-left">{platform.name}</span>
+                                {!platform.available && <span className="text-[10px] text-white/30 uppercase tracking-wider">Soon</span>}
+                                {isSelected && <i className="las la-check text-emerald-400 text-sm"></i>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>,
+                    document.body,
+                  )}
               </div>
 
               <div className="h-8 w-px bg-white/10" />
