@@ -179,16 +179,52 @@ pub async fn delete_project(project_id: i64) -> Result<(), String> {
 }
 
 /// Delete all projects and associated data
+/// NOTE: This excludes projects that are associated with tracked GitHub repos
+/// to preserve their scan data
 #[tauri::command]
 pub async fn delete_all_projects() -> Result<(), String> {
     println!("[ryn] delete_all_projects called");
     let conn = db::get_connection();
+
+    // Get all tracked repo local paths to exclude from deletion
+    let tracked_repos = queries::select_tracked_repos(&conn)
+        .map_err(|e| format!("Failed to load tracked repos: {}", e))?;
+    let tracked_paths: std::collections::HashSet<String> = tracked_repos
+        .iter()
+        .filter_map(|r| r.local_path.clone())
+        .collect();
+
+    println!(
+        "[ryn] Excluding {} tracked repo paths from deletion",
+        tracked_paths.len()
+    );
+
     let projects =
         queries::select_projects(&conn).map_err(|e| format!("Failed to load projects: {}", e))?;
+
+    let mut deleted_count = 0;
+    let mut skipped_count = 0;
+
     for project in projects {
+        // Skip projects that are associated with tracked GitHub repos
+        if tracked_paths.contains(&project.path) {
+            println!(
+                "[ryn] Skipping project {} (tracked repo): {}",
+                project.id, project.path
+            );
+            skipped_count += 1;
+            continue;
+        }
+
         queries::delete_project(&conn, project.id)
             .map_err(|e| format!("Failed to delete project {}: {}", project.id, e))?;
+        deleted_count += 1;
     }
+
+    println!(
+        "[ryn] delete_all_projects complete: deleted={}, skipped={}",
+        deleted_count, skipped_count
+    );
     Ok(())
 }
 

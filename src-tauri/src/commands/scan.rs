@@ -846,15 +846,48 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
     Ok((llm_violations, total_cost))
 }
 
+/// Deduplicate regex violations that have the same file, line, and control_id
+/// Keeps the one with the highest severity if there are duplicates
+fn deduplicate_regex_violations(violations: Vec<Violation>) -> Vec<Violation> {
+    use std::collections::HashMap;
+
+    // Group by (file_path, line_number, control_id)
+    let mut groups: HashMap<(String, i64, String), Vec<Violation>> = HashMap::new();
+
+    for v in violations {
+        let key = (v.file_path.clone(), v.line_number, v.control_id.clone());
+        groups.entry(key).or_default().push(v);
+    }
+
+    // For each group, keep the one with highest severity
+    let mut result = Vec::new();
+    for (_, mut group) in groups {
+        if group.len() == 1 {
+            result.push(group.remove(0));
+        } else {
+            // Sort by severity (highest first) and keep the first
+            group.sort_by(|a, b| {
+                let a_sev = a.get_severity().unwrap_or(Severity::Low).numeric_value();
+                let b_sev = b.get_severity().unwrap_or(Severity::Low).numeric_value();
+                b_sev.cmp(&a_sev)
+            });
+            result.push(group.remove(0));
+        }
+    }
+
+    result
+}
+
 /// Merge regex and LLM violations, deduplicating when both found the same issue
 ///
 /// # Algorithm
-/// 1. For each LLM violation, search for regex violations in the same file
-/// 2. Check if line numbers are within ±3 lines (configurable tolerance)
-/// 3. If match found:
+/// 1. First deduplicate regex violations among themselves
+/// 2. For each LLM violation, search for regex violations in the same file
+/// 3. Check if line numbers are within ±3 lines (configurable tolerance)
+/// 4. If match found:
 ///    - Create hybrid violation with combined reasoning
 ///    - Mark both original violations as "merged" (don't insert separately)
-/// 4. Return deduplicated list: [regex-only, llm-only, hybrid]
+/// 5. Return deduplicated list: [regex-only, llm-only, hybrid]
 ///
 /// # Arguments
 /// * `regex_violations` - Violations detected by regex patterns
@@ -867,6 +900,9 @@ fn merge_violations(
     llm_violations: Vec<Violation>,
 ) -> Vec<Violation> {
     const LINE_TOLERANCE: i64 = 3;
+
+    // First, deduplicate regex violations among themselves
+    let regex_violations = deduplicate_regex_violations(regex_violations);
 
     let mut merged = Vec::new();
     let mut regex_matched = vec![false; regex_violations.len()];

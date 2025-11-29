@@ -323,6 +323,31 @@ export function Dashboard() {
     prevRepoIdsRef.current = new Set(trackedRepos.map(r => r.id))
   }, [trackedRepos, connectionStatus?.connected])
 
+  // Auto-scan repos that have never been scanned and aren't currently scanning
+  // This ensures repos NEVER show "Not scanned" status
+  useEffect(() => {
+    if (!connectionStatus?.connected) return
+
+    const unscannedRepos = trackedRepos.filter(repo => {
+      // No completed scan
+      const hasCompletedScan = !!repo.last_scanned_at
+      // Not currently scanning (either in local state or backend status)
+      const isCurrentlyScanning = scanningRepos.has(repo.id) || repo.last_scan_status === "running"
+      // Not being checked
+      const isBeingChecked = checkingRepos.has(repo.id)
+
+      return !hasCompletedScan && !isCurrentlyScanning && !isBeingChecked
+    })
+
+    // Trigger scans for repos that need it
+    for (const repo of unscannedRepos) {
+      console.log(`[dashboard] Auto-scanning unscanned repo: ${repo.github_repo.name}`)
+      runScanForRepo(repo.id, "auto-first-scan", false).catch(err => {
+        console.error(`Failed to auto-scan repo ${repo.github_repo.name}:`, err)
+      })
+    }
+  }, [connectionStatus?.connected, trackedRepos, scanningRepos, checkingRepos, runScanForRepo])
+
   const handlePlatformSelect = useCallback(
     async (platform: typeof PLATFORMS[number]) => {
       if (!platform.available) return
@@ -838,7 +863,8 @@ export function Dashboard() {
                           ? "warning"
                           : "clean"
                     const isChecking = checkingRepos.has(repo.id)
-                    const isScanning = scanningRepos.has(repo.id)
+                    // Also check last_scan_status to detect scans running from before app restart
+                    const isScanning = scanningRepos.has(repo.id) || repo.last_scan_status === "running"
                     const hasChanges = repoChanges.get(repo.id) === true
                     const scanModeLabel = repo.last_scan_mode
                       ? repo.last_scan_mode.replace("_", " ")

@@ -459,17 +459,21 @@ Found {} occurrences but none covered that line.",
 /// Returns: Success message or error
 #[tauri::command]
 pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
+    println!("[ryn] apply_fix called with fix_id={}", fix_id);
+
     let conn = db::get_connection();
 
     // Get fix
     let fix = queries::select_fix(&conn, fix_id)
         .map_err(|e| format!("Failed to fetch fix: {}", e))?
         .ok_or_else(|| format!("Fix not found: {}", fix_id))?;
+    println!("[ryn] apply_fix: Found fix for violation_id={}", fix.violation_id);
 
     // Get violation and project info
     let violation = queries::select_violation(&conn, fix.violation_id)
         .map_err(|e| format!("Failed to fetch violation: {}", e))?
         .ok_or_else(|| "Violation not found".to_string())?;
+    println!("[ryn] apply_fix: Violation file_path={}", violation.file_path);
 
     let scan = queries::select_scan(&conn, violation.scan_id)
         .map_err(|e| format!("Failed to fetch scan: {}", e))?
@@ -478,12 +482,18 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
     let project = queries::select_project(&conn, scan.project_id)
         .map_err(|e| format!("Failed to fetch project: {}", e))?
         .ok_or_else(|| "Project not found".to_string())?;
+    println!("[ryn] apply_fix: Project path={}", project.path);
 
     let repo_path = Path::new(&project.path);
 
     // Validate file path with path traversal protection
+    println!("[ryn] apply_fix: Validating path {} in base {}", violation.file_path, project.path);
     let file_path = path_validation::validate_file_path(repo_path, &violation.file_path)
-        .map_err(|e| format!("Security: Invalid file path: {}", e))?;
+        .map_err(|e| {
+            println!("[ryn] apply_fix: Path validation failed: {}", e);
+            format!("Security: Invalid file path: {}", e)
+        })?;
+    println!("[ryn] apply_fix: Validated file path={}", file_path.display());
 
     // Apply fix to file content using pure function
     let file_content =
@@ -522,16 +532,20 @@ pub async fn apply_fix(fix_id: i64) -> Result<String, String> {
     let backup_path_str = backup_path.to_string_lossy().to_string();
 
     // Write updated file (path already validated)
+    println!("[ryn] apply_fix: Writing fixed content to {}", file_path.display());
     std::fs::write(&file_path, &updated_content)
         .map_err(|e| format!("Failed to write fixed file: {}", e))?;
+    println!("[ryn] apply_fix: Successfully wrote fixed file!");
 
     // Update fix record with backup path (no git commit SHA)
     queries::update_fix_applied(&conn, fix_id, "", Some(&backup_path_str))
         .map_err(|e| format!("Failed to update fix: {}", e))?;
+    println!("[ryn] apply_fix: Updated fix record in database");
 
     // Update violation status to fixed
     queries::update_violation_status(&conn, fix.violation_id, "fixed")
         .map_err(|e| format!("Failed to update violation status: {}", e))?;
+    println!("[ryn] apply_fix: Updated violation status to 'fixed'");
 
     // Log audit event
     if let Ok(event) = create_audit_event(

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Play, Clock3, Search, FolderTree, Sparkles, Check } from "lucide-react"
+import { Play, Clock3, Search, FolderTree, Sparkles, Check, Github, Folder } from "lucide-react"
 import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
 import { ScanControls } from "@/components/scan/scan-controls"
 import { ScanProgressCard } from "@/components/scan/scan-progress-card"
@@ -13,7 +13,7 @@ import { useProjectStore } from "@/lib/stores/project-store"
 import type { Severity } from "@/lib/types/violation"
 import { formatDateTime, formatRelativeTime } from "@/lib/utils/date"
 import { handleTauriError, showInfo, showSuccess } from "@/lib/utils/error-handler"
-import { apply_fix, generate_fix, read_file_content, type Fix } from "@/lib/tauri/commands"
+import { apply_fix, generate_fix, get_violation, read_file_content, type Fix } from "@/lib/tauri/commands"
 
 export function ScanResults() {
   const { selectedProject } = useProjectStore()
@@ -73,6 +73,7 @@ export function ScanResults() {
   const [isCodeExpanded, setIsCodeExpanded] = useState(false)
   const [fullFileContent, setFullFileContent] = useState<string | null>(null)
   const [isLoadingFile, setIsLoadingFile] = useState(false)
+  const [showApplyConfirm, setShowApplyConfirm] = useState(false)
 
   const lastCostDisplay = lastScanCost ? `$${lastScanCost.totalCostUsd.toFixed(3)}` : "–"
   const lastCompletedDisplay = lastScanStats.completedAt
@@ -82,6 +83,7 @@ export function ScanResults() {
     ? formatRelativeTime(lastScanStats.completedAt)
     : ""
   const lastMode = lastScan?.scanMode ? lastScan.scanMode : "regex_only"
+  const isGitHubSnapshot = selectedProject?.path.includes("ryn-github-cache") ?? false
 
   const severityTone = (sev: Severity) =>
     sev === "critical"
@@ -149,11 +151,32 @@ export function ScanResults() {
     }
   }, [visibleViolations, selectedViolationId])
 
-  // Reset fix and expanded state when violation changes
+  // Load existing fix from database when violation changes
   useEffect(() => {
-    setGeneratedFix(null)
     setIsCodeExpanded(false)
     setFullFileContent(null)
+
+    // Load existing fix for this violation if one exists
+    const loadExistingFix = async () => {
+      if (!selectedViolationId) {
+        setGeneratedFix(null)
+        return
+      }
+
+      try {
+        const detail = await get_violation(selectedViolationId)
+        if (detail.fix) {
+          setGeneratedFix(detail.fix)
+        } else {
+          setGeneratedFix(null)
+        }
+      } catch (error) {
+        console.error("Failed to load existing fix:", error)
+        setGeneratedFix(null)
+      }
+    }
+
+    loadExistingFix()
   }, [selectedViolationId])
 
   const selectedViolation = selectedViolationId
@@ -199,17 +222,32 @@ export function ScanResults() {
     }
   }
 
-  const handleApplyFix = async () => {
-    if (!generatedFix) return
+  const handleApplyFix = () => {
+    if (!selectedViolation) return
+    setShowApplyConfirm(true)
+  }
+
+  const confirmApplyFix = async () => {
+    if (!selectedViolation) return
 
     setIsApplyingFix(true)
     try {
-      showInfo("Applying fix...")
-      await apply_fix(generatedFix.id)
-      showSuccess("Fix applied successfully!")
+      let fixToApply = generatedFix
+
+      // If no fix was generated yet, generate one first
+      if (!fixToApply) {
+        showInfo("Generating fix with Grok...")
+        fixToApply = await generate_fix(selectedViolation.id)
+        setGeneratedFix(fixToApply)
+      }
+
+      showInfo("Applying fix to file...")
+      await apply_fix(fixToApply.id)
+      showSuccess("Fix applied successfully! File has been modified.")
 
       // Reflect applied state locally and refresh violation list
-      setGeneratedFix((prev) => (prev ? { ...prev, applied_at: new Date().toISOString() } : null))
+      setGeneratedFix((prev) => (prev ? { ...prev, applied_at: new Date().toISOString() } : { ...fixToApply!, applied_at: new Date().toISOString() }))
+      setShowApplyConfirm(false)
       await reload()
     } catch (error) {
       handleTauriError(error, "Failed to apply fix")
@@ -260,7 +298,20 @@ export function ScanResults() {
       <div className="flex flex-wrap items-center justify-between gap-4 animate-fade-in-up">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Scan Results</h1>
-          <p className="text-xs text-white/50">Project: {selectedProject.name}</p>
+          <p className="text-xs text-white/50 flex items-center gap-2">
+            <span>Project: {selectedProject.name}</span>
+            {selectedProject.path.includes("ryn-github-cache") ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 text-[10px] font-medium">
+                <Github className="w-3 h-3" />
+                GitHub Snapshot
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 text-[10px] font-medium">
+                <Folder className="w-3 h-3" />
+                Local
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -529,24 +580,34 @@ export function ScanResults() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   onClick={handleSuggestFix}
-                  disabled={isGeneratingFix}
+                  disabled={isGeneratingFix || generatedFix !== null}
                   size="sm"
                   variant="outline"
                   className="gap-2"
                 >
                   <Sparkles className="w-4 h-4" />
-                  {isGeneratingFix ? "Generating..." : "Suggest Fix"}
+                  {isGeneratingFix ? "Generating..." : generatedFix ? "Suggested" : "Suggest Fix"}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleApplyFix}
-                  disabled={!generatedFix || isApplyingFix || generatedFix.applied_at !== null}
-                  className="gap-2"
-                >
-                  <Check className="w-4 h-4" />
-                  {generatedFix?.applied_at ? "Applied" : isApplyingFix ? "Applying..." : "Apply Fix"}
-                </Button>
+                <div className="relative group/apply">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleApplyFix}
+                    disabled={isApplyingFix || generatedFix?.applied_at !== null || isGitHubSnapshot}
+                    className={`gap-2 ${isGitHubSnapshot ? "cursor-not-allowed opacity-50" : ""}`}
+                  >
+                    <Check className="w-4 h-4" />
+                    {generatedFix?.applied_at ? "Applied" : isApplyingFix ? "Applying..." : "Apply Fix"}
+                  </Button>
+                  {isGitHubSnapshot && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-black/95 border border-white/20 text-white text-xs rounded-lg whitespace-nowrap opacity-0 invisible group-hover/apply:opacity-100 group-hover/apply:visible transition-all duration-200 z-50 shadow-lg">
+                      Cannot apply fixes to GitHub snapshots.
+                      <br />
+                      Clone the repo locally to apply fixes.
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white/20" />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -561,6 +622,47 @@ export function ScanResults() {
           onContinue={continueAfterCostLimit}
           onStop={stopAfterCostLimit}
         />
+      )}
+
+      {/* Apply Fix Confirmation Dialog */}
+      {showApplyConfirm && selectedViolation && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl p-8 max-w-lg">
+            <h3 className="text-xl font-bold mb-4">Apply Fix?</h3>
+            <p className="text-sm text-white/60 mb-4">
+              {generatedFix
+                ? "This will modify the file and replace the original code with the suggested fix."
+                : "This will generate a fix using AI and then apply it to the file."
+              }
+              {" "}A backup will be created before any changes are made.
+            </p>
+            <div className="bg-white/5 rounded-lg p-4 mb-4">
+              <p className="text-xs text-white/40 mb-1">File to be modified:</p>
+              <p className="font-mono text-sm text-white/90">{selectedViolation.filePath}</p>
+            </div>
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 mb-6">
+              <p className="text-sm text-yellow-200">
+                Warning: This action will modify your source code. {!generatedFix && "A fix will be generated first. "}Make sure you understand the changes.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={confirmApplyFix}
+                disabled={isApplyingFix}
+                className="flex-1 px-6 py-3 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-colors disabled:opacity-50"
+              >
+                {isApplyingFix ? "Applying..." : generatedFix ? "Apply Fix" : "Generate & Apply"}
+              </button>
+              <button
+                onClick={() => setShowApplyConfirm(false)}
+                disabled={isApplyingFix}
+                className="flex-1 px-6 py-3 border border-white/10 text-sm rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

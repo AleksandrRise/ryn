@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { open } from "@tauri-apps/plugin-dialog"
-import { Folder } from "lucide-react"
+import { Folder, Github } from "lucide-react"
 import {
   create_project,
   detect_framework,
@@ -127,6 +127,20 @@ export function TopNav() {
 
   const currentProjectId = selectedProject ? String(selectedProject.id) : undefined
 
+  // Separate projects into local and GitHub repos
+  const { localProjects, githubProjects } = useMemo(() => {
+    const local: Project[] = []
+    const github: Project[] = []
+    for (const project of projects) {
+      if (project.path.includes("ryn-github-cache")) {
+        github.push(project)
+      } else {
+        local.push(project)
+      }
+    }
+    return { localProjects: local, githubProjects: github }
+  }, [projects])
+
   if (pathname?.startsWith("/onboarding")) {
     return null
   }
@@ -180,45 +194,91 @@ export function TopNav() {
             </SelectTrigger>
             <SelectContent className="!bg-black/85 !border !border-white/10 !backdrop-blur-2xl !rounded-2xl !shadow-2xl px-1 py-1">
               {projects.length > 0 ? (
-                projects.map((project) => (
-                  <div key={project.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-white/5">
-                    <SelectItem
-                      value={String(project.id)}
-                      textValue={project.name}
-                      className="flex-1 rounded-lg px-0 py-0 hover:bg-transparent focus:bg-transparent"
-                      label={project.name}
-                      description={
-                        <span className="flex items-center gap-1.5">
-                          <FrameworkBadge framework={project.framework} showLabel={false} className="!bg-transparent !border-0 !p-0" />
-                          <span className="truncate max-w-[180px]">{project.framework || project.path}</span>
-                        </span>
-                      }
-                    />
-                    <button
-                      className="text-red-400 hover:text-red-300 px-2 py-1 rounded-md hover:bg-red-500/10 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteProject(project.id, project.name)
-                      }}
-                      disabled={isDeleting}
-                      title="Delete project"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))
+                <>
+                  {/* Local Projects Section */}
+                  {localProjects.length > 0 && (
+                    <>
+                      <div className="px-3 py-1.5 text-[10px] font-medium text-white/40 uppercase tracking-wider flex items-center gap-1.5">
+                        <Folder className="w-3 h-3" />
+                        Local Projects
+                      </div>
+                      {localProjects.map((project) => (
+                        <div key={project.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-white/5">
+                          <SelectItem
+                            value={String(project.id)}
+                            textValue={project.name}
+                            className="flex-1 rounded-lg px-0 py-0 hover:bg-transparent focus:bg-transparent"
+                            label={project.name}
+                            description={
+                              <span className="flex items-center gap-1.5">
+                                <FrameworkBadge framework={project.framework} showLabel={false} className="!bg-transparent !border-0 !p-0" />
+                                <span className="truncate max-w-[180px]">{project.framework || project.path}</span>
+                              </span>
+                            }
+                          />
+                          <button
+                            className="text-red-400 hover:text-red-300 px-2 py-1 rounded-md hover:bg-red-500/10 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteProject(project.id, project.name)
+                            }}
+                            disabled={isDeleting}
+                            title="Delete project"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Divider between sections */}
+                  {localProjects.length > 0 && githubProjects.length > 0 && <SelectSeparator />}
+
+                  {/* GitHub Projects Section */}
+                  {githubProjects.length > 0 && (
+                    <>
+                      <div className="px-3 py-1.5 text-[10px] font-medium text-white/40 uppercase tracking-wider flex items-center gap-1.5">
+                        <Github className="w-3 h-3" />
+                        GitHub Snapshots
+                      </div>
+                      {githubProjects.map((project) => (
+                        <div key={project.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-white/5">
+                          <SelectItem
+                            value={String(project.id)}
+                            textValue={project.name}
+                            className="flex-1 rounded-lg px-0 py-0 hover:bg-transparent focus:bg-transparent"
+                            label={project.name}
+                            description={
+                              <span className="flex items-center gap-1.5">
+                                <FrameworkBadge framework={project.framework} showLabel={false} className="!bg-transparent !border-0 !p-0" />
+                                <span className="truncate max-w-[180px]">{project.framework || "GitHub"}</span>
+                              </span>
+                            }
+                          />
+                          <button
+                            className="text-red-400 hover:text-red-300 px-2 py-1 rounded-md hover:bg-red-500/10 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteProject(project.id, project.name)
+                            }}
+                            disabled={isDeleting}
+                            title="Delete project"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
               ) : (
                 <SelectItem value="__no_projects__" label="No projects yet" disabled />
               )}
               <SelectSeparator />
               <SelectItem
                 value="__add_new__"
-                label={
-                  <span className="flex items-center gap-2 text-sm">
-                    <Folder className="w-3 h-3" />
-                    <span>Add new project…</span>
-                  </span>
-                }
+                label="Add new project…"
                 className="rounded-lg px-3 py-2 hover:bg-white/5 focus:bg-white/8"
               />
               {projects.length > 0 && (
