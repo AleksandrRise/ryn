@@ -13,8 +13,7 @@ import { useProjectStore } from "@/lib/stores/project-store"
 import type { Severity } from "@/lib/types/violation"
 import { formatDateTime, formatRelativeTime } from "@/lib/utils/date"
 import { handleTauriError, showInfo, showSuccess } from "@/lib/utils/error-handler"
-import { apply_fix, generate_fix, type Fix } from "@/lib/tauri/commands"
-import { readTextFile } from "@tauri-apps/plugin-fs"
+import { apply_fix, generate_fix, read_file_content, type Fix } from "@/lib/tauri/commands"
 
 export function ScanResults() {
   const { selectedProject } = useProjectStore()
@@ -231,7 +230,7 @@ export function ScanResults() {
 
     try {
       const fullPath = `${selectedProject.path}/${selectedViolation.filePath}`
-      const content = await readTextFile(fullPath)
+      const content = await read_file_content(fullPath)
       setFullFileContent(content)
       setIsCodeExpanded(true)
     } catch (error) {

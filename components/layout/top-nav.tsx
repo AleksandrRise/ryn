@@ -141,7 +141,10 @@ export function TopNav() {
 
           <div className="flex gap-4">
             {links.map((link) => {
-              const isActive = pathname === link.href
+              // Normalize paths by removing trailing slashes for comparison
+              const normalizedPathname = pathname?.replace(/\/$/, "") || ""
+              const normalizedHref = link.href.replace(/\/$/, "") || ""
+              const isActive = normalizedPathname === normalizedHref
               return (
                 <Link
                   key={link.href}

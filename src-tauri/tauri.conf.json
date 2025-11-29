@@ -47,12 +47,30 @@
           "scopes": {
             "fs:allow-read-text-file": [
               {
-                "path": "/**"
+                "path": "$HOME/**"
+              },
+              {
+                "path": "/var/folders/**"
+              },
+              {
+                "path": "/tmp/**"
+              },
+              {
+                "path": "/Users/**"
               }
             ],
             "fs:default": [
               {
-                "path": "/**"
+                "path": "$HOME/**"
+              },
+              {
+                "path": "/var/folders/**"
+              },
+              {
+                "path": "/tmp/**"
+              },
+              {
+                "path": "/Users/**"
               }
             ]
           }

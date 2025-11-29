@@ -192,6 +192,33 @@ pub async fn delete_all_projects() -> Result<(), String> {
     Ok(())
 }
 
+/// Read file content from any path
+///
+/// This bypasses the fs plugin scope restrictions by reading files directly
+/// from the Rust backend.
+///
+/// # Arguments
+/// * `file_path` - Absolute path to the file to read
+///
+/// Returns: File contents as a string
+#[tauri::command]
+pub async fn read_file_content(file_path: String) -> Result<String, String> {
+    println!("[ryn] read_file_content called: {}", file_path);
+
+    let path = Path::new(&file_path);
+
+    if !path.exists() {
+        return Err(format!("File does not exist: {}", file_path));
+    }
+
+    if !path.is_file() {
+        return Err(format!("Path is not a file: {}", file_path));
+    }
+
+    std::fs::read_to_string(path)
+        .map_err(|e| format!("Failed to read file: {}", e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

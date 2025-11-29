@@ -97,6 +97,8 @@ fn main() {
             // Project Delete Commands
             project::delete_project,
             project::delete_all_projects,
+            // File Reading Command
+            project::read_file_content,
         ])
         .run(tauri::generate_context!())
     {

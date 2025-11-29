@@ -147,6 +147,14 @@ export async function delete_all_projects(): Promise<void> {
   await invoke<void>("delete_all_projects")
 }
 
+/**
+ * Read file content from any path
+ * This bypasses the fs plugin scope restrictions by reading via the Rust backend
+ */
+export async function read_file_content(filePath: string): Promise<string> {
+  return await invoke<string>("read_file_content", { filePath })
+}
+
 // ============================================================================
 // SCAN COMMANDS
 // ============================================================================

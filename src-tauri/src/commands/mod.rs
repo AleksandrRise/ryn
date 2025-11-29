@@ -67,7 +67,8 @@ pub use github::{
 };
 pub use logger::log_frontend_message;
 pub use project::{
-    create_project, delete_all_projects, delete_project, get_projects, select_project_folder,
+    create_project, delete_all_projects, delete_project, get_projects, read_file_content,
+    select_project_folder,
 };
 pub use scan::{
     detect_framework, get_scan_progress, get_scans, scan_project, stop_watching, watch_project,
