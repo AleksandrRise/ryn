@@ -57,7 +57,6 @@ export default [
       ".next/**",
       "e2e-tests/fixtures/**",
       "src-tauri/tests/fixtures/**",
-      "components/mcp-init.tsx",
     ],
   },
   {

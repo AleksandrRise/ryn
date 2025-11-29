@@ -258,7 +258,7 @@ export function ScanResults() {
   return (
     <div className="px-6 py-6 max-w-[1400px] mx-auto space-y-4">
       {/* Top bar: title + primary actions */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 animate-fade-in-up">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Scan Results</h1>
           <p className="text-xs text-white/50">Project: {selectedProject.name}</p>
@@ -277,7 +277,7 @@ export function ScanResults() {
       </div>
 
       {/* Meta line + filters */}
-      <div className="flex flex-wrap items-center gap-3 text-xs text-white/65">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-white/65 animate-fade-in-up delay-100">
         <span className="flex items-center gap-1">
           <Clock3 className="w-3.5 h-3.5" />
           {lastCompletedDisplay}
@@ -302,7 +302,7 @@ export function ScanResults() {
 
       {isScanning && <ScanProgressCard progress={progress} onCancel={cancelScan} />}
 
-      <div className="rounded-xl border border-white/10 bg-black/25 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] grid gap-5 xl:grid-cols-[260px_360px_1fr] items-stretch min-h-[520px]">
+      <div className="rounded-xl border border-white/10 bg-black/25 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] grid gap-5 xl:grid-cols-[260px_360px_1fr] items-stretch min-h-[520px] animate-fade-in-up delay-200">
         {/* Files */}
         <div className="flex flex-col gap-3 xl:border-r xl:border-white/10 xl:pr-4">
           <div className="flex items-center justify-between text-sm text-white/75">

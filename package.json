@@ -14,9 +14,7 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "wdio run e2e-tests/wdio.conf.js",
-    "test:mcp": "node e2e-tests/mcp-smoke.mjs",
-    "test:mcp:e2e": "node e2e-tests/mcp-suite.mjs"
+    "test:e2e": "wdio run e2e-tests/wdio.conf.js"
   },
   "dependencies": {
     "@radix-ui/react-label": "2.1.1",

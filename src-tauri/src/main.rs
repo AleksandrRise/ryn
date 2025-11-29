@@ -12,7 +12,6 @@
 
 // Import command modules
 use ryn::commands::{analytics, audit, fix, github, logger, project, scan, settings, violation};
-use tauri_plugin_mcp_bridge;
 
 fn main() {
     // Load environment variables from .env file
@@ -43,28 +42,8 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_mcp_bridge::init())
         .manage(scan::ScanResponseChannels::default())
         .manage(scan::FileWatcherState::default());
-
-    // MCP plugin disabled - not linked in Cargo.toml
-    // Uncomment and add dependency if needed for development
-    // #[cfg(debug_assertions)]
-    // {
-    //     println!("[ryn] Development build detected, enabling MCP plugin");
-    //     let socket_path = std::path::Path::new("/tmp/tauri-mcp.sock");
-    //     if socket_path.exists() {
-    //         println!("[ryn] Removing stale MCP socket file");
-    //         if let Err(e) = std::fs::remove_file(socket_path) {
-    //             eprintln!("[ryn] WARNING: Failed to remove stale socket: {}", e);
-    //         }
-    //     }
-    //     builder = builder.plugin(tauri_plugin_mcp::init_with_config(
-    //         tauri_plugin_mcp::PluginConfig::new("ryn".to_string())
-    //             .start_socket_server(true)
-    //             .socket_path("/tmp/tauri-mcp.sock".into())
-    //     ));
-    // }
 
     // Run the Tauri application
     // If this fails, log detailed error and exit gracefully

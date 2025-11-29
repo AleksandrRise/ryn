@@ -1,5 +1,0 @@
-"$schema" = "schemas/schema.json"
-
-[default]
-description = "Default permissions for MCP bridge plugin"
-permissions = ["allow-js-callback"]

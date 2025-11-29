@@ -34,9 +34,9 @@ export function TopNav() {
 
   const links = [
     { href: "/", label: "Dashboard" },
-    { href: "/scan", label: "Scan Results" },
-    { href: "/audit", label: "Audit Trail" },
-    { href: "/settings", label: "Settings" },
+    { href: "/scan/", label: "Scan Results" },
+    { href: "/audit/", label: "Audit Trail" },
+    { href: "/settings/", label: "Settings" },
   ]
 
   const loadProjects = async () => {
@@ -160,10 +160,11 @@ export function TopNav() {
         <div className="ml-auto flex items-center">
           <Select value={currentProjectId} onValueChange={handleProjectChange}>
             <SelectTrigger
-              className="!gap-2 !text-[13px] !h-9 !px-3 !min-w-[216px] !rounded-[11px] !bg-white/[0.04] !border !border-white/8 hover:!bg-white/[0.07] hover:!border-white/12 shadow-sm backdrop-blur-sm"
+              className="!gap-2 !text-[13px] !h-9 !px-3 !min-w-[216px] !rounded-[11px] !bg-white/[0.04] !border !border-white/8 hover:!bg-white/[0.07] hover:!border-white/12 shadow-sm backdrop-blur-sm !overflow-hidden"
             >
               <Folder className="w-3 h-3" />
               <SelectValue
+                className="truncate text-left"
                 placeholder={
                   isLoadingProjects
                     ? "Loading projects..."
@@ -171,6 +172,7 @@ export function TopNav() {
                     ? selectedProject.name
                     : "Select project"
                 }
+                aria-label={selectedProject?.name || undefined}
               />
             </SelectTrigger>
             <SelectContent className="!bg-black/85 !border !border-white/10 !backdrop-blur-2xl !rounded-2xl !shadow-2xl px-1 py-1">
@@ -181,17 +183,14 @@ export function TopNav() {
                       value={String(project.id)}
                       textValue={project.name}
                       className="flex-1 rounded-lg px-0 py-0 hover:bg-transparent focus:bg-transparent"
-                    >
-                      <span className="flex flex-col items-start gap-1">
-                        <span className="text-sm font-medium">{project.name}</span>
+                      label={project.name}
+                      description={
                         <span className="flex items-center gap-1.5">
                           <FrameworkBadge framework={project.framework} showLabel={false} className="!bg-transparent !border-0 !p-0" />
-                          <span className="text-[11px] text-muted-foreground truncate max-w-[180px]">
-                            {project.framework || project.path}
-                          </span>
+                          <span className="truncate max-w-[180px]">{project.framework || project.path}</span>
                         </span>
-                      </span>
-                    </SelectItem>
+                      }
+                    />
                     <button
                       className="text-red-400 hover:text-red-300 px-2 py-1 rounded-md hover:bg-red-500/10 transition-colors"
                       onClick={(e) => {
@@ -206,17 +205,19 @@ export function TopNav() {
                   </div>
                 ))
               ) : (
-                <SelectItem value="__no_projects__" disabled>
-                  No projects yet
-                </SelectItem>
+                <SelectItem value="__no_projects__" label="No projects yet" disabled />
               )}
               <SelectSeparator />
-              <SelectItem value="__add_new__" className="rounded-lg px-3 py-2 hover:bg-white/5 focus:bg-white/8">
-                <span className="flex items-center gap-2 text-sm">
-                  <Folder className="w-3 h-3" />
-                  <span>Add new project…</span>
-                </span>
-              </SelectItem>
+              <SelectItem
+                value="__add_new__"
+                label={
+                  <span className="flex items-center gap-2 text-sm">
+                    <Folder className="w-3 h-3" />
+                    <span>Add new project…</span>
+                  </span>
+                }
+                className="rounded-lg px-3 py-2 hover:bg-white/5 focus:bg-white/8"
+              />
               {projects.length > 0 && (
                 <div className="px-3 py-2">
                   <button

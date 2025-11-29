@@ -13,7 +13,6 @@
 - Tauri prod bundle (codesign/ad-hoc as configured): `pnpm tauri build`.
 - Unit/UI tests: `pnpm test` (Vitest), `pnpm test:run`, `pnpm test:coverage`.
 - E2E (WebdriverIO): `pnpm test:e2e`.
-- MCP (Tauri Model Context Protocol) smoke/flows: `pnpm test:mcp` (smoke) and `pnpm test:mcp:e2e` (full). MCP tools available when the Tauri MCP server is running (see toolbox below).
 - Lint: `pnpm lint`.
 
 ## Coding Style & Naming Conventions
@@ -34,8 +33,3 @@
 ## Security & Configuration Tips
 - Secrets: never commit keys; use `.env` (not in repo). X.AI/Grok keys required for fixes.
 - Tauri dev: set `PORT` to an open port to avoid conflicts; macOS code signing may require stripping xattrs (`xattr -cr …/ryn.app`) or using ad-hoc identity. Keep `identifier` without `.app` suffix.
-
-## Tooling / MCP
-- Local MCP server command (from tooling repo): `node /Users/seane/Documents/Github/taurimcp/tauri-mcp-server/dist/index.js`
-- Available MCP tools (once server is running): `browser_navigate`, `browser_click`, `browser_type`, `browser_wait`, `browser_snapshot`, `browser_screenshot`, window management, devtools, performance, etc.
-- MCP socket path: `/Users/seane/.tauri/mcp.sock` (server must be running and the Tauri app started, e.g., via `./run-ryn-dev.sh`, for MCP calls to succeed).

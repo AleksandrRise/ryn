@@ -31,9 +31,7 @@ import { useRouter } from "next/navigation"
 // Platform configuration
 const PLATFORMS = [
   { id: "github", name: "GitHub", laIcon: "lab la-github", available: true },
-  { id: "aws", name: "AWS", laIcon: "lab la-aws", available: false },
-  { id: "azure", name: "Azure", laIcon: "lab la-microsoft", available: false },
-  { id: "gcp", name: "Google Cloud", laIcon: "lab la-google", available: false },
+  { id: "local", name: "Local folder", laIcon: "las la-folder-open", available: true },
 ] as const
 
 const AUTO_POLL_INTERVAL_MS = 90_000
@@ -398,7 +396,7 @@ export function Dashboard() {
       <main className="px-6 pt-8 pb-12">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="flex items-start justify-between mb-8">
+          <div className="flex items-start justify-between mb-8 animate-fade-in-up">
             <div className="flex items-center gap-5">
               {/* Platform Selector */}
               <div className="relative" ref={dropdownRef}>
@@ -414,7 +412,7 @@ export function Dashboard() {
                 </button>
 
                 {platformDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-56 bg-[#12121a] backdrop-blur-xl rounded-xl shadow-2xl overflow-hidden z-50 animate-fadeIn">
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-black/90 backdrop-blur-2xl rounded-xl shadow-2xl overflow-hidden z-50 animate-fadeIn border border-white/8">
                     <div className="p-1.5">
                       {PLATFORMS.map((platform) => {
                         const isSelected = platform.id === selectedPlatform.id
@@ -456,7 +454,7 @@ export function Dashboard() {
           </div>
 
           {/* Top Section: Stats + Chart side by side */}
-          <div className="grid grid-cols-12 gap-5 mb-5">
+          <div className="grid grid-cols-12 gap-5 mb-5 animate-fade-in-up delay-100">
             {/* Stats Column - Vertical stack */}
             <div className="col-span-3 flex flex-col gap-3">
               {/* Repositories */}
@@ -666,7 +664,7 @@ export function Dashboard() {
           </div>
 
           {/* Bottom Section: Activity + Repositories Table */}
-          <div className="grid grid-cols-12 gap-5">
+          <div className="grid grid-cols-12 gap-5 animate-fade-in-up delay-200">
             {/* Activity Feed */}
             <div className="col-span-4 bg-gradient-to-br from-purple-500/[0.08] to-transparent rounded-2xl p-5 border border-white/[0.04]">
               <h2 className="text-sm font-medium mb-4">Recent Activity</h2>

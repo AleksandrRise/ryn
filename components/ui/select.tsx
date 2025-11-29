@@ -19,9 +19,16 @@ function SelectGroup({
 }
 
 function SelectValue({
+  className,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Value>) {
-  return <SelectPrimitive.Value data-slot="select-value" {...props} />
+  return (
+    <SelectPrimitive.Value
+      data-slot="select-value"
+      className={cn('min-w-0 truncate', className)}
+      {...props}
+    />
+  )
 }
 
 function SelectTrigger({
@@ -37,7 +44,7 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-white/18 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-[0_0_0_1px_rgba(255,255,255,0.14)] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex w-fit items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-all duration-200 outline-none disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:scale-[1.01] active:scale-[0.99] data-[state=open]:scale-[1.01] data-[state=open]:shadow-[0_0_0_1px_rgba(255,255,255,0.16)]",
+        "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-white/18 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-[0_0_0_1px_rgba(255,255,255,0.14)] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex min-w-0 items-center justify-between gap-2 overflow-hidden rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-all duration-200 outline-none disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:scale-[1.01] active:scale-[0.99] data-[state=open]:scale-[1.01] data-[state=open]:shadow-[0_0_0_1px_rgba(255,255,255,0.16)]",
         className,
       )}
       {...props}
@@ -98,16 +105,22 @@ function SelectLabel({
   )
 }
 
+type SelectItemProps = React.ComponentProps<typeof SelectPrimitive.Item> & {
+  label: React.ReactNode
+  description?: React.ReactNode
+}
+
 function SelectItem({
   className,
-  children,
+  label,
+  description,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Item>) {
+}: SelectItemProps) {
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "focus:bg-accent focus:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2 transition-all duration-150 hover:pl-3",
+        "focus:bg-accent focus:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 transition-all duration-150 hover:pl-3",
         className,
       )}
       {...props}
@@ -117,7 +130,10 @@ function SelectItem({
           <CheckIcon className="size-4 transition-transform duration-200 scale-0 data-[state=checked]:scale-100" />
         </SelectPrimitive.ItemIndicator>
       </span>
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <SelectPrimitive.ItemText className="truncate">{label}</SelectPrimitive.ItemText>
+        {description ? <div className="text-[11px] text-muted-foreground truncate">{description}</div> : null}
+      </div>
     </SelectPrimitive.Item>
   )
 }

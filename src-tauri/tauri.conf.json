@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.ryn.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev:static:tauri",
+    "beforeDevCommand": "",
     "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../out"
@@ -29,8 +29,6 @@
             "identifier": "main-capability",
             "windows": ["main"],
             "permissions": [
-              "mcp-bridge:default",
-              "mcp-bridge:allow-js-callback",
               "core:event:allow-listen",
               "core:event:allow-emit",
               "core:event:allow-unlisten",
