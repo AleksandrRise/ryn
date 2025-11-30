@@ -13,7 +13,7 @@ export interface WaterBackgroundProps extends React.HTMLAttributes<HTMLDivElemen
 export function WaterBackground({
   className,
   speed = 0.1,
-  intensity = 0.35,
+  intensity = 0.7,
   rippleCount = 4,
   ...props
 }: WaterBackgroundProps) {
@@ -57,7 +57,7 @@ export function WaterBackground({
 
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
       const data = imageData.data
-      const cellSize = 1 // Full resolution for sharper fluid effect
+      const cellSize = 2 // Balance between performance and quality
 
       for (let y = 0; y < canvas.height; y += cellSize) {
         for (let x = 0; x < canvas.width; x += cellSize) {
@@ -71,12 +71,12 @@ export function WaterBackground({
             const distance = Math.sqrt(dx * dx + dy * dy)
 
             // Multiple wave frequencies for realistic water
-            const wave1 = Math.sin(distance * 0.08 - time * 2 + ripple.offset)
-            const wave2 = Math.sin(distance * 0.06 - time * 1.5 + ripple.offset) * 0.5
-            const wave3 = Math.sin(distance * 0.1 - time * 2.5 + ripple.offset) * 0.3
+            const wave1 = Math.sin(distance * 0.2 - time * 2 + ripple.offset)
+            const wave2 = Math.sin(distance * 0.15 - time * 1.5 + ripple.offset) * 0.5
+            const wave3 = Math.sin(distance * 0.25 - time * 2.5 + ripple.offset) * 0.3
 
             // Distance-based attenuation
-            const attenuation = 1 / (1 + distance * 0.003)
+            const attenuation = 1 / (1 + distance * 0.015)
             rippleEffect += (wave1 + wave2 + wave3) * attenuation
           }
 
@@ -84,8 +84,8 @@ export function WaterBackground({
           const centerDx = x - canvas.width / 2
           const centerDy = y - canvas.height / 2
           const centerDist = Math.sqrt(centerDx * centerDx + centerDy * centerDy)
-          const centerWave = Math.sin(centerDist * 0.08 - time * 2) * 0.4
-          const centerAttenuation = 1 / (1 + centerDist * 0.003)
+          const centerWave = Math.sin(centerDist * 0.2 - time * 2) * 0.4
+          const centerAttenuation = 1 / (1 + centerDist * 0.015)
           rippleEffect += centerWave * centerAttenuation
 
           // Convert ripple effect to grayscale intensity
