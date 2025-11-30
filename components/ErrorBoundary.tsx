@@ -1,6 +1,5 @@
 "use client"
 
-import type { ErrorInfo } from "react"
 import {
   ErrorBoundary as ReactErrorBoundary,
   FallbackProps,
@@ -52,8 +51,7 @@ ${new Date().toISOString()}
 
 `)
 
-    // TODO: Replace with actual GitHub repository URL when available
-    const githubUrl = `https://github.com/ryn-app/ryn/issues/new?title=${title}&body=${body}`
+    const githubUrl = `https://github.com/AleksandrRise/ryn/issues/new?title=${title}&body=${body}`
     window.open(githubUrl, "_blank")
   }
 
@@ -145,39 +143,12 @@ ${new Date().toISOString()}
  * ```
  */
 export function ErrorBoundary({ children }: { children: React.ReactNode }) {
-  const handleError = (error: Error, info: ErrorInfo) => {
-    // Log error to console with component stack
-    console.error("❌ React Error Boundary caught an error:")
-    console.error("Error:", error)
-    console.error("Error Message:", error.message)
-    console.error("Error Stack:", error.stack)
-    console.error("Component Stack:", info.componentStack ?? "No component stack available")
-
-    // TODO: Send to error tracking service (Sentry, LogRocket, etc.)
-    // Example:
-    // Sentry.captureException(error, {
-    //   contexts: {
-    //     react: {
-    //       componentStack: info.componentStack,
-    //     },
-    //   },
-    // })
+  const handleError = () => {
+    // Error logging is handled by console-logger.tsx which forwards to Tauri backend
   }
 
-  const handleReset = (
-    details:
-      | { reason: "imperative-api"; args: unknown[] }
-      | { reason: "keys"; prev: unknown[] | undefined; next: unknown[] | undefined }
-  ) => {
-    // Log reset event for debugging
-    if (details.reason === "imperative-api") {
-      console.log("🔄 Error boundary reset via API with args:", details.args)
-    } else if (details.reason === "keys") {
-      console.log("🔄 Error boundary reset due to key change:", {
-        previous: details.prev,
-        next: details.next,
-      })
-    }
+  const handleReset = () => {
+    // Reset handled - no action needed
   }
 
   return (

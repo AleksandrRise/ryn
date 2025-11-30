@@ -67,9 +67,8 @@ export function useScanRunner(
     return () => {
       // Cleanup runs before effect runs again with new projectId
       if (scanIdRef.current) {
-        console.log("[useScanRunner] Project changed, cancelling scan:", scanIdRef.current)
-        cancel_scan(scanIdRef.current).catch((e) => {
-          console.error("[useScanRunner] Failed to cancel scan on project change:", e)
+        cancel_scan(scanIdRef.current).catch(() => {
+          // Failed to cancel scan on project change
         })
         scanIdRef.current = null
       }
@@ -118,8 +117,8 @@ export function useScanRunner(
     if (currentScanId) {
       try {
         await cancel_scan(currentScanId)
-      } catch (e) {
-        console.error("[useScanRunner] Failed to cancel scan on backend:", e)
+      } catch {
+        // Failed to cancel scan on backend
       }
       void options.onScanStopped?.(currentScanId)
     }
@@ -321,9 +320,8 @@ export function useScanRunner(
     return () => {
       // If scan is running when component unmounts, cancel it on the backend
       if (scanIdRef.current) {
-        console.log("[useScanRunner] Component unmounting, cancelling scan:", scanIdRef.current)
-        cancel_scan(scanIdRef.current).catch((e) => {
-          console.error("[useScanRunner] Failed to cancel scan on unmount:", e)
+        cancel_scan(scanIdRef.current).catch(() => {
+          // Failed to cancel scan on unmount
         })
       }
     }

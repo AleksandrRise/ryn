@@ -11,7 +11,6 @@ import {
   check_repos_for_changes_batch,
   disconnect_github,
   get_tracked_repos,
-  check_repo_for_changes,
   scan_github_repo,
   create_project,
   get_projects,
@@ -115,8 +114,8 @@ export function Dashboard() {
     try {
       const status = await check_github_connection()
       setConnectionStatus(status)
-    } catch (error) {
-      console.error("Failed to check GitHub connection:", error)
+    } catch {
+      // Connection check failed
     }
   }, [])
 
@@ -125,8 +124,8 @@ export function Dashboard() {
       const repos = await get_tracked_repos()
       setTrackedRepos(repos)
       latestReposRef.current = repos
-    } catch (error) {
-      console.error("Failed to load tracked repos:", error)
+    } catch {
+      // Failed to load tracked repos
     }
   }, [])
 
@@ -159,8 +158,8 @@ export function Dashboard() {
         if (mode) {
           setDefaultScanMode(mode)
         }
-      } catch (error) {
-        console.warn("Failed to load scan mode setting", error)
+      } catch {
+        // Failed to load scan mode setting
       }
     }
     void loadScanModeSetting()
@@ -171,8 +170,8 @@ export function Dashboard() {
       await disconnect_github()
       setConnectionStatus({ connected: false, username: undefined, avatar_url: undefined, repo_count: 0, tracked_count: 0 })
       setTrackedRepos([])
-    } catch (error) {
-      console.error("Failed to disconnect:", error)
+    } catch {
+      // Failed to disconnect
     }
   }
 
@@ -203,8 +202,8 @@ export function Dashboard() {
         if (progress.status !== "in_progress" && progress.status !== "queued") {
           return progress
         }
-      } catch (err) {
-        console.warn(`Polling scan ${scanId} failed`, err)
+      } catch {
+        // Polling scan failed
       }
       await new Promise((res) => setTimeout(res, 1500))
     }
@@ -234,11 +233,7 @@ export function Dashboard() {
       toast.success("Scan complete", {
         description: `${repoName} scan finished.`,
       })
-      console.log(`Scan completed for repo ${repoId} (${reason})`)
       return scanId
-    } catch (error) {
-      console.error(`Failed to scan repo ${repoId} (${reason}):`, error)
-      throw error
     } finally {
       setScanningRepos(prev => {
         const next = new Set(prev)
@@ -248,16 +243,6 @@ export function Dashboard() {
       })
     }
   }, [defaultScanMode, loadTrackedRepos])
-
-  const checkRepoAndFlag = useCallback(async (repoId: number) => {
-    const hasChanges = await check_repo_for_changes(repoId)
-    setRepoChanges(prev => {
-      const next = new Map(prev)
-      next.set(repoId, hasChanges)
-      return next
-    })
-    return hasChanges
-  }, [])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -359,8 +344,7 @@ export function Dashboard() {
           if (!scanned && !cancelled) {
             await loadTrackedRepos()
           }
-        } catch (error) {
-          console.warn(`Batch repo check failed:`, error)
+        } catch {
           // Fall back to loading repos to get fresh data
           if (!cancelled) {
             await loadTrackedRepos()
@@ -424,12 +408,11 @@ export function Dashboard() {
 
     // Trigger scans for repos that need it
     for (const repo of unscannedRepos) {
-      console.log(`[dashboard] Auto-scanning unscanned repo: ${repo.github_repo.name}`)
       toast("First scan starting", {
         description: `Running initial compliance scan on ${repo.github_repo.name}...`,
       })
-      runScanForRepo(repo.id, "auto-first-scan", false).catch(err => {
-        console.error(`Failed to auto-scan repo ${repo.github_repo.name}:`, err)
+      runScanForRepo(repo.id, "auto-first-scan", false).catch(() => {
+        // Auto-scan failed
       })
     }
   }, [connectionStatus?.connected, trackedRepos, scanningRepos, checkingRepos, runScanForRepo])
@@ -441,13 +424,11 @@ export function Dashboard() {
       setPlatformDropdownOpen(false)
 
       if (platform.id === "github") {
-        console.log("[platform-select] github chosen")
         handleConnectClick()
         return
       }
 
       try {
-        console.log("[platform-select] local chosen -> opening picker")
         toast("Opening local folder picker…")
         const folder = await open({
           title: "Select Project Folder",
@@ -456,7 +437,6 @@ export function Dashboard() {
           recursive: true,
         })
         if (!folder || typeof folder !== "string") {
-          console.log("[platform-select] local picker cancelled")
           return
         }
 
@@ -470,9 +450,7 @@ export function Dashboard() {
         toast.success("Local project ready", {
           description: name,
         })
-        console.log("[platform-select] local project ready", project.path)
       } catch (error) {
-        console.error("Failed to add local project", error)
         toast.error("Could not open local folder", {
           description: error instanceof Error ? error.message : "Unexpected error",
         })
@@ -528,7 +506,6 @@ export function Dashboard() {
       setSelectedProject(project)
       router.push("/scan")
     } catch (error) {
-      console.error("Failed to open project from repo:", error)
       setProjectModalError(error instanceof Error ? error.message : String(error))
     } finally {
       if (runId === projectModalRunId.current) {

@@ -10,8 +10,8 @@ export function McpInit() {
 
     // Register global MCP callback handler (still used by some debug scripts)
     window.__MCPCallback = (id: string, data: any = null, error: string | null = null) => {
-      invoke('plugin:mcp-bridge|js_callback', { id, data, error }).catch((e) => {
-        console.error('[MCP] Failed to send callback to backend:', e)
+      invoke('plugin:mcp-bridge|js_callback', { id, data, error }).catch(() => {
+        // Callback failed silently
       })
     }
 
@@ -26,7 +26,6 @@ export function McpInit() {
         const { id, code } = payload ?? {}
 
         if (typeof code !== 'string') {
-          console.error('[MCP] Invalid callback payload, expected code string:', payload)
           if (id) {
             window.__MCPCallback?.(id, null, 'Invalid callback payload')
           }
@@ -37,7 +36,6 @@ export function McpInit() {
           // Execute injected JavaScript that will call plugin:mcp-bridge|js_callback
           eval(code)
         } catch (e) {
-          console.error('[MCP] Failed to execute callback code:', e)
           if (id) {
             window.__MCPCallback?.(id, null, `Execution error: ${String(e)}`)
           }
@@ -55,14 +53,13 @@ export function McpInit() {
               : null
 
         if (typeof code !== 'string') {
-          console.error('[MCP] Invalid JS execute payload, expected string code:', payload)
           return
         }
 
         try {
           eval(code)
-        } catch (e) {
-          console.error('[MCP] Failed to execute JS code:', e)
+        } catch {
+          // JS execution failed silently
         }
       })
 
@@ -72,27 +69,23 @@ export function McpInit() {
         const requestId = payload?.requestId
 
         if (!requestId) {
-          console.error('[MCP] Missing requestId in mcp-get-url payload:', payload)
           return
         }
-
-        console.debug('[MCP] mcp-get-url received', requestId, window.location.href)
 
         const href = window.location.href
         const title = document.title
 
         try {
           await emit('mcp-url-response', { requestId, href, title })
-        } catch (err) {
-          console.error('[MCP] Failed to emit mcp-url-response:', err)
+        } catch {
+          // URL response failed silently
         }
       })
 
-      console.log('[MCP] MCPInit listeners initialized')
     }
 
-    setupListeners().catch((e) => {
-      console.error('[MCP] Failed to setup MCP listeners:', e)
+    setupListeners().catch(() => {
+      // MCP listener setup failed silently
     })
 
     return () => {

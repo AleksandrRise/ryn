@@ -111,8 +111,7 @@ export function useFileWatcher(
         if (!granted) return false
         await sendNotification({ title, body })
         return true
-      } catch (err) {
-        console.error("[useFileWatcher] Desktop notification failed", err)
+      } catch {
         return false
       }
     },
@@ -123,7 +122,6 @@ export function useFileWatcher(
   const startWatching = useCallback(async () => {
     // Don't attempt to watch if no valid project
     if (projectId === undefined || projectId <= 0) {
-      console.warn('[useFileWatcher] Cannot start watching: invalid project ID', projectId)
       const errorMsg = `Cannot start watching: ${projectId === undefined ? 'no project selected' : 'invalid project ID'}`
       setError(errorMsg)
       if (showNotifications) {
@@ -138,10 +136,8 @@ export function useFileWatcher(
     setError(null)
 
     try {
-      console.log('[useFileWatcher] Calling watch_project with project_id=', projectId)
       await commands.watch_project(projectId)
       setIsWatching(true)
-      console.log('[useFileWatcher] Successfully started watching project_id=', projectId)
 
       if (showNotifications) {
         toast.success(`Started watching project for changes`)
@@ -163,18 +159,11 @@ export function useFileWatcher(
       // If the error is "already being watched", treat it as success
       // This can happen in React Strict Mode when the component mounts twice
       if (errorMsg.includes('already being watched')) {
-        console.log('[useFileWatcher] Project already being watched, treating as success')
         setIsWatching(true)
         setIsLoading(false)
-        // Don't show error notification since this is expected behavior
         return
       }
 
-      // Only log actual errors
-      console.error('[useFileWatcher] watch_project failed:', errorMsg)
-      console.error('[useFileWatcher] project_id:', projectId)
-      console.error('[useFileWatcher] error type:', typeof err)
-      console.error('[useFileWatcher] error keys:', err ? Object.getOwnPropertyNames(err) : [])
       setError(errorMsg)
 
       if (showNotifications) {
@@ -188,9 +177,7 @@ export function useFileWatcher(
 
   // Stop watching for file changes
   const stopWatching = useCallback(async () => {
-    // Don't attempt to stop watching if no valid project
     if (projectId === undefined || projectId <= 0) {
-      console.warn('[useFileWatcher] Cannot stop watching: invalid project ID', projectId)
       return
     }
 
