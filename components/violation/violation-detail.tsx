@@ -35,7 +35,6 @@ const MemoizedCodeBlock = memo(function MemoizedCodeBlock({
         language={language}
         style={vscDarkPlus}
         customStyle={customStyle}
-        showLineNumbers
       >
         {code}
       </SyntaxHighlighter>

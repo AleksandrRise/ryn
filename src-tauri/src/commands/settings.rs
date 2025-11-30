@@ -232,6 +232,16 @@ pub async fn complete_onboarding(scan_mode: String, cost_limit: f64) -> Result<(
     Ok(())
 }
 
+/// Check if XAI_API_KEY environment variable is available
+///
+/// Used by frontend to determine if AI scan modes should be enabled
+///
+/// Returns: true if XAI_API_KEY is set, false otherwise
+#[tauri::command]
+pub fn check_api_key_available() -> bool {
+    std::env::var("XAI_API_KEY").is_ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -247,6 +247,15 @@ pub async fn scan_project_internal<R: tauri::Runtime>(
             .map(|s| s.value)
             .unwrap_or_else(|| "regex_only".to_string());
 
+        // Block AI scan modes if API key is not configured
+        if llm_scan_mode != "regex_only" && std::env::var("XAI_API_KEY").is_err() {
+            return Err(format!(
+                "Cannot run {} scan: XAI_API_KEY not configured. \
+                 Set it in .env file and restart the app, or switch to Pattern Only mode in Settings.",
+                llm_scan_mode
+            ));
+        }
+
         // Get project from database
         let project = queries::select_project(&conn, project_id)
             .map_err(|e| format!("Failed to fetch project: {}", e))?
@@ -409,9 +418,8 @@ pub async fn scan_project_internal<R: tauri::Runtime>(
                 llm_violations
             }
             Err(e) => {
-                println!("[ryn] LLM analysis failed: {}", e);
-                // Continue with empty LLM violations
-                Vec::new()
+                // Hard failure - don't silently continue with regex-only results
+                return Err(format!("AI analysis failed: {}. Scan aborted.", e));
             }
         }
     } else {
@@ -510,6 +518,15 @@ pub async fn scan_project_http(project_id: i64) -> Result<Scan, String> {
             .flatten()
             .map(|s| s.value)
             .unwrap_or_else(|| "regex_only".to_string());
+
+        // Block AI scan modes if API key is not configured
+        if llm_scan_mode != "regex_only" && std::env::var("XAI_API_KEY").is_err() {
+            return Err(format!(
+                "Cannot run {} scan: XAI_API_KEY not configured. \
+                 Set it in .env file and restart the app, or switch to Pattern Only mode in Settings.",
+                llm_scan_mode
+            ));
+        }
 
         // Get project from database
         let project = queries::select_project(&conn, project_id)

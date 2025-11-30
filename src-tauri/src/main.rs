@@ -71,12 +71,13 @@ fn main() {
             fix::apply_fix,
             // Audit Commands (1)
             audit::get_audit_events,
-            // Settings Commands (5)
+            // Settings Commands (6)
             settings::get_settings,
             settings::update_settings,
             settings::clear_database,
             settings::export_data,
             settings::complete_onboarding,
+            settings::check_api_key_available,
             // Analytics Commands (2)
             analytics::get_scan_costs,
             analytics::get_scan_cost,

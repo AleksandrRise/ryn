@@ -11,6 +11,7 @@ import {
   update_settings,
   clear_database,
   export_data,
+  check_api_key_available,
   type Settings as SettingsType,
 } from "@/lib/tauri/commands"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
@@ -71,15 +72,26 @@ export function Settings() {
   )
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [apiKeyAvailable, setApiKeyAvailable] = useState(true)
 
-  // Load settings from backend on mount
+  // Load settings and check API key on mount
   useEffect(() => {
     const loadSettings = async () => {
       try {
         setIsLoading(true)
-        const settings = await get_settings()
+        const [settings, hasApiKey] = await Promise.all([
+          get_settings(),
+          check_api_key_available()
+        ])
         const loadedState = settingsArrayToState(settings)
+
+        // If no API key and current mode requires it, force to regex_only
+        if (!hasApiKey && loadedState.llmScanMode !== "regex_only") {
+          loadedState.llmScanMode = "regex_only"
+        }
+
         setState(loadedState)
+        setApiKeyAvailable(hasApiKey)
       } catch (error) {
         handleTauriError(error, "Failed to load settings")
       } finally {
@@ -253,7 +265,7 @@ export function Settings() {
                     <p className="text-xs text-white/50">Free, instant regex-based detection only</p>
                   </label>
                 </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+                <div className={`flex items-start gap-3 p-3 rounded-lg border border-white/10 transition-colors ${apiKeyAvailable ? "cursor-pointer hover:bg-white/5" : "opacity-50 cursor-not-allowed"}`}>
                   <input
                     id="scanModeSmart"
                     type="radio"
@@ -261,16 +273,17 @@ export function Settings() {
                     value="smart"
                     checked={state.llmScanMode === "smart"}
                     onChange={(e) => handleLlmScanModeChange(e.target.value)}
+                    disabled={!apiKeyAvailable}
                     className="mt-1"
                   />
-                  <label htmlFor="scanModeSmart" className="flex-1 cursor-pointer">
+                  <label htmlFor="scanModeSmart" className={`flex-1 ${apiKeyAvailable ? "cursor-pointer" : "cursor-not-allowed"}`}>
                     <p className="text-sm font-medium">Smart (Recommended)</p>
                     <p className="text-xs text-white/50">
                       AI analyzes ~30-40% of files (security-critical code only)
                     </p>
                   </label>
                 </div>
-                <div className="flex items-start gap-3 p-3 rounded-lg border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+                <div className={`flex items-start gap-3 p-3 rounded-lg border border-white/10 transition-colors ${apiKeyAvailable ? "cursor-pointer hover:bg-white/5" : "opacity-50 cursor-not-allowed"}`}>
                   <input
                     id="scanModeAll"
                     type="radio"
@@ -278,13 +291,21 @@ export function Settings() {
                     value="analyze_all"
                     checked={state.llmScanMode === "analyze_all"}
                     onChange={(e) => handleLlmScanModeChange(e.target.value)}
+                    disabled={!apiKeyAvailable}
                     className="mt-1"
                   />
-                  <label htmlFor="scanModeAll" className="flex-1 cursor-pointer">
+                  <label htmlFor="scanModeAll" className={`flex-1 ${apiKeyAvailable ? "cursor-pointer" : "cursor-not-allowed"}`}>
                     <p className="text-sm font-medium">Analyze All</p>
                     <p className="text-xs text-white/50">AI analyzes every file (maximum accuracy, higher cost)</p>
                   </label>
                 </div>
+                {!apiKeyAvailable && (
+                  <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                    <p className="text-xs text-yellow-200">
+                      AI scanning requires XAI_API_KEY in your .env file. Add it and restart the app to enable Smart and Analyze All modes.
+                    </p>
+                  </div>
+                )}
               </fieldset>
             </div>
 

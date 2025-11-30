@@ -10,6 +10,7 @@
 //! - Missing RBAC (role-based access control) checks
 
 use crate::models::{Severity, Violation};
+use crate::utils::extract_context_from_string;
 use anyhow::{Context, Result};
 use regex::Regex;
 
@@ -113,14 +114,16 @@ impl CC61AccessControlRule {
                     || next_lines.contains("if not request.user");
 
                 if !has_auth && !has_inline_auth {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                     violations.push(Violation::new(
                         scan_id,
                         "CC6.1".to_string(),
                         Severity::High,
                         "View function missing authentication decorator or check".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                 }
             }
@@ -160,14 +163,16 @@ impl CC61AccessControlRule {
             }
 
             if hardcoded_id_pattern.is_match(line) {
+                let line_number = (idx + 1) as i64;
+                let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                 violations.push(Violation::new(
                     scan_id,
                     "CC6.1".to_string(),
                     Severity::High,
                     "Hardcoded user ID should use request.user or current_user".to_string(),
                     file_path.to_string(),
-                    (idx + 1) as i64,
-                    line.trim().to_string(),
+                    line_number,
+                    code_snippet,
                 ));
             }
         }
@@ -209,14 +214,16 @@ impl CC61AccessControlRule {
                 let next_lines = lines[idx..end_idx].join("\n");
 
                 if !permission_keywords.is_match(&next_lines) {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                     violations.push(Violation::new(
                         scan_id,
                         "CC6.1".to_string(),
                         Severity::Critical,
                         "Admin/sensitive operation missing permission check".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                 }
             }
@@ -270,14 +277,16 @@ impl CC61AccessControlRule {
                         };
 
                         if !has_auth_on_next_line {
+                            let line_number = (idx + 1) as i64;
+                            let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                             violations.push(Violation::new(
                                 scan_id,
                                 "CC6.1".to_string(),
                                 Severity::High,
                                 "Express route missing authentication middleware".to_string(),
                                 file_path.to_string(),
-                                (idx + 1) as i64,
-                                line.trim().to_string(),
+                                line_number,
+                                code_snippet,
                             ));
                         }
                     }
@@ -323,14 +332,16 @@ impl CC61AccessControlRule {
                 if idx + 1 < lines.len() {
                     let func_line = lines[idx + 1];
                     if !depends_pattern.is_match(func_line) {
+                        let line_number = (idx + 1) as i64;
+                        let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                         violations.push(Violation::new(
                             scan_id,
                             "CC6.1".to_string(),
                             Severity::High,
                             "FastAPI endpoint missing Depends(permission) check".to_string(),
                             file_path.to_string(),
-                            (idx + 1) as i64,
-                            line.trim().to_string(),
+                            line_number,
+                            code_snippet,
                         ));
                     }
                 }
@@ -423,6 +434,8 @@ impl CC61AccessControlRule {
                             Severity::High
                         };
 
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                     violations.push(Violation::new(
                         scan_id,
                         "CC6.1".to_string(),
@@ -432,8 +445,8 @@ impl CC61AccessControlRule {
                             route_path
                         ),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                 }
             }

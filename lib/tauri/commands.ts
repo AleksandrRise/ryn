@@ -357,6 +357,15 @@ export async function complete_onboarding(
   })
 }
 
+/**
+ * Check if XAI_API_KEY environment variable is available
+ * Used to determine if AI scan modes should be enabled
+ * @returns true if API key is configured, false otherwise
+ */
+export async function check_api_key_available(): Promise<boolean> {
+  return await invoke<boolean>("check_api_key_available")
+}
+
 // ============================================================================
 // ANALYTICS COMMANDS
 // ============================================================================

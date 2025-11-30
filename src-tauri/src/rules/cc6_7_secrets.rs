@@ -88,10 +88,10 @@ impl CC67SecretsRule {
                     Severity::High
                 };
 
-                // Extract code block with 5 lines of context before and after
+                // Extract code block with 9 lines of context before and after
                 let line_number = (idx + 1) as i64;
                 let (code_snippet, _relative_line) =
-                    extract_context_from_string(code, line_number, 5);
+                    extract_context_from_string(code, line_number, 9);
 
                 violations.push(Violation::new(
                     scan_id,
@@ -127,14 +127,16 @@ impl CC67SecretsRule {
             }
 
             if github_token_pattern.is_match(line) {
+                let line_number = (idx + 1) as i64;
+                let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                 violations.push(Violation::new(
                     scan_id,
                     "CC6.7".to_string(),
                     Severity::Critical,
                     "Hardcoded GitHub token".to_string(),
                     file_path.to_string(),
-                    (idx + 1) as i64,
-                    Self::redact_line(line),
+                    line_number,
+                    code_snippet,
                 ));
             }
         }
@@ -163,26 +165,30 @@ impl CC67SecretsRule {
             }
 
             if aws_access_key_pattern.is_match(line) {
+                let line_number = (idx + 1) as i64;
+                let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                 violations.push(Violation::new(
                     scan_id,
                     "CC6.7".to_string(),
                     Severity::Critical,
                     "Hardcoded AWS Access Key ID".to_string(),
                     file_path.to_string(),
-                    (idx + 1) as i64,
-                    Self::redact_line(line),
+                    line_number,
+                    code_snippet,
                 ));
             }
 
             if aws_secret_key_pattern.is_match(line) {
+                let line_number = (idx + 1) as i64;
+                let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                 violations.push(Violation::new(
                     scan_id,
                     "CC6.7".to_string(),
                     Severity::Critical,
                     "Hardcoded AWS Secret Access Key".to_string(),
                     file_path.to_string(),
-                    (idx + 1) as i64,
-                    Self::redact_line(line),
+                    line_number,
+                    code_snippet,
                 ));
             }
         }
@@ -249,14 +255,16 @@ impl CC67SecretsRule {
                     continue;
                 }
 
+                let line_number = (idx + 1) as i64;
+                let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                 violations.push(Violation::new(
                     scan_id,
                     "CC6.7".to_string(),
                     Severity::Critical,
                     "Hardcoded password or secret in code".to_string(),
                     file_path.to_string(),
-                    (idx + 1) as i64,
-                    Self::redact_line(line),
+                    line_number,
+                    code_snippet,
                 ));
             }
         }
@@ -285,14 +293,16 @@ impl CC67SecretsRule {
             if db_cred_pattern.is_match(line) {
                 // Make sure it's not using environment variables
                 if !is_env_var.is_match(line) {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                     violations.push(Violation::new(
                         scan_id,
                         "CC6.7".to_string(),
                         Severity::Critical,
                         "Database credentials in connection string".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        Self::redact_line(line),
+                        line_number,
+                        code_snippet,
                     ));
                 }
             }
@@ -360,14 +370,16 @@ impl CC67SecretsRule {
                 let is_safe = safe_addresses.iter().any(|addr| line.contains(addr));
 
                 if !is_safe {
+                    let line_number = (idx + 1) as i64;
+                    let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                     violations.push(Violation::new(
                         scan_id,
                         "CC6.7".to_string(),
                         Severity::High,
                         "Insecure HTTP connection (use HTTPS)".to_string(),
                         file_path.to_string(),
-                        (idx + 1) as i64,
-                        line.trim().to_string(),
+                        line_number,
+                        code_snippet,
                     ));
                 }
             }
@@ -406,26 +418,30 @@ impl CC67SecretsRule {
                 && !line.contains("test")
                 && !line.contains("mock")
             {
+                let line_number = (idx + 1) as i64;
+                let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                 violations.push(Violation::new(
                     scan_id,
                     "CC6.7".to_string(),
                     Severity::Critical,
                     "Hardcoded JWT or Bearer token".to_string(),
                     file_path.to_string(),
-                    (idx + 1) as i64,
-                    Self::redact_line(line),
+                    line_number,
+                    code_snippet,
                 ));
             }
 
             if oauth_pattern.is_match(line) {
+                let line_number = (idx + 1) as i64;
+                let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                 violations.push(Violation::new(
                     scan_id,
                     "CC6.7".to_string(),
                     Severity::Critical,
                     "Hardcoded OAuth token".to_string(),
                     file_path.to_string(),
-                    (idx + 1) as i64,
-                    Self::redact_line(line),
+                    line_number,
+                    code_snippet,
                 ));
             }
         }
@@ -470,14 +486,16 @@ impl CC67SecretsRule {
                     continue;
                 }
 
+                let line_number = (idx + 1) as i64;
+                let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                 violations.push(Violation::new(
                     scan_id,
                     "CC6.7".to_string(),
                     Severity::High,
                     "Hardcoded API key detected".to_string(),
                     file_path.to_string(),
-                    (idx + 1) as i64,
-                    Self::redact_line(line),
+                    line_number,
+                    code_snippet,
                 ));
             }
         }
@@ -541,42 +559,21 @@ impl CC67SecretsRule {
                     continue;
                 }
 
+                let line_number = (idx + 1) as i64;
+                let (code_snippet, _) = extract_context_from_string(code, line_number, 9);
                 violations.push(Violation::new(
                     scan_id,
                     "CC6.7".to_string(),
                     Severity::Critical,
                     format!("Hardcoded secret in config dictionary: {}", &caps[2]),
                     file_path.to_string(),
-                    (idx + 1) as i64,
-                    Self::redact_line(line),
+                    line_number,
+                    code_snippet,
                 ));
             }
         }
 
         Ok(violations)
-    }
-
-    /// Redacts sensitive parts of a line for display
-    fn redact_line(line: &str) -> String {
-        let patterns = vec![
-            (r"(test_stripe_key_FAKE_NOT_REAL)[a-zA-Z0-9]{10,}", "$1..."),
-            (r"(sk_test_)[a-zA-Z0-9]{10,}", "$1..."),
-            (r"(pk_live_)[a-zA-Z0-9]{10,}", "$1..."),
-            (r"(pk_test_)[a-zA-Z0-9]{10,}", "$1..."),
-            (r"(ghp_)[a-zA-Z0-9_]{20,}", "$1..."),
-            (r"(AKIA)[0-9A-Z]{16}", "$1..."),
-            (r#"(password\s*[:=]\s*)['"]([^'"]{6,})['"]\b?"#, "$1\"***\""),
-            (r#"(passwd\s*[:=]\s*)['"]([^'"]{6,})['"]\b?"#, "$1\"***\""),
-            (r"(://\w+:)[^@]+(@)", "$1***$2"),
-        ];
-
-        let mut result = line.to_string();
-        for (pattern, replacement) in patterns {
-            if let Ok(re) = Regex::new(pattern) {
-                result = re.replace_all(&result, replacement).to_string();
-            }
-        }
-        result
     }
 }
 
