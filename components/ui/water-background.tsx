@@ -13,7 +13,7 @@ export interface WaterBackgroundProps extends React.HTMLAttributes<HTMLDivElemen
 export function WaterBackground({
   className,
   speed = 0.25,
-  intensity = 0.15,
+  intensity = 0.5,
   rippleCount = 4,
   ...props
 }: WaterBackgroundProps) {
@@ -57,7 +57,7 @@ export function WaterBackground({
 
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
       const data = imageData.data
-      const cellSize = 3 // Sample every 3 pixels for performance
+      const cellSize = 1 // Full resolution for sharper fluid effect
 
       for (let y = 0; y < canvas.height; y += cellSize) {
         for (let x = 0; x < canvas.width; x += cellSize) {
@@ -90,7 +90,7 @@ export function WaterBackground({
 
           // Convert ripple effect to grayscale intensity
           const brightness = Math.floor(rippleEffect * intensity * 255)
-          const gray = Math.max(0, Math.min(255, 51 + brightness)) // Dark background (20%)
+          const gray = Math.max(0, Math.min(255, 128 + brightness)) // Medium background (50%)
 
           // Fill cellSize x cellSize block
           for (let dy = 0; dy < cellSize && y + dy < canvas.height; dy++) {
