@@ -58,6 +58,9 @@ function MiniDonutComponent({
               ))}
             </Pie>
             <Tooltip
+              allowEscapeViewBox={{ x: true, y: true }}
+              isAnimationActive={false}
+              wrapperStyle={{ pointerEvents: "none" }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null
                 const item = payload[0].payload as DonutDataPoint

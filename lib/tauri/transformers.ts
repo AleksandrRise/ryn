@@ -13,7 +13,6 @@ export function toScanSummary(scan: ApiScanResult): ScanSummary {
     status: scan.status,
     startedAt: scan.started_at,
     completedAt: scan.completed_at,
-    createdAt: scan.created_at,
     filesScanned: scan.files_scanned ?? 0,
     totalFiles: scan.total_files ?? scan.files_scanned ?? 0,
     violationsFound: scan.violations_found ?? 0,

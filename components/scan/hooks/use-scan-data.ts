@@ -91,7 +91,7 @@ export function useScanData(projectId?: number): UseScanDataResult {
       setLastScanStats({
         filesScanned: mappedScan.filesScanned || 0,
         violationsFound: mappedViolations.length,
-        completedAt: mappedScan.createdAt || mappedScan.startedAt,
+        completedAt: mappedScan.completedAt || mappedScan.startedAt,
       })
     } catch (error) {
       handleTauriError(error, "Failed to load scan data")

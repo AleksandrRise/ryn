@@ -6,7 +6,6 @@ export interface ScanSummary {
   status: string
   startedAt: string
   completedAt?: string
-  createdAt?: string
   filesScanned: number
   totalFiles: number
   violationsFound: number

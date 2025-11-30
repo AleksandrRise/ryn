@@ -70,6 +70,9 @@ export function TrendArea({ data, height = "100%" }: TrendAreaProps) {
         />
 
         <Tooltip
+          allowEscapeViewBox={{ x: true, y: true }}
+          isAnimationActive={false}
+          wrapperStyle={{ pointerEvents: "none" }}
           contentStyle={{
             backgroundColor: "rgba(13,13,20,0.98)",
             border: "1px solid rgba(255,255,255,0.1)",
@@ -78,6 +81,7 @@ export function TrendArea({ data, height = "100%" }: TrendAreaProps) {
             boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
           }}
           labelStyle={{ color: "rgba(255,255,255,0.6)" }}
+          itemStyle={{ color: "rgba(255,255,255,0.6)" }}
         />
 
         <Legend

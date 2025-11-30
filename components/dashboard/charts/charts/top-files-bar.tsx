@@ -55,19 +55,19 @@ export function TopFilesBar({ data, height = "100%" }: TopFilesBarProps) {
         />
 
         <Tooltip
+          allowEscapeViewBox={{ x: true, y: true }}
+          isAnimationActive={false}
+          wrapperStyle={{ pointerEvents: "none" }}
           cursor={{ fill: "rgba(255,255,255,0.04)" }}
-          contentStyle={{
-            backgroundColor: "rgba(13,13,20,0.98)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            borderRadius: "12px",
-            fontSize: "12px",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          content={({ active, payload }) => {
+            if (!active || !payload?.length) return null
+            const item = payload[0].payload as BarDataPoint & { displayName: string }
+            return (
+              <div className="rounded-xl border border-white/10 bg-[rgba(13,13,20,0.98)] px-3 py-2 text-xs shadow-lg">
+                <span className="text-white/60">{item.name} : {item.value} violations</span>
+              </div>
+            )
           }}
-          labelStyle={{ color: "rgba(255,255,255,0.6)" }}
-          formatter={(value: number, _name: string, props: { payload: BarDataPoint & { displayName: string } }) => [
-            `${value} violations`,
-            props.payload.name, // Show full name in tooltip
-          ]}
         />
 
         <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={20}>

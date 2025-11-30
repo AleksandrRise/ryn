@@ -692,7 +692,7 @@ export function Dashboard() {
 
             {/* Chart - Large - With connection CTA when not connected */}
             <div
-              className={`col-span-9 relative rounded-2xl overflow-hidden transition-all duration-300 border ${
+              className={`col-span-9 relative rounded-2xl overflow-hidden transition-colors duration-300 border ${
                 showChartCta
                   ? isLocalMode
                     ? "bg-[#0a0b10]/90 border-white/10 cursor-pointer group/card"
