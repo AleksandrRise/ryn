@@ -1176,7 +1176,7 @@ export function Dashboard() {
                     <i className="lab la-github text-2xl text-white/20"></i>
                   </div>
                   <p className="text-sm text-white/40 mb-3">No repositories tracked</p>
-                  <button onClick={handleConnectClick} className="text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
+                  <button onClick={handlePrimaryConnect} className="text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
                     {selectedPlatform.id === "local" ? "Open a local project" : "Connect GitHub to get started"}
                   </button>
                 </div>

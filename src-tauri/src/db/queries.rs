@@ -127,7 +127,21 @@ pub fn insert_scan(conn: &Connection, project_id: i64, scan_mode: &str) -> Resul
 
 pub fn select_scans(conn: &Connection, project_id: i64) -> Result<Vec<Scan>> {
     let mut stmt = conn
-        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, total_files, violations_found, status, scan_mode FROM scans WHERE project_id = ? ORDER BY started_at DESC")
+        .prepare(
+            "SELECT
+                s.id, s.project_id, s.started_at, s.completed_at,
+                s.files_scanned, s.total_files, s.violations_found,
+                s.status, s.scan_mode,
+                COALESCE(SUM(CASE WHEN v.severity = 'critical' THEN 1 ELSE 0 END), 0) as critical_count,
+                COALESCE(SUM(CASE WHEN v.severity = 'high' THEN 1 ELSE 0 END), 0) as high_count,
+                COALESCE(SUM(CASE WHEN v.severity = 'medium' THEN 1 ELSE 0 END), 0) as medium_count,
+                COALESCE(SUM(CASE WHEN v.severity = 'low' THEN 1 ELSE 0 END), 0) as low_count
+            FROM scans s
+            LEFT JOIN violations v ON s.id = v.scan_id
+            WHERE s.project_id = ?
+            GROUP BY s.id
+            ORDER BY s.started_at DESC",
+        )
         .context("Failed to prepare select scans query")?;
 
     let scans = stmt
@@ -142,10 +156,10 @@ pub fn select_scans(conn: &Connection, project_id: i64) -> Result<Vec<Scan>> {
                 violations_found: row.get(6)?,
                 status: row.get(7)?,
                 scan_mode: row.get(8)?,
-                critical_count: 0,
-                high_count: 0,
-                medium_count: 0,
-                low_count: 0,
+                critical_count: row.get(9)?,
+                high_count: row.get(10)?,
+                medium_count: row.get(11)?,
+                low_count: row.get(12)?,
             })
         })
         .context("Failed to map scans from query")?
@@ -157,7 +171,20 @@ pub fn select_scans(conn: &Connection, project_id: i64) -> Result<Vec<Scan>> {
 
 pub fn select_scan(conn: &Connection, id: i64) -> Result<Option<Scan>> {
     let mut stmt = conn
-        .prepare("SELECT id, project_id, started_at, completed_at, files_scanned, total_files, violations_found, status, scan_mode FROM scans WHERE id = ?")
+        .prepare(
+            "SELECT
+                s.id, s.project_id, s.started_at, s.completed_at,
+                s.files_scanned, s.total_files, s.violations_found,
+                s.status, s.scan_mode,
+                COALESCE(SUM(CASE WHEN v.severity = 'critical' THEN 1 ELSE 0 END), 0) as critical_count,
+                COALESCE(SUM(CASE WHEN v.severity = 'high' THEN 1 ELSE 0 END), 0) as high_count,
+                COALESCE(SUM(CASE WHEN v.severity = 'medium' THEN 1 ELSE 0 END), 0) as medium_count,
+                COALESCE(SUM(CASE WHEN v.severity = 'low' THEN 1 ELSE 0 END), 0) as low_count
+            FROM scans s
+            LEFT JOIN violations v ON s.id = v.scan_id
+            WHERE s.id = ?
+            GROUP BY s.id",
+        )
         .context("Failed to prepare select scan query")?;
 
     let scan = stmt
@@ -172,10 +199,10 @@ pub fn select_scan(conn: &Connection, id: i64) -> Result<Option<Scan>> {
                 violations_found: row.get(6)?,
                 status: row.get(7)?,
                 scan_mode: row.get(8)?,
-                critical_count: 0,
-                high_count: 0,
-                medium_count: 0,
-                low_count: 0,
+                critical_count: row.get(9)?,
+                high_count: row.get(10)?,
+                medium_count: row.get(11)?,
+                low_count: row.get(12)?,
             })
         })
         .optional()

@@ -3,6 +3,7 @@ export { ChartSelector } from "./chart-selector"
 export { ChartContainer } from "./chart-container"
 
 // Individual charts (for direct use if needed)
+export { DistributionOverview } from "./charts/distribution-overview"
 export { SeverityDonut } from "./charts/severity-donut"
 export { TrendArea } from "./charts/trend-area"
 export { RuleCategoryBar } from "./charts/rule-category-bar"

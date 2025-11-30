@@ -26,8 +26,8 @@ export const useDashboardChartStore = create<DashboardChartStore>()(
   persist(
     (set) => ({
       // Defaults per user preference
-      localChartType: "severity-breakdown",
-      githubChartType: "severity-breakdown",
+      localChartType: "distribution-overview",
+      githubChartType: "distribution-overview",
       trendTimeRange: "last-10",
 
       setLocalChartType: (type) => set({ localChartType: type }),

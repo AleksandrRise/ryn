@@ -17,13 +17,10 @@ import {
 } from "@/lib/utils/chart-data"
 
 // Import individual chart components
-import { SeverityDonut } from "./charts/severity-donut"
+import { DistributionOverview } from "./charts/distribution-overview"
 import { TrendArea } from "./charts/trend-area"
-
 import { RuleCategoryBar } from "./charts/rule-category-bar"
-import { DetectionMethodDonut } from "./charts/detection-method-donut"
 import { TopFilesBar } from "./charts/top-files-bar"
-import { StatusDonut } from "./charts/status-donut"
 import { RepoComparisonBar } from "./charts/repo-comparison-bar"
 
 interface ChartContainerProps {
@@ -88,8 +85,22 @@ export function ChartContainer({
 
   // Render the appropriate chart based on type
   switch (chartType) {
-    case "severity-breakdown":
-      return <SeverityDonut data={severityData} height={height} />
+    case "distribution-overview":
+      if (mode === "github" && violations.length === 0) {
+        return (
+          <div className="h-full flex items-center justify-center text-sm text-white/40">
+            Distribution overview requires individual violation data
+          </div>
+        )
+      }
+      return (
+        <DistributionOverview
+          severityData={severityData}
+          statusData={statusData}
+          detectionMethodData={detectionMethodData}
+          height={height}
+        />
+      )
 
     case "trend-over-time":
       return <TrendArea data={trendData} height={height} />
@@ -104,16 +115,6 @@ export function ChartContainer({
       }
       return <RuleCategoryBar data={ruleCategoryData} height={height} />
 
-    case "by-detection-method":
-      if (mode === "github" && violations.length === 0) {
-        return (
-          <div className="h-full flex items-center justify-center text-sm text-white/40">
-            Detection method breakdown requires individual violation data
-          </div>
-        )
-      }
-      return <DetectionMethodDonut data={detectionMethodData} height={height} />
-
     case "top-problem-files":
       if (mode === "github" && violations.length === 0) {
         return (
@@ -123,16 +124,6 @@ export function ChartContainer({
         )
       }
       return <TopFilesBar data={topFilesData} height={height} />
-
-    case "status-overview":
-      if (mode === "github" && violations.length === 0) {
-        return (
-          <div className="h-full flex items-center justify-center text-sm text-white/40">
-            Status overview requires individual violation data
-          </div>
-        )
-      }
-      return <StatusDonut data={statusData} height={height} />
 
     case "repository-comparison":
       if (mode === "local") {

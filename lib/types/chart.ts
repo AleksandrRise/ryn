@@ -3,12 +3,10 @@
  */
 
 export type DashboardChartType =
-  | "severity-breakdown"
+  | "distribution-overview"
   | "trend-over-time"
   | "by-rule-category"
-  | "by-detection-method"
   | "top-problem-files"
-  | "status-overview"
   | "repository-comparison"
 
 export type TrendTimeRange = "last-5" | "last-10" | "all-time"
@@ -27,9 +25,9 @@ export interface ChartConfig {
  */
 export const CHART_CONFIGS: ChartConfig[] = [
   {
-    id: "severity-breakdown",
-    label: "Severity Breakdown",
-    description: "Violations by severity level",
+    id: "distribution-overview",
+    label: "Distribution Overview",
+    description: "Severity, status, and detection breakdown",
     icon: "la-chart-pie",
     availableFor: ["local", "github"],
   },
@@ -48,24 +46,10 @@ export const CHART_CONFIGS: ChartConfig[] = [
     availableFor: ["local", "github"],
   },
   {
-    id: "by-detection-method",
-    label: "By Detection Method",
-    description: "Regex vs LLM vs Hybrid detections",
-    icon: "la-robot",
-    availableFor: ["local", "github"],
-  },
-  {
     id: "top-problem-files",
     label: "Top Problem Files",
     description: "Files with most violations",
     icon: "la-file-code",
-    availableFor: ["local", "github"],
-  },
-  {
-    id: "status-overview",
-    label: "Status Overview",
-    description: "Open vs Fixed vs Dismissed",
-    icon: "la-tasks",
     availableFor: ["local", "github"],
   },
   {
