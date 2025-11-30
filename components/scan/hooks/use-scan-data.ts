@@ -20,6 +20,9 @@ interface UseScanDataResult {
   violations: Violation[]
   lastScanStats: LastScanStats
   reload: () => Promise<void>
+  // For scan history feature
+  allScans: ScanSummary[]
+  loadScanData: (scanId: number) => Promise<{ violations: Violation[]; cost: ScanCost | null }>
 }
 
 export function useScanData(projectId?: number): UseScanDataResult {
@@ -27,6 +30,7 @@ export function useScanData(projectId?: number): UseScanDataResult {
   const [lastScan, setLastScan] = useState<ScanSummary | null>(null)
   const [lastScanCost, setLastScanCost] = useState<ScanCost | null>(null)
   const [violations, setViolations] = useState<Violation[]>([])
+  const [allScans, setAllScans] = useState<ScanSummary[]>([])
   const [lastScanStats, setLastScanStats] = useState<LastScanStats>({
     filesScanned: 0,
     violationsFound: 0,
@@ -37,6 +41,7 @@ export function useScanData(projectId?: number): UseScanDataResult {
     setLastScan(null)
     setLastScanCost(null)
     setViolations([])
+    setAllScans([])
     setLastScanStats({
       filesScanned: 0,
       violationsFound: 0,
@@ -53,11 +58,19 @@ export function useScanData(projectId?: number): UseScanDataResult {
     setIsLoading(true)
     try {
       const scans = await get_scans(projectId)
+      // Store all scans for history feature (map to frontend types)
+      const mappedScans = scans.map(toScanSummary)
+      setAllScans(mappedScans)
+
       // Find the most recent completed scan (skip in_progress/cancelled scans)
       const completedScan = scans.find(s => s.status === "completed")
 
       if (!completedScan) {
-        reset()
+        // Still show empty state but keep allScans populated
+        setLastScan(null)
+        setLastScanCost(null)
+        setViolations([])
+        setLastScanStats({ filesScanned: 0, violationsFound: 0, completedAt: "" })
         return
       }
 
@@ -88,6 +101,27 @@ export function useScanData(projectId?: number): UseScanDataResult {
     }
   }, [projectId, reset])
 
+  // Load data for any scan (used when viewing historical scans)
+  const loadScanData = useCallback(async (scanId: number): Promise<{ violations: Violation[]; cost: ScanCost | null }> => {
+    try {
+      const viols = await get_violations(scanId, {})
+      const mappedViolations = viols.map(toViolation)
+
+      let cost: ScanCost | null = null
+      try {
+        const costData = await get_scan_cost(scanId)
+        cost = toScanCost(costData)
+      } catch {
+        // Cost might not exist for regex-only scans
+      }
+
+      return { violations: mappedViolations, cost }
+    } catch (error) {
+      handleTauriError(error, "Failed to load scan data")
+      return { violations: [], cost: null }
+    }
+  }, [])
+
   useEffect(() => {
     void load()
   }, [load])
@@ -99,5 +133,7 @@ export function useScanData(projectId?: number): UseScanDataResult {
     violations,
     lastScanStats,
     reload: load,
+    allScans,
+    loadScanData,
   }
 }

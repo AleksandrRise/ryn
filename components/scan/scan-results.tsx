@@ -1,17 +1,19 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { Play, Clock3, Search, FolderTree, Sparkles, Check, Github, Folder } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Play, Search, FolderTree, Sparkles, Check, Github, Folder, X } from "lucide-react"
 import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
 import { ScanControls } from "@/components/scan/scan-controls"
+import { ScanHistoryPanel } from "@/components/scan/scan-history-panel"
 import { ScanProgressCard } from "@/components/scan/scan-progress-card"
 import { SeverityFilter } from "@/components/scan/severity-filter"
 import { Button } from "@/components/ui/button"
 import { useScanData } from "@/components/scan/hooks/use-scan-data"
 import { useScanRunner } from "@/components/scan/hooks/use-scan-runner"
 import { useProjectStore } from "@/lib/stores/project-store"
-import type { Severity } from "@/lib/types/violation"
-import { formatDateTime, formatRelativeTime } from "@/lib/utils/date"
+import { useScanHistoryStore } from "@/lib/stores/scan-history-store"
+import type { Severity, Violation } from "@/lib/types/violation"
+import { formatDateTime } from "@/lib/utils/date"
 import { handleTauriError, showInfo, showSuccess } from "@/lib/utils/error-handler"
 import { apply_fix, generate_fix, get_violation, read_file_content, type Fix } from "@/lib/tauri/commands"
 
@@ -32,7 +34,22 @@ export function ScanResults() {
     violations,
     lastScanStats,
     reload,
+    allScans,
+    loadScanData,
   } = useScanData(selectedProject?.id)
+
+  // Scan history state
+  const {
+    isExpanded: historyExpanded,
+    toggleExpanded: toggleHistoryExpanded,
+    detailLevel,
+    setDetailLevel,
+    selectedScanId,
+    setSelectedScanId,
+  } = useScanHistoryStore()
+
+  const [historicalViolations, setHistoricalViolations] = useState<Violation[]>([])
+  const [loadingScanId, setLoadingScanId] = useState<number | null>(null)
 
   const {
     isScanning,
@@ -54,14 +71,43 @@ export function ScanResults() {
     }))
   }
 
+  // Handle selecting a historical scan
+  const handleSelectHistoricalScan = useCallback(async (scanId: number) => {
+    // If selecting the latest scan, clear historical selection
+    if (lastScan && scanId === lastScan.id) {
+      setSelectedScanId(null)
+      setHistoricalViolations([])
+      return
+    }
+
+    setSelectedScanId(scanId)
+    setLoadingScanId(scanId)
+    try {
+      const data = await loadScanData(scanId)
+      setHistoricalViolations(data.violations)
+    } finally {
+      setLoadingScanId(null)
+    }
+  }, [lastScan, loadScanData, setSelectedScanId])
+
+  // Clear historical selection when project changes
+  useEffect(() => {
+    setSelectedScanId(null)
+    setHistoricalViolations([])
+  }, [selectedProject?.id, setSelectedScanId])
+
+  // Determine which violations to display (historical vs current)
+  const isViewingHistorical = selectedScanId !== null && selectedScanId !== lastScan?.id
+  const activeViolations = isViewingHistorical ? historicalViolations : violations
+
   const filteredViolations = useMemo(
     () =>
-      violations.filter((violation) => {
+      activeViolations.filter((violation) => {
         const matchesSeverity = selectedSeverity === "all" || violation.severity === selectedSeverity
         const matchesControl = selectedControls[violation.controlId] !== false
         return matchesSeverity && matchesControl
       }),
-    [selectedSeverity, selectedControls, violations],
+    [selectedSeverity, selectedControls, activeViolations],
   )
 
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
@@ -76,12 +122,6 @@ export function ScanResults() {
   const [showApplyConfirm, setShowApplyConfirm] = useState(false)
 
   const lastCostDisplay = lastScanCost ? `$${lastScanCost.totalCostUsd.toFixed(3)}` : "–"
-  const lastCompletedDisplay = lastScanStats.completedAt
-    ? formatDateTime(lastScanStats.completedAt)
-    : "No scans yet"
-  const lastCompletedRelative = lastScanStats.completedAt
-    ? formatRelativeTime(lastScanStats.completedAt)
-    : ""
   const lastMode = lastScan?.scanMode ? lastScan.scanMode : "regex_only"
   const isGitHubSnapshot = selectedProject?.path.includes("ryn-github-cache") ?? false
 
@@ -326,31 +366,53 @@ export function ScanResults() {
         </div>
       </div>
 
-      {/* Meta line + filters */}
-      <div className="flex flex-wrap items-center gap-2 text-xs text-white/65 animate-fade-in-up delay-100">
-        <div className="flex flex-wrap items-center gap-2 max-w-[65vw]">
-          <span className="flex items-center gap-1">
-            <Clock3 className="w-3.5 h-3.5" />
-            {lastCompletedDisplay}
-            {lastCompletedRelative && <span className="text-white/45">({lastCompletedRelative})</span>}
-          </span>
-          <span className="text-white/60">·</span>
-          <span>Mode: {lastMode === "regex_only" ? "Pattern only" : lastMode === "smart" ? "Smart" : "Analyze all"}</span>
-          <span className="text-white/60">·</span>
-          <span>Files: {lastScanStats.filesScanned || 0}</span>
-          <span className="text-white/60">·</span>
-          <span>Violations: {lastScanStats.violationsFound || 0}</span>
-          <span className="text-white/60">·</span>
-          <span>Cost: {lastCostDisplay}</span>
-        </div>
-        <div className="ml-auto flex items-center gap-3">
-          <ScanControls selectedControls={selectedControls} onToggle={toggleControl} />
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-white/55">Severity</span>
-            <SeverityFilter selected={selectedSeverity} onSelect={setSelectedSeverity} violations={violations} />
-          </div>
+      {/* Scan History Panel */}
+      <ScanHistoryPanel
+        scans={allScans}
+        selectedScanId={selectedScanId}
+        onSelectScan={handleSelectHistoricalScan}
+        detailLevel={detailLevel}
+        onDetailLevelChange={setDetailLevel}
+        isExpanded={historyExpanded}
+        onToggleExpanded={toggleHistoryExpanded}
+        loadingScanId={loadingScanId}
+        currentScanStats={{
+          filesScanned: lastScanStats.filesScanned,
+          violationsFound: lastScanStats.violationsFound,
+          completedAt: lastScanStats.completedAt,
+          mode: lastMode,
+          cost: lastCostDisplay,
+        }}
+        currentScanCost={lastScanCost}
+      />
+
+      {/* Filters row */}
+      <div className="flex items-center justify-end gap-3 text-xs animate-fade-in-up delay-100">
+        <ScanControls selectedControls={selectedControls} onToggle={toggleControl} />
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-white/55">Severity</span>
+          <SeverityFilter selected={selectedSeverity} onSelect={setSelectedSeverity} violations={activeViolations} />
         </div>
       </div>
+
+      {/* Historical scan banner */}
+      {isViewingHistorical && (
+        <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg animate-fade-in-up">
+          <span className="text-sm text-amber-200">
+            Viewing historical scan from {formatDateTime(allScans.find(s => s.id === selectedScanId)?.completedAt || "")}
+          </span>
+          <button
+            onClick={() => {
+              setSelectedScanId(null)
+              setHistoricalViolations([])
+            }}
+            className="flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+            View latest
+          </button>
+        </div>
+      )}
 
       {isScanning && <ScanProgressCard progress={progress} onCancel={cancelScan} />}
 
