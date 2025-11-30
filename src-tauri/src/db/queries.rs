@@ -1270,6 +1270,188 @@ pub fn get_github_repo_count(conn: &Connection) -> Result<i64> {
     Ok(count)
 }
 
+// ===== FILE HASH CRUD (Incremental Scanning) =====
+
+use std::collections::HashMap;
+
+/// Represents a stored file hash with its associated scan info
+#[derive(Debug, Clone)]
+pub struct StoredFileHash {
+    pub content_hash: String,
+    pub last_scan_id: i64,
+    pub scan_mode: String,
+}
+
+/// Get all stored file hashes for a project
+/// Returns a map of file_path -> StoredFileHash for efficient lookup
+pub fn select_file_hashes(conn: &Connection, project_id: i64) -> Result<HashMap<String, StoredFileHash>> {
+    let mut stmt = conn
+        .prepare("SELECT file_path, content_hash, last_scan_id, scan_mode FROM file_hashes WHERE project_id = ?")
+        .context("Failed to prepare select file hashes query")?;
+
+    let mut hashes = HashMap::new();
+    let rows = stmt
+        .query_map(params![project_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })
+        .context("Failed to query file hashes")?;
+
+    for row in rows {
+        let (path, hash, scan_id, mode) = row.context("Failed to read file hash row")?;
+        hashes.insert(
+            path,
+            StoredFileHash {
+                content_hash: hash,
+                last_scan_id: scan_id,
+                scan_mode: mode,
+            },
+        );
+    }
+
+    Ok(hashes)
+}
+
+/// Insert or update a file hash
+/// Uses UPSERT to handle both new files and updates efficiently
+pub fn upsert_file_hash(
+    conn: &Connection,
+    project_id: i64,
+    file_path: &str,
+    content_hash: &str,
+    scan_id: i64,
+    scan_mode: &str,
+) -> Result<()> {
+    conn.execute(
+        "INSERT INTO file_hashes (project_id, file_path, content_hash, last_scan_id, scan_mode, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(project_id, file_path)
+         DO UPDATE SET content_hash = excluded.content_hash,
+                       last_scan_id = excluded.last_scan_id,
+                       scan_mode = excluded.scan_mode,
+                       updated_at = datetime('now')",
+        params![project_id, file_path, content_hash, scan_id, scan_mode],
+    )
+    .context("Failed to upsert file hash")?;
+
+    Ok(())
+}
+
+/// Delete hash for a file that no longer exists
+pub fn delete_file_hash(conn: &Connection, project_id: i64, file_path: &str) -> Result<()> {
+    conn.execute(
+        "DELETE FROM file_hashes WHERE project_id = ? AND file_path = ?",
+        params![project_id, file_path],
+    )
+    .context("Failed to delete file hash")?;
+
+    Ok(())
+}
+
+/// Get the last completed scan for a project
+/// Used to find violations to carry forward from unchanged files
+pub fn select_last_completed_scan(conn: &Connection, project_id: i64) -> Result<Option<Scan>> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT
+                s.id, s.project_id, s.started_at, s.completed_at,
+                s.files_scanned, s.total_files, s.violations_found,
+                s.status, s.scan_mode,
+                0, 0, 0, 0
+            FROM scans s
+            WHERE s.project_id = ? AND s.status = 'completed'
+            ORDER BY s.completed_at DESC
+            LIMIT 1",
+        )
+        .context("Failed to prepare select last completed scan query")?;
+
+    let scan = stmt
+        .query_row(params![project_id], |row| {
+            Ok(Scan {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                started_at: row.get(2)?,
+                completed_at: row.get(3)?,
+                files_scanned: row.get(4)?,
+                total_files: row.get(5)?,
+                violations_found: row.get(6)?,
+                status: row.get(7)?,
+                scan_mode: row.get(8)?,
+                critical_count: row.get(9)?,
+                high_count: row.get(10)?,
+                medium_count: row.get(11)?,
+                low_count: row.get(12)?,
+            })
+        })
+        .optional()
+        .context("Failed to query last completed scan")?;
+
+    Ok(scan)
+}
+
+/// Get violations for specific files from a specific scan
+/// Used to carry forward violations from unchanged files
+pub fn select_violations_for_files(
+    conn: &Connection,
+    scan_id: i64,
+    file_paths: &[String],
+) -> Result<Vec<Violation>> {
+    if file_paths.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Build placeholders for IN clause
+    let placeholders: Vec<&str> = file_paths.iter().map(|_| "?").collect();
+    let sql = format!(
+        "SELECT id, scan_id, control_id, severity, description, file_path, line_number,
+                code_snippet, status, detected_at, detection_method, confidence_score,
+                llm_reasoning, regex_reasoning, function_name, class_name
+         FROM violations
+         WHERE scan_id = ? AND file_path IN ({})
+         ORDER BY file_path, line_number",
+        placeholders.join(", ")
+    );
+
+    let mut stmt = conn.prepare(&sql).context("Failed to prepare select violations for files")?;
+
+    // Build params: scan_id followed by all file paths
+    let mut params_vec: Vec<&dyn rusqlite::ToSql> = vec![&scan_id];
+    for path in file_paths {
+        params_vec.push(path);
+    }
+
+    let violations = stmt
+        .query_map(params_vec.as_slice(), |row| {
+            Ok(Violation {
+                id: row.get(0)?,
+                scan_id: row.get(1)?,
+                control_id: row.get(2)?,
+                severity: row.get(3)?,
+                description: row.get(4)?,
+                file_path: row.get(5)?,
+                line_number: row.get(6)?,
+                code_snippet: row.get(7)?,
+                status: row.get(8)?,
+                detected_at: row.get(9)?,
+                detection_method: row.get(10)?,
+                confidence_score: row.get(11)?,
+                llm_reasoning: row.get(12)?,
+                regex_reasoning: row.get(13)?,
+                function_name: row.get(14)?,
+                class_name: row.get(15)?,
+            })
+        })
+        .context("Failed to query violations for files")?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .context("Failed to collect violations for files")?;
+
+    Ok(violations)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

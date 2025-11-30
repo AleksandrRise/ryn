@@ -294,6 +294,41 @@ fn migrate_to_v6(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migrate from v6 to v7 (Incremental scanning)
+/// Adds file_hashes table to track file content hashes:
+/// - Enables skipping unchanged files during scans
+/// - Stores SHA256 hash, scan mode, and last scan that processed the file
+fn migrate_to_v7(conn: &Connection) -> Result<()> {
+    // ============================================================
+    // FILE_HASHES TABLE: Track file content hashes for change detection
+    // ============================================================
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS file_hashes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            file_path TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            last_scan_id INTEGER NOT NULL,
+            scan_mode TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (last_scan_id) REFERENCES scans(id) ON DELETE SET NULL,
+            UNIQUE(project_id, file_path)
+        )",
+        [],
+    )
+    .context("Failed to create file_hashes table")?;
+
+    // Index for efficient project-based hash lookups
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_file_hashes_project_id ON file_hashes(project_id)",
+        [],
+    )
+    .context("Failed to create idx_file_hashes_project_id index")?;
+
+    Ok(())
+}
+
 /// Backfill scan_mode for historical scans that used LLM analysis
 ///
 /// Rules (deterministic, no inference beyond stored data):
@@ -356,6 +391,7 @@ pub fn seed_settings(conn: &Connection) -> Result<()> {
 /// - v4: Scan mode tracking (scan_mode column in scans table)
 /// - v5: GitHub integration (github_connections, github_repos, tracked_repos)
 /// - v6: Smart polling (last_commit_sha, last_checked_at in tracked_repos)
+/// - v7: Incremental scanning (file_hashes table for change detection)
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     let current_version = get_schema_version(conn)?;
 
@@ -388,6 +424,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 6 {
         migrate_to_v6(conn)?;
         set_schema_version(conn, 6)?;
+    }
+
+    if current_version < 7 {
+        migrate_to_v7(conn)?;
+        set_schema_version(conn, 7)?;
     }
 
     // Seed default settings (idempotent - won't overwrite existing values)

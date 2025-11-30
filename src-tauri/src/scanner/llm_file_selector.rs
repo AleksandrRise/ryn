@@ -41,6 +41,41 @@ fn is_supported_language(file_path: &str) -> bool {
     }
 }
 
+/// Get the selection reason for why a file was chosen for LLM analysis
+///
+/// # Arguments
+/// * `code` - Full file contents
+/// * `scan_mode` - Scanning mode (regex_only/smart/analyze_all)
+///
+/// # Returns
+/// Selection reason as a string: "auth", "db", "api", "secrets", "file_io", "network", "all", or "none"
+pub fn get_selection_reason(code: &str, scan_mode: &str) -> String {
+    match scan_mode {
+        "regex_only" => "none".to_string(),
+        "analyze_all" => "all".to_string(),
+        "smart" => {
+            let code_lower = code.to_lowercase();
+            // Return the first matching category (priority order)
+            if contains_auth_patterns(&code_lower) {
+                "auth".to_string()
+            } else if contains_database_patterns(&code_lower) {
+                "db".to_string()
+            } else if contains_endpoint_patterns(&code_lower) {
+                "api".to_string()
+            } else if contains_secrets_patterns(&code_lower) {
+                "secrets".to_string()
+            } else if contains_file_io_patterns(&code_lower) {
+                "file_io".to_string()
+            } else if contains_network_patterns(&code_lower) {
+                "network".to_string()
+            } else {
+                "none".to_string()
+            }
+        }
+        _ => "none".to_string(),
+    }
+}
+
 /// Heuristic analysis to determine if code is security-relevant
 ///
 /// Scans for patterns indicating:

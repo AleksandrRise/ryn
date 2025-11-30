@@ -6,6 +6,7 @@ use crate::db::{self, queries};
 use crate::fix_generator::grok_client::GrokClient;
 use crate::models::{DetectionMethod, Scan, ScanCost, Severity, Violation};
 use crate::rules::{A12ResilienceRule, CC61AccessControlRule, CC67SecretsRule, CC72LoggingRule};
+use crate::scanner::compute_hash;
 use crate::scanner::framework_detector::FrameworkDetector;
 use crate::scanner::llm_file_selector;
 use crate::scanner::tree_sitter_utils::{find_context_at_line, CodeParser};
@@ -14,7 +15,7 @@ use crate::scanner::{FileWatcher, SKIP_DIRECTORIES};
 use crate::security::path_validation;
 use crate::utils::create_audit_event;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -41,6 +42,71 @@ struct CostLimitEvent {
     limit_usd: f64,
     files_analyzed: i64,
     files_remaining: i32,
+}
+
+// ============================================================================
+// AI TRANSPARENCY EVENTS (for real-time inference visibility)
+// ============================================================================
+
+/// Event emitted when AI analysis starts on a file
+/// Allows frontend to show which file is currently being analyzed
+#[derive(Clone, Serialize)]
+pub struct AiFileStartedEvent {
+    /// The scan ID this analysis belongs to
+    pub scan_id: i64,
+    /// Path to the file being analyzed
+    pub file_path: String,
+    /// Which file in the LLM queue (1-indexed)
+    pub file_index: i32,
+    /// Total number of files being analyzed by LLM
+    pub total_llm_files: i32,
+    /// Why this file was selected for AI analysis
+    /// One of: "auth", "db", "api", "secrets", "file_io", "network", "all"
+    pub selection_reason: String,
+}
+
+/// Event emitted for each chunk of AI reasoning text as it streams
+/// Enables ChatGPT-style live typing effect in the UI
+#[derive(Clone, Serialize)]
+pub struct AiReasoningChunkEvent {
+    /// The scan ID this analysis belongs to
+    pub scan_id: i64,
+    /// Path to the file being analyzed
+    pub file_path: String,
+    /// The new text chunk (incremental)
+    pub chunk: String,
+    /// Full accumulated text so far (for late-joining listeners)
+    pub accumulated: String,
+}
+
+/// Event emitted when AI analysis completes for a file
+/// Provides summary of what the AI found
+#[derive(Clone, Serialize)]
+pub struct AiFileCompletedEvent {
+    /// The scan ID this analysis belongs to
+    pub scan_id: i64,
+    /// Path to the file that was analyzed
+    pub file_path: String,
+    /// Number of violations found in this file
+    pub violations_found: i32,
+    /// Confidence scores for each violation (0-100)
+    pub confidence_scores: Vec<i64>,
+    /// Brief summary or first violation description
+    pub summary: String,
+}
+
+/// Event emitted when AI analysis begins for a batch
+/// Helps frontend track batch progress
+#[derive(Clone, Serialize)]
+pub struct AiBatchStartedEvent {
+    /// The scan ID
+    pub scan_id: i64,
+    /// Current batch number (1-indexed)
+    pub batch_number: i32,
+    /// Total number of batches
+    pub total_batches: i32,
+    /// Files in this batch
+    pub files_in_batch: Vec<String>,
 }
 
 /// Channels for handling scan-time cost limit prompts and cancellations
@@ -236,7 +302,7 @@ pub async fn scan_project_internal<R: tauri::Runtime>(
     project_id: i64,
 ) -> Result<Scan, String> {
     // Query settings and create scan record (scoped to drop connection before async operations)
-    let (llm_scan_mode, project, scan_id) = {
+    let (llm_scan_mode, project, scan_id, stored_hashes, last_scan) = {
         let conn = db::get_connection();
 
         // Query LLM scan mode from settings (regex_only, smart, or analyze_all)
@@ -269,8 +335,24 @@ pub async fn scan_project_internal<R: tauri::Runtime>(
         let scan_id = queries::insert_scan(&conn, project_id, &llm_scan_mode)
             .map_err(|e| format!("Failed to create scan: {}", e))?;
 
-        (llm_scan_mode, project, scan_id)
+        // Load stored file hashes for incremental scanning
+        let stored_hashes = queries::select_file_hashes(&conn, project_id)
+            .unwrap_or_default();
+
+        // Get last completed scan for violation carry-forward
+        let last_scan = queries::select_last_completed_scan(&conn, project_id)
+            .ok()
+            .flatten();
+
+        (llm_scan_mode, project, scan_id, stored_hashes, last_scan)
     }; // Connection dropped here
+
+    // Track which stored files we've seen (to detect deletions)
+    let mut seen_files: HashSet<String> = HashSet::new();
+    // Track unchanged files for violation carry-forward
+    let mut unchanged_files: Vec<String> = Vec::new();
+    // Track changed files with their new hashes for update after scan
+    let mut changed_file_hashes: Vec<(String, String)> = Vec::new();
 
     // Count total files before scanning (for accurate progress tracking)
     let total_files = WalkDir::new(&project.path)
@@ -292,7 +374,8 @@ pub async fn scan_project_internal<R: tauri::Runtime>(
 
     // Collect files for LLM analysis (smart/analyze_all modes)
     // Each entry: (relative_path, content)
-    let mut files_for_llm_analysis: Vec<(String, String)> = Vec::new();
+    // Tuple: (file_path, content, selection_reason)
+    let mut files_for_llm_analysis: Vec<(String, String, String)> = Vec::new();
 
     // Walk through project files
     let mut files_scanned = 0;
@@ -362,6 +445,28 @@ pub async fn scan_project_internal<R: tauri::Runtime>(
                             .to_string_lossy()
                             .to_string();
 
+                    // Mark file as seen for deletion detection
+                    seen_files.insert(relative_path.clone());
+
+                    // Compute hash and check if file changed
+                    let current_hash = compute_hash(&content);
+                    let file_changed = if let Some(stored) = stored_hashes.get(&relative_path) {
+                        // File changed if: hash differs OR scan mode differs
+                        stored.content_hash != current_hash || stored.scan_mode != llm_scan_mode
+                    } else {
+                        // New file (not in stored hashes)
+                        true
+                    };
+
+                    if !file_changed {
+                        // File unchanged - track for violation carry-forward, skip scanning
+                        unchanged_files.push(relative_path.clone());
+                        continue;
+                    }
+
+                    // File is new or changed - track hash for update after scan
+                    changed_file_hashes.push((relative_path.clone(), current_hash));
+
                     // Run all 4 rule engines and collect violations (don't insert yet)
                     let mut violations = run_all_rules(&content, &relative_path, scan_id);
                     regex_violations.append(&mut violations);
@@ -376,7 +481,13 @@ pub async fn scan_project_internal<R: tauri::Runtime>(
                         &content,
                         &llm_scan_mode,
                     ) {
-                        files_for_llm_analysis.push((relative_path.clone(), content.clone()));
+                        let selection_reason =
+                            llm_file_selector::get_selection_reason(&content, &llm_scan_mode);
+                        files_for_llm_analysis.push((
+                            relative_path.clone(),
+                            content.clone(),
+                            selection_reason,
+                        ));
                     }
                 }
             }
@@ -386,6 +497,83 @@ pub async fn scan_project_internal<R: tauri::Runtime>(
             }
         }
     }
+
+    // Detect deleted files (in stored hashes but not seen during walk)
+    let deleted_files: Vec<String> = stored_hashes
+        .keys()
+        .filter(|path| !seen_files.contains(*path))
+        .cloned()
+        .collect();
+
+    // Handle "no changes" case - emit event and carry forward all violations
+    if changed_file_hashes.is_empty() && deleted_files.is_empty() && last_scan.is_some() {
+        println!("[ryn] No changes detected since last scan, carrying forward violations");
+
+        // Emit "no changes detected" event
+        let _ = app.emit("scan-no-changes", serde_json::json!({
+            "scan_id": scan_id,
+            "project_id": project_id,
+            "message": "No changes detected since last scan"
+        }));
+
+        // Carry forward all violations from last scan
+        let last_scan_ref = last_scan.as_ref().unwrap();
+        let conn = db::get_connection();
+        let all_violations = queries::select_violations(&conn, last_scan_ref.id)
+            .unwrap_or_default();
+
+        for mut v in all_violations {
+            v.scan_id = scan_id;
+            v.id = 0; // Reset ID for new insert
+            if queries::insert_violation(&conn, &v).is_ok() {
+                violations_found += 1;
+            }
+        }
+
+        // Mark scan as completed
+        let completed_at = chrono::Utc::now().to_rfc3339();
+        queries::update_scan_status(&conn, scan_id, "completed", Some(&completed_at))
+            .map_err(|e| format!("Failed to update scan status: {}", e))?;
+        queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found)
+            .map_err(|e| format!("Failed to update scan results: {}", e))?;
+
+        // Log audit event
+        if let Ok(event) = create_audit_event(
+            &conn,
+            "scan_completed",
+            Some(project_id),
+            None,
+            None,
+            &format!(
+                "No changes detected, carried forward {} violations from previous scan",
+                violations_found
+            ),
+        ) {
+            let _ = queries::insert_audit_event(&conn, &event);
+        }
+
+        // Fetch complete scan with severity counts
+        let mut scan = queries::select_scan(&conn, scan_id)
+            .map_err(|e| format!("Failed to fetch scan: {}", e))?
+            .ok_or_else(|| "Scan was created but could not be retrieved".to_string())?;
+
+        let (critical, high, medium, low) = queries::get_severity_counts(&conn, scan_id)
+            .map_err(|e| format!("Failed to calculate severity counts: {}", e))?;
+
+        scan.critical_count = critical;
+        scan.high_count = high;
+        scan.medium_count = medium;
+        scan.low_count = low;
+
+        return Ok(scan);
+    }
+
+    println!(
+        "[ryn] Incremental scan: {} changed files, {} unchanged files, {} deleted files",
+        changed_file_hashes.len(),
+        unchanged_files.len(),
+        deleted_files.len()
+    );
 
     // Merge regex and LLM violations, then insert deduplicated results
     println!(
@@ -447,9 +635,69 @@ pub async fn scan_project_internal<R: tauri::Runtime>(
     } // Connection dropped here
 
     println!(
-        "[ryn] Inserted {} final violations after deduplication",
+        "[ryn] Inserted {} violations from changed files",
         violations_found
     );
+
+    // Carry forward violations from unchanged files
+    if !unchanged_files.is_empty() {
+        if let Some(ref last) = last_scan {
+            let conn = db::get_connection();
+            let carried_violations = queries::select_violations_for_files(
+                &conn,
+                last.id,
+                &unchanged_files,
+            ).unwrap_or_default();
+
+            let carried_count = carried_violations.len();
+            for mut v in carried_violations {
+                v.scan_id = scan_id;
+                v.id = 0; // Reset ID for new insert
+                if queries::insert_violation(&conn, &v).is_ok() {
+                    violations_found += 1;
+                }
+            }
+            println!(
+                "[ryn] Carried forward {} violations from {} unchanged files",
+                carried_count, unchanged_files.len()
+            );
+        }
+    }
+
+    println!(
+        "[ryn] Total violations after carry-forward: {}",
+        violations_found
+    );
+
+    // Update file hashes for changed files
+    {
+        let conn = db::get_connection();
+
+        // Update/insert hashes for changed files
+        for (path, hash) in &changed_file_hashes {
+            let _ = queries::upsert_file_hash(
+                &conn,
+                project_id,
+                path,
+                hash,
+                scan_id,
+                &llm_scan_mode,
+            );
+        }
+
+        // Delete hashes for deleted files
+        for path in &deleted_files {
+            let _ = queries::delete_file_hash(&conn, project_id, path);
+        }
+
+        if !changed_file_hashes.is_empty() || !deleted_files.is_empty() {
+            println!(
+                "[ryn] Updated {} file hashes, deleted {} stale hashes",
+                changed_file_hashes.len(),
+                deleted_files.len()
+            );
+        }
+    } // Connection dropped here
 
     // Update scan with results and fetch final data (scoped to drop connection)
     let scan = {
@@ -842,10 +1090,11 @@ pub async fn stop_watching(
 ///
 /// Processes files concurrently (max 10 simultaneous) with 30-second timeout per file.
 /// Fetches existing regex violations for context and stores LLM-detected violations.
+/// Emits AI transparency events for real-time frontend visibility.
 ///
 /// # Arguments
 /// * `scan_id` - ID of current scan
-/// * `files` - Vector of (relative_path, content) tuples to analyze
+/// * `files` - Vector of (relative_path, content, selection_reason) tuples to analyze
 ///
 /// # Returns
 /// Tuple of (total_violations_found, total_cost_usd)
@@ -855,9 +1104,10 @@ pub async fn stop_watching(
 /// - 30-second timeout: Prevents hanging on slow/large files
 /// - Each task gets independent DB connection and Grok client
 /// - Errors are logged but don't stop processing of other files
+/// - Emits ai-file-started, ai-file-completed, ai-batch-started events
 async fn analyze_files_with_llm<R: tauri::Runtime>(
     scan_id: i64,
-    files: Vec<(String, String)>,
+    files: Vec<(String, String, String)>,
     channels: Arc<ScanResponseChannels>,
     app_handle: tauri::AppHandle<R>,
 ) -> Result<(Vec<Violation>, f64), String> {
@@ -886,10 +1136,16 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
     // Track cumulative cost, token usage and collected violations
     let mut llm_violations: Vec<Violation> = Vec::new();
     let mut total_cost = 0.0;
-    let total_files = files.len();
+    let total_files = files.len() as i32;
     let mut total_input_tokens: i64 = 0;
     let mut total_output_tokens: i64 = 0;
     let mut files_analyzed_with_llm: i64 = 0;
+
+    // Calculate total batches for progress reporting
+    let total_batches = (files.len() + 9) / 10; // Ceiling division
+
+    // Track file index across all batches for AI events
+    let mut global_file_index = 0i32;
 
     // Process files in batches, checking cost limit every 10 files
     for (batch_idx, chunk) in files.chunks(10).enumerate() {
@@ -903,17 +1159,45 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
             break;
         }
 
+        // Emit ai-batch-started event
+        let batch_files: Vec<String> = chunk.iter().map(|(path, _, _)| path.clone()).collect();
+        let _ = app_handle.emit(
+            "ai-batch-started",
+            AiBatchStartedEvent {
+                scan_id,
+                batch_number: (batch_idx + 1) as i32,
+                total_batches: total_batches as i32,
+                files_in_batch: batch_files,
+            },
+        );
+
         let mut tasks = Vec::new();
 
         // Spawn tasks for this batch of up to 10 files
-        for (file_path, content) in chunk {
+        for (file_path, content, selection_reason) in chunk {
             let file_path = file_path.clone();
             let content = content.clone();
+            let selection_reason = selection_reason.clone();
             let sem_clone = semaphore.clone();
+            let app_clone = app_handle.clone();
+            let file_index = global_file_index;
+            global_file_index += 1;
 
             let task = tokio::spawn(async move {
                 // Acquire semaphore permit (blocks if 10 tasks already running)
                 let _permit = sem_clone.acquire().await.unwrap();
+
+                // Emit ai-file-started event
+                let _ = app_clone.emit(
+                    "ai-file-started",
+                    AiFileStartedEvent {
+                        scan_id,
+                        file_path: file_path.clone(),
+                        file_index: file_index + 1, // 1-indexed for display
+                        total_llm_files: total_files,
+                        selection_reason: selection_reason.clone(),
+                    },
+                );
 
                 // Create Grok client for this task (reads API key from env)
                 let client = match GrokClient::new() {
@@ -932,14 +1216,60 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
                         .collect()
                 }; // Connection dropped here
 
-                // Analyze with 30-second timeout
-                let analysis_future =
-                    client.analyze_for_violations(scan_id, &file_path, &content, regex_findings);
+                // Clone values for the streaming callback closure
+                let app_for_stream = app_clone.clone();
+                let file_path_for_stream = file_path.clone();
 
-                let result = timeout(Duration::from_secs(30), analysis_future).await;
+                // Streaming callback: emit ai-reasoning-chunk events as AI responds
+                let on_chunk = move |chunk: &str, accumulated: &str| {
+                    let _ = app_for_stream.emit(
+                        "ai-reasoning-chunk",
+                        AiReasoningChunkEvent {
+                            scan_id,
+                            file_path: file_path_for_stream.clone(),
+                            chunk: chunk.to_string(),
+                            accumulated: accumulated.to_string(),
+                        },
+                    );
+                };
+
+                // Analyze with streaming (60-second timeout for streaming)
+                let analysis_future = client.analyze_for_violations_streaming(
+                    scan_id,
+                    &file_path,
+                    &content,
+                    regex_findings,
+                    on_chunk,
+                );
+
+                let result = timeout(Duration::from_secs(60), analysis_future).await;
 
                 match result {
                     Ok(Ok(analysis)) => {
+                        // Emit ai-file-completed event
+                        let violations_count = analysis.violations.len() as i32;
+                        let confidence_scores: Vec<i64> = analysis
+                            .violations
+                            .iter()
+                            .map(|v| v.confidence_score.unwrap_or(0))
+                            .collect();
+                        let summary = analysis
+                            .violations
+                            .first()
+                            .map(|v| v.description.clone())
+                            .unwrap_or_else(|| "No violations found".to_string());
+
+                        let _ = app_clone.emit(
+                            "ai-file-completed",
+                            AiFileCompletedEvent {
+                                scan_id,
+                                file_path: file_path.clone(),
+                                violations_found: violations_count,
+                                confidence_scores,
+                                summary,
+                            },
+                        );
+
                         // Return violations, token usage and cost for this file.
                         let usage = analysis.usage;
                         Ok((
@@ -981,7 +1311,7 @@ async fn analyze_files_with_llm<R: tauri::Runtime>(
         }
 
         // After each batch (every 10 files), check if we've exceeded cost limit
-        let files_analyzed = ((batch_idx + 1) * 10).min(total_files);
+        let files_analyzed = (((batch_idx + 1) * 10) as i32).min(total_files);
         let files_remaining = total_files.saturating_sub(files_analyzed);
 
         if total_cost > cost_limit_usd && files_remaining > 0 {

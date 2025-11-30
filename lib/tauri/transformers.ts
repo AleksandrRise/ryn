@@ -40,7 +40,9 @@ export function toViolation(violation: ApiViolation): Violation {
     status,
     detectedAt: violation.created_at ?? "",
     detectionMethod: violation.detection_method,
-    confidenceScore: violation.confidence_score,
+    confidenceScore: violation.confidence_score != null
+      ? violation.confidence_score / 100
+      : undefined,
     llmReasoning: violation.llm_reasoning,
     regexReasoning: violation.regex_reasoning,
   }

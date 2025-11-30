@@ -11,6 +11,7 @@
 
 use crate::models::{Control, DetectionMethod, Severity, Violation};
 use anyhow::{anyhow, Context, Result};
+use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -99,6 +100,53 @@ impl UsageMetrics {
 
         input_cost + output_cost
     }
+}
+
+// ============================================================================
+// STREAMING RESPONSE TYPES (for real-time AI inference transparency)
+// ============================================================================
+
+/// Streaming chunk from Grok API (SSE format)
+/// Each line in the stream looks like: `data: {"id":"...","choices":[...]}`
+#[derive(Debug, Clone, Deserialize)]
+pub struct GrokStreamChunk {
+    /// Chunk ID
+    pub id: String,
+    /// Object type (always "chat.completion.chunk")
+    pub object: String,
+    /// Unix timestamp of creation
+    pub created: i64,
+    /// Model used
+    pub model: String,
+    /// Streaming choices with delta content
+    pub choices: Vec<StreamChoice>,
+    /// Usage metrics (only present in final chunk when stream_options.include_usage is true)
+    #[serde(default)]
+    pub usage: Option<UsageMetrics>,
+}
+
+/// Choice in streaming response
+#[derive(Debug, Clone, Deserialize)]
+pub struct StreamChoice {
+    /// Choice index
+    pub index: i32,
+    /// Delta content (partial message)
+    pub delta: StreamDelta,
+    /// Finish reason (only present in final chunk: "stop", "length", etc.)
+    #[serde(default)]
+    pub finish_reason: Option<String>,
+}
+
+/// Delta content in streaming response
+/// Contains incremental text as the LLM generates it
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct StreamDelta {
+    /// Role (only in first chunk: "assistant")
+    #[serde(default)]
+    pub role: Option<String>,
+    /// Content chunk (the actual text being streamed)
+    #[serde(default)]
+    pub content: Option<String>,
 }
 
 /// Result of LLM analysis for violations
@@ -402,6 +450,158 @@ impl GrokClient {
             violations,
             usage: response.usage,
         })
+    }
+
+    /// Analyze code for violations with streaming response
+    ///
+    /// This method streams the AI response in real-time, calling `on_chunk` for each
+    /// piece of text as it arrives. This enables showing the AI's reasoning to users
+    /// as it happens (ChatGPT-style typing effect).
+    ///
+    /// # Arguments
+    /// * `scan_id` - The scan ID for context
+    /// * `file_path` - Path to the file being analyzed
+    /// * `code` - The file contents to analyze
+    /// * `regex_findings` - Existing regex-detected violations for context
+    /// * `on_chunk` - Callback called with each text chunk as it streams
+    ///
+    /// # Returns
+    /// AnalysisResult with violations and token usage (usage may be estimated if not provided)
+    pub async fn analyze_for_violations_streaming<F>(
+        &self,
+        scan_id: i64,
+        file_path: &str,
+        code: &str,
+        regex_findings: Vec<Violation>,
+        on_chunk: F,
+    ) -> Result<AnalysisResult>
+    where
+        F: Fn(&str, &str) + Send + Sync, // (chunk, accumulated)
+    {
+        let system_prompt = Self::build_soc2_system_prompt();
+        let user_prompt = Self::build_analysis_prompt(file_path, code, &regex_findings);
+
+        // Call streaming API and collect the full response
+        let (full_content, usage) = self
+            .call_api_streaming(&user_prompt, Some(&system_prompt), on_chunk)
+            .await?;
+
+        // Parse violations from the complete response
+        let violations = Self::parse_violations_response(&full_content, scan_id, file_path)?;
+
+        Ok(AnalysisResult { violations, usage })
+    }
+
+    /// Call Grok API with streaming enabled
+    ///
+    /// Processes Server-Sent Events (SSE) from the API and calls the callback
+    /// for each content chunk received.
+    async fn call_api_streaming<F>(
+        &self,
+        prompt: &str,
+        system: Option<&str>,
+        on_chunk: F,
+    ) -> Result<(String, UsageMetrics)>
+    where
+        F: Fn(&str, &str) + Send + Sync, // (chunk, accumulated)
+    {
+        let mut messages = Vec::new();
+
+        if let Some(sys) = system {
+            messages.push(Message {
+                role: "system".to_string(),
+                content: sys.to_string(),
+            });
+        }
+
+        messages.push(Message {
+            role: "user".to_string(),
+            content: prompt.to_string(),
+        });
+
+        let request = GrokRequest {
+            model: "grok-code-fast-1".to_string(),
+            messages,
+            stream: Some(true), // Enable streaming!
+            temperature: Some(0.0),
+            max_tokens: Some(4096),
+        };
+
+        let response = self
+            .http_client
+            .post(format!("{}/chat/completions", self.api_base))
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .context("Failed to send streaming request to Grok API")?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow!("Grok API error ({}): {}", status, error_text));
+        }
+
+        // Process the SSE stream
+        let mut accumulated = String::new();
+        let mut final_usage: Option<UsageMetrics> = None;
+        let mut byte_stream = response.bytes_stream();
+
+        while let Some(chunk_result) = byte_stream.next().await {
+            let chunk = chunk_result.context("Failed to read stream chunk")?;
+            let chunk_str = String::from_utf8_lossy(&chunk);
+
+            // SSE format: each event is "data: {json}\n\n"
+            for line in chunk_str.lines() {
+                let line = line.trim();
+
+                // Skip empty lines and comments
+                if line.is_empty() || line.starts_with(':') {
+                    continue;
+                }
+
+                // Extract data after "data: " prefix
+                if let Some(data) = line.strip_prefix("data: ") {
+                    // Check for stream end signal
+                    if data == "[DONE]" {
+                        break;
+                    }
+
+                    // Parse the JSON chunk
+                    if let Ok(stream_chunk) = serde_json::from_str::<GrokStreamChunk>(data) {
+                        // Extract content delta if present
+                        if let Some(choice) = stream_chunk.choices.first() {
+                            if let Some(content) = &choice.delta.content {
+                                accumulated.push_str(content);
+                                // Call the callback with the new chunk and full accumulated text
+                                on_chunk(content, &accumulated);
+                            }
+                        }
+
+                        // Capture usage if provided (usually in final chunk)
+                        if let Some(usage) = stream_chunk.usage {
+                            final_usage = Some(usage);
+                        }
+                    }
+                }
+            }
+        }
+
+        // If no usage was provided in the stream, estimate it
+        let usage = final_usage.unwrap_or_else(|| {
+            // Rough estimation: ~4 chars per token for English text
+            let prompt_chars = prompt.len() + system.map(|s| s.len()).unwrap_or(0);
+            let completion_chars = accumulated.len();
+
+            UsageMetrics {
+                prompt_tokens: (prompt_chars / 4) as i32,
+                completion_tokens: (completion_chars / 4) as i32,
+                total_tokens: ((prompt_chars + completion_chars) / 4) as i32,
+            }
+        });
+
+        Ok((accumulated, usage))
     }
 
     fn build_soc2_system_prompt() -> String {

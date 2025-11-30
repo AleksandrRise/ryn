@@ -4,7 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { listen } from "@tauri-apps/api/event"
 import { cancel_scan, respond_to_cost_limit, scan_project } from "@/lib/tauri/commands"
 import { toScanSummary } from "@/lib/tauri/transformers"
-import type { ScanProgress, ScanSummary } from "@/lib/types/scan"
+import type {
+  ScanProgress,
+  ScanSummary,
+  AiActivity,
+  AiFileStream,
+  AiFileStartedEvent,
+  AiReasoningChunkEvent,
+  AiFileCompletedEvent,
+  AiBatchStartedEvent,
+} from "@/lib/types/scan"
 
 interface CostLimitData {
   currentCost: number
@@ -25,6 +34,15 @@ const initialProgress: ScanProgress = {
   totalFiles: 0,
 }
 
+const initialAiActivity: AiActivity = {
+  phase: "idle",
+  currentBatch: 0,
+  totalBatches: 0,
+  filesAnalyzed: 0,
+  totalLlmFiles: 0,
+  activeStreams: new Map(),
+}
+
 export function useScanRunner(
   projectId?: number,
   options: UseScanRunnerOptions = {}
@@ -39,6 +57,8 @@ export function useScanRunner(
     open: false,
     data: null,
   })
+  // AI activity state for real-time transparency into AI analysis
+  const [aiActivity, setAiActivity] = useState<AiActivity>(initialAiActivity)
   // Ref to track scan ID for cleanup effects (avoids stale closure issues)
   const scanIdRef = useRef<number | null>(null)
 
@@ -66,6 +86,7 @@ export function useScanRunner(
     setCurrentScanId(null)
     setIsScanning(true)
     setProgress(initialProgress)
+    setAiActivity(initialAiActivity)
 
     try {
       const scan = await scan_project(projectId)
@@ -184,6 +205,117 @@ export function useScanRunner(
     }
   }, [isScanning])
 
+  // Listen for AI transparency events while scanning
+  useEffect(() => {
+    if (!isScanning) return
+
+    const unlisteners: Array<() => void> = []
+
+    const register = async () => {
+      // AI file started
+      const unlistenStarted = await listen<{
+        scan_id: number
+        file_path: string
+        file_index: number
+        total_llm_files: number
+        selection_reason: string
+      }>("ai-file-started", (event) => {
+        const { file_path, file_index, total_llm_files, selection_reason } = event.payload
+        setAiActivity((prev) => {
+          const newStreams = new Map(prev.activeStreams)
+          const newStream: AiFileStream = {
+            filePath: file_path,
+            status: "analyzing",
+            streamingText: "",
+            selectionReason: selection_reason as AiFileStream["selectionReason"],
+            violationsFound: 0,
+            startedAt: Date.now(),
+          }
+          newStreams.set(file_path, newStream)
+          return {
+            ...prev,
+            phase: "analyzing",
+            totalLlmFiles: total_llm_files,
+            activeStreams: newStreams,
+          }
+        })
+      })
+      unlisteners.push(unlistenStarted)
+
+      // AI reasoning chunk (streaming text)
+      const unlistenChunk = await listen<{
+        scan_id: number
+        file_path: string
+        chunk: string
+        accumulated: string
+      }>("ai-reasoning-chunk", (event) => {
+        const { file_path, accumulated } = event.payload
+        setAiActivity((prev) => {
+          const newStreams = new Map(prev.activeStreams)
+          const existing = newStreams.get(file_path)
+          if (existing) {
+            newStreams.set(file_path, {
+              ...existing,
+              streamingText: accumulated,
+            })
+          }
+          return { ...prev, activeStreams: newStreams }
+        })
+      })
+      unlisteners.push(unlistenChunk)
+
+      // AI file completed
+      const unlistenCompleted = await listen<{
+        scan_id: number
+        file_path: string
+        violations_found: number
+        confidence_scores: number[]
+        summary: string
+      }>("ai-file-completed", (event) => {
+        const { file_path, violations_found } = event.payload
+        setAiActivity((prev) => {
+          const newStreams = new Map(prev.activeStreams)
+          const existing = newStreams.get(file_path)
+          if (existing) {
+            newStreams.set(file_path, {
+              ...existing,
+              status: "complete",
+              violationsFound: violations_found,
+            })
+          }
+          return {
+            ...prev,
+            filesAnalyzed: prev.filesAnalyzed + 1,
+            activeStreams: newStreams,
+          }
+        })
+      })
+      unlisteners.push(unlistenCompleted)
+
+      // AI batch started
+      const unlistenBatch = await listen<{
+        scan_id: number
+        batch_number: number
+        total_batches: number
+        files_in_batch: string[]
+      }>("ai-batch-started", (event) => {
+        const { batch_number, total_batches } = event.payload
+        setAiActivity((prev) => ({
+          ...prev,
+          currentBatch: batch_number,
+          totalBatches: total_batches,
+        }))
+      })
+      unlisteners.push(unlistenBatch)
+    }
+
+    void register()
+
+    return () => {
+      unlisteners.forEach((unlisten) => unlisten())
+    }
+  }, [isScanning])
+
   // Cleanup: Cancel scan on component unmount (page navigation, project switch)
   useEffect(() => {
     return () => {
@@ -202,6 +334,7 @@ export function useScanRunner(
     progress,
     costLimitPrompt,
     currentScanId,
+    aiActivity,
     startScan,
     cancelScan,
     continueAfterCostLimit,

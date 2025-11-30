@@ -32,15 +32,16 @@ React → `lib/tauri/commands.ts` → `invoke()` → Rust → JSON
 
 **Convention**: snake_case params in Rust (`project_id`), camelCase in TS. Transformers in `lib/tauri/transformers.ts` handle conversion.
 
-### Tauri Commands (28 total)
-- **Project**: select_project_folder, create_project, get_projects, delete_project, delete_all_projects
-- **Scan**: detect_framework, scan_project, get_scan_progress, get_scans, watch_project, stop_watching, respond_to_cost_limit, cancel_scan
-- **Violation**: get_violations, get_violation, dismiss_violation
-- **Fix**: generate_fix, apply_fix
-- **Settings**: get_settings, update_settings, clear_database, export_data, complete_onboarding, check_api_key_available
-- **GitHub**: start_github_oauth, poll_github_oauth, check_github_connection, disconnect_github, fetch_github_repos, get_github_repos, track_repo, untrack_repo, get_tracked_repos, scan_github_repo
-- **Analytics**: get_scan_costs, get_scan_cost
-- **Other**: get_audit_events, log_frontend_message, read_file_content
+### Tauri Commands (40 registered in main.rs)
+- **Project (6)**: select_project_folder, create_project, get_projects, delete_project, delete_all_projects, read_file_content
+- **Scan (8)**: detect_framework, scan_project, watch_project, stop_watching, get_scan_progress, get_scans, respond_to_cost_limit, cancel_scan
+- **Violation (3)**: get_violations, get_violation, dismiss_violation
+- **Fix (2)**: generate_fix, apply_fix
+- **Audit (1)**: get_audit_events
+- **Settings (6)**: get_settings, update_settings, clear_database, export_data, complete_onboarding, check_api_key_available
+- **Analytics (2)**: get_scan_costs, get_scan_cost
+- **Logger (1)**: log_frontend_message
+- **GitHub (11)**: start_github_oauth, poll_github_oauth, check_github_connection, disconnect_github, fetch_github_repos, get_github_repos, track_repo, untrack_repo, get_tracked_repos, check_repo_for_changes, scan_github_repo
 
 ### SOC 2 Rules (src-tauri/src/rules/)
 | Rule | File | Detects |
@@ -66,7 +67,7 @@ Global TTL cache (5s) for IPC results. Invalidate with `invalidateTauriCache(key
 ## Module Structure
 ```
 src-tauri/src/
-├── commands/       # 28 Tauri IPC commands
+├── commands/       # 40 Tauri IPC commands
 ├── rules/          # 4 SOC 2 rule engines
 ├── scanner/        # Framework detection, file selection
 ├── fix_generator/  # Grok API client

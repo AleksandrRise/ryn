@@ -829,14 +829,9 @@ export function Dashboard() {
                       <div className="h-full flex flex-col">
                         {/* Header with Chart Selector */}
                         <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                              <i className="las la-folder-open text-lg text-blue-400"></i>
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-semibold">{selectedProject?.name ?? "Local Project"}</h3>
-                              <p className="text-xs text-white/40">Last scanned {formatRelativeTime(localScanStats.completedAt)}</p>
-                            </div>
+                          <div>
+                            <h3 className="text-sm font-semibold">{selectedProject?.name ?? "Local Project"}</h3>
+                            <p className="text-xs text-white/40">Last scanned {formatRelativeTime(localScanStats.completedAt)}</p>
                           </div>
                           <div className="flex items-center gap-2">
                             <ChartSelector

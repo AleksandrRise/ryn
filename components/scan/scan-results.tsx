@@ -55,6 +55,7 @@ export function ScanResults() {
     isScanning,
     progress,
     costLimitPrompt,
+    aiActivity,
     startScan,
     cancelScan,
     continueAfterCostLimit,
@@ -447,7 +448,7 @@ export function ScanResults() {
         </div>
       )}
 
-      {isScanning && <ScanProgressCard progress={progress} onCancel={cancelScan} />}
+      {isScanning && <ScanProgressCard progress={progress} aiActivity={aiActivity} onCancel={cancelScan} />}
 
       <div className="rounded-xl border border-white/10 bg-black/25 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] grid gap-5 xl:grid-cols-[260px_360px_1fr] items-stretch min-h-[520px] animate-fade-in-up delay-200">
         {/* Files */}
@@ -550,6 +551,17 @@ export function ScanResults() {
                         {v.severity}
                       </span>
                       <span className="text-white/60 text-[11px]">{v.detectionMethod}</span>
+                      {v.confidenceScore !== undefined && v.confidenceScore > 0 && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                          v.confidenceScore >= 0.8
+                            ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/25"
+                            : v.confidenceScore >= 0.6
+                              ? "bg-amber-500/15 text-amber-300 border-amber-500/25"
+                              : "bg-white/10 text-white/60 border-white/20"
+                        }`}>
+                          {Math.round(v.confidenceScore * 100)}% conf
+                        </span>
+                      )}
                       <span className="font-mono text-[11px] text-white/70">{v.controlId}</span>
                     </div>
                     <span className="text-[11px] text-white/60 font-mono shrink-0">{v.filePath}:{v.lineNumber}</span>
@@ -572,6 +584,17 @@ export function ScanResults() {
                     {selectedViolation.severity}
                   </span>
                   <span className="text-white/60 text-[11px]">{selectedViolation.detectionMethod}</span>
+                  {selectedViolation.confidenceScore !== undefined && selectedViolation.confidenceScore > 0 && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                      selectedViolation.confidenceScore >= 0.8
+                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/25"
+                        : selectedViolation.confidenceScore >= 0.6
+                          ? "bg-amber-500/15 text-amber-300 border-amber-500/25"
+                          : "bg-white/10 text-white/60 border-white/20"
+                    }`}>
+                      {Math.round(selectedViolation.confidenceScore * 100)}% confidence
+                    </span>
+                  )}
                   <span className="font-mono text-[11px] text-white/70">{selectedViolation.controlId}</span>
                 </>
               ) : (
