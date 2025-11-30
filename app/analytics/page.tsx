@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip } from 'recharts'
-import { CalendarIcon, TrendingUpIcon, DollarSignIcon, ActivityIcon, Sparkles } from 'lucide-react'
+import { PiCalendar, PiTrendUp, PiCurrencyDollar, PiActivity, PiSparkle } from 'react-icons/pi'
 import { get_scan_costs, type TimeRange, type ScanCost } from "@/lib/tauri/commands"
 import type { CategoricalChartState } from 'recharts/types/chart/types'
 
@@ -96,7 +96,7 @@ export default function AnalyticsPage() {
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/90">
-                  <Sparkles className="size-4" />
+                  <PiSparkle className="size-4" />
                   LLM Spend Overview
                 </div>
                 <h1 className="text-4xl md:text-5xl font-black leading-tight tracking-tight">${totalCost.toFixed(2)}</h1>
@@ -105,7 +105,7 @@ export default function AnalyticsPage() {
 
               <div className="flex flex-col gap-3 md:items-end">
                 <div className="flex items-center gap-2">
-                  <CalendarIcon className="size-4 text-white/70" />
+                  <PiCalendar className="size-4 text-white/70" />
                   <div className="flex gap-2">
                     {(['24h', '7d', '30d', 'all'] as TimeRange[]).map((range) => (
                       <Button
@@ -124,7 +124,7 @@ export default function AnalyticsPage() {
                 </div>
                 <div className="rounded-2xl border border-white/15 bg-black/40 px-4 py-3 text-sm text-white/80 shadow-inner">
                   <div className="flex items-center gap-2">
-                    <TrendingUpIcon className="size-4 text-emerald-300" />
+                    <PiTrendUp className="size-4 text-emerald-300" />
                     <div>
                       <div className="font-semibold">${avgCostPerScan.toFixed(3)} per scan</div>
                       <div className="text-xs text-white/60">Avg in {primaryRangeLabel.toLowerCase()}</div>
@@ -142,7 +142,7 @@ export default function AnalyticsPage() {
                 <CardTitle className="text-sm font-medium">
                   Total Cost
                 </CardTitle>
-                <DollarSignIcon className="size-4 text-muted-foreground" />
+                <PiCurrencyDollar className="size-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold tabular-nums">
@@ -159,7 +159,7 @@ export default function AnalyticsPage() {
                 <CardTitle className="text-sm font-medium">
                   Avg Cost Per Scan
                 </CardTitle>
-                <TrendingUpIcon className="size-4 text-muted-foreground" />
+                <PiTrendUp className="size-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold tabular-nums">
@@ -176,7 +176,7 @@ export default function AnalyticsPage() {
                 <CardTitle className="text-sm font-medium">
                   Files Analyzed
                 </CardTitle>
-                <ActivityIcon className="size-4 text-muted-foreground" />
+                <PiActivity className="size-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold tabular-nums">
@@ -193,7 +193,7 @@ export default function AnalyticsPage() {
                 <CardTitle className="text-sm font-medium">
                   Total Tokens
                 </CardTitle>
-                <TrendingUpIcon className="size-4 text-muted-foreground" />
+                <PiTrendUp className="size-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold tabular-nums">
@@ -225,7 +225,7 @@ export default function AnalyticsPage() {
                 </div>
               ) : chartData.length === 0 ? (
                 <div className="h-[400px] flex flex-col items-center justify-center text-muted-foreground">
-                  <DollarSignIcon className="size-12 mb-4 opacity-20" />
+                  <PiCurrencyDollar className="size-12 mb-4 opacity-20" />
                   <p className="text-lg font-medium">No scan costs yet</p>
                   <p className="text-sm">Run a scan with AI analysis to see cost data</p>
                 </div>

@@ -5,7 +5,7 @@ import {
   ErrorBoundary as ReactErrorBoundary,
   FallbackProps,
 } from "react-error-boundary"
-import { AlertTriangle, RotateCw, Bug } from "lucide-react"
+import { PiWarning, PiArrowClockwise, PiBug } from "react-icons/pi"
 import { Button } from "@/components/ui/button"
 
 /**
@@ -63,7 +63,7 @@ ${new Date().toISOString()}
         {/* Header */}
         <div className="flex items-center gap-4">
           <div className="p-3 rounded-full bg-red-950/50 border border-red-900/50">
-            <AlertTriangle className="w-8 h-8 text-red-500" />
+            <PiWarning className="w-8 h-8 text-red-500" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-white">Something Went Wrong</h1>
@@ -106,7 +106,7 @@ ${new Date().toISOString()}
             variant="default"
             className="flex items-center gap-2"
           >
-            <RotateCw className="w-4 h-4" />
+            <PiArrowClockwise className="w-4 h-4" />
             Reload Page
           </Button>
           <Button
@@ -114,7 +114,7 @@ ${new Date().toISOString()}
             variant="outline"
             className="flex items-center gap-2 border-neutral-700 hover:bg-neutral-900"
           >
-            <Bug className="w-4 h-4" />
+            <PiBug className="w-4 h-4" />
             Report Bug
           </Button>
         </div>

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { AlertTriangle, DollarSign } from "lucide-react"
+import { PiWarning, PiCurrencyDollar } from "react-icons/pi"
 
 interface CostLimitDialogProps {
   currentCost: number
@@ -42,7 +42,7 @@ export function CostLimitDialog({
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <div className="p-3 bg-[#f97316]/10 rounded-full">
-            <AlertTriangle className="w-6 h-6 text-[#f97316]" />
+            <PiWarning className="w-6 h-6 text-[#f97316]" />
           </div>
           <div>
             <h3 className="text-2xl font-bold">Cost Limit Reached</h3>
@@ -54,7 +54,7 @@ export function CostLimitDialog({
         <div className="mb-6 p-4 bg-[#f97316]/5 border border-[#f97316]/20 rounded-lg">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-[#f97316]" />
+              <PiCurrencyDollar className="w-4 h-4 text-[#f97316]" />
               <span className="text-sm font-medium text-[#aaaaaa]">Current Cost</span>
             </div>
             <span className="text-xl font-bold text-[#f97316]">${currentCost.toFixed(3)}</span>

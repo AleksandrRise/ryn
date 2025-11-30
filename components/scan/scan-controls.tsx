@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, Shield } from "lucide-react"
+import { PiCheck, PiShield } from "react-icons/pi"
 
 interface ScanControlsProps {
   selectedControls: Record<string, boolean>
@@ -18,7 +18,7 @@ export function ScanControls({ selectedControls, onToggle }: ScanControlsProps) 
   return (
     <div className="flex flex-wrap items-center gap-2">
       <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-white/50">
-        <Shield className="w-3.5 h-3.5" />
+        <PiShield className="w-3.5 h-3.5" />
         Controls
       </div>
       {Object.entries(selectedControls).map(([control, checked]) => (
@@ -35,7 +35,7 @@ export function ScanControls({ selectedControls, onToggle }: ScanControlsProps) 
           <span className="text-[11px] text-white/60 group-hover:text-white/80">
             {CONTROL_COPY[control] || "Control"}
           </span>
-          {checked && <Check className="w-3.5 h-3.5 text-emerald-300" />}
+          {checked && <PiCheck className="w-3.5 h-3.5 text-emerald-300" />}
         </button>
       ))}
     </div>

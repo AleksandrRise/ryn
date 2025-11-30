@@ -1,4 +1,4 @@
-import { SearchCodeIcon, SparklesIcon, Combine } from "lucide-react"
+import { PiCode, PiSparkle, PiCirclesThreePlus } from "react-icons/pi"
 import type { DetectionMethod } from "@/lib/types/violation"
 
 interface DetectionBadgeProps {
@@ -11,19 +11,19 @@ export function DetectionBadge({ method, className = "" }: DetectionBadgeProps) 
     regex: {
       bg: "bg-blue-500/10",
       text: "text-blue-600 dark:text-blue-400",
-      icon: SearchCodeIcon,
+      icon: PiCode,
       label: "Pattern",
     },
     llm: {
       bg: "bg-purple-500/10",
       text: "text-purple-600 dark:text-purple-400",
-      icon: SparklesIcon,
+      icon: PiSparkle,
       label: "AI",
     },
     hybrid: {
       bg: "bg-emerald-500/10",
       text: "text-emerald-600 dark:text-emerald-400",
-      icon: Combine,
+      icon: PiCirclesThreePlus,
       label: "Hybrid",
     },
   }

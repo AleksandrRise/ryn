@@ -680,10 +680,7 @@ export function Dashboard() {
               </div>
 
               {/* Critical */}
-              <div className="flex-1 bg-gradient-to-br from-red-500/10 via-transparent to-transparent rounded-2xl p-5 border border-white/[0.04] hover:border-red-500/20 transition-colors relative">
-                {((isLocalMode && hasLocalScanData && localCriticalCount > 0) || (connectionStatus?.connected && criticalCount > 0)) && (
-                  <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                )}
+              <div className="flex-1 bg-gradient-to-br from-red-500/10 via-transparent to-transparent rounded-2xl p-5 border border-white/[0.04] hover:border-red-500/20 transition-colors">
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-9 h-9 rounded-xl bg-red-500/20 flex items-center justify-center">
                     <i className="las la-radiation text-lg text-red-400"></i>

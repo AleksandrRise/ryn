@@ -16,10 +16,12 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-label": "2.1.1",
     "@radix-ui/react-radio-group": "1.2.2",
     "@radix-ui/react-select": "2.1.4",
     "@radix-ui/react-slot": "1.1.1",
+    "@tanstack/react-virtual": "^3.13.12",
     "@tauri-apps/api": "^2.9.0",
     "@tauri-apps/plugin-dialog": "^2.4.2",
     "@tauri-apps/plugin-fs": "^2.4.4",
@@ -28,7 +30,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.24",
-    "lucide-react": "^0.454.0",
     "next": "16.0.1",
     "react": "19.2.0",
     "react-dom": "19.2.0",

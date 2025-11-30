@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Save, Download, BarChart3, Sparkles, Eye, Compass } from "lucide-react"
+import { PiFloppyDisk, PiDownloadSimple, PiChartBar, PiSparkle, PiEye, PiCompass } from "react-icons/pi"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { useFileWatcher } from "@/lib/hooks/useFileWatcher"
 import {
@@ -211,7 +211,7 @@ export function Settings() {
             href="/analytics"
             className="inline-flex items-center gap-2 mt-4 text-sm text-white/70 hover:text-white transition-colors"
           >
-            <BarChart3 className="w-4 h-4" />
+            <PiChartBar className="w-4 h-4" />
             View Cost Analytics →
           </Link>
           <div className="mt-2">
@@ -219,18 +219,18 @@ export function Settings() {
               href="/onboarding?force=1"
               className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors"
             >
-              <Compass className="w-4 h-4" />
+              <PiCompass className="w-4 h-4" />
               Re-run onboarding
             </Link>
           </div>
         </div>
         <div className="flex gap-3">
           <Button onClick={handleExport} size="lg" variant="outline" className="gap-2" disabled={isSaving}>
-            <Download className="w-4 h-4" />
+            <PiDownloadSimple className="w-4 h-4" />
             Export
           </Button>
           <Button onClick={handleSaveChanges} size="lg" className="gap-2" disabled={isSaving}>
-            <Save className="w-4 h-4" />
+            <PiFloppyDisk className="w-4 h-4" />
             {isSaving ? "Saving..." : "Save Changes"}
           </Button>
         </div>
@@ -242,7 +242,7 @@ export function Settings() {
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-white/5 rounded-lg">
-              <Sparkles className="w-5 h-5 text-white/60" />
+              <PiSparkle className="w-5 h-5 text-white/60" />
             </div>
             <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">AI Scanning</h2>
           </div>
@@ -333,7 +333,7 @@ export function Settings() {
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-white/5 rounded-lg">
-              <Eye className="w-5 h-5 text-white/60" />
+              <PiEye className="w-5 h-5 text-white/60" />
             </div>
             <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Monitoring</h2>
           </div>
@@ -360,7 +360,7 @@ export function Settings() {
               <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
                 <div>
                   <div className="flex items-center gap-2">
-                    <Eye className="w-4 h-4 text-white/60" />
+                    <PiEye className="w-4 h-4 text-white/60" />
                     <p className="text-[14px] mb-1">Real-time file watching</p>
                   </div>
                   <p className="text-[12px] text-[#aaaaaa]">
@@ -393,7 +393,7 @@ export function Settings() {
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 xl:col-span-2">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-white/5 rounded-lg">
-              <BarChart3 className="w-5 h-5 text-white/60" />
+              <PiChartBar className="w-5 h-5 text-white/60" />
             </div>
             <div>
               <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Data & Maintenance</h2>
@@ -403,11 +403,11 @@ export function Settings() {
 
           <div className="flex flex-wrap gap-3">
             <Button onClick={handleExportAll} variant="outline" className="gap-2">
-              <Download className="w-4 h-4" />
+              <PiDownloadSimple className="w-4 h-4" />
               Export all data
             </Button>
             <Button onClick={handleClearDatabase} variant="outline" className="gap-2 border-red-400/50 text-red-100 hover:bg-red-500/20">
-              <Save className="w-4 h-4" />
+              <PiFloppyDisk className="w-4 h-4" />
               Clear scan history
             </Button>
           </div>

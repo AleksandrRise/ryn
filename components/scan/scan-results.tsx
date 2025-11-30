@@ -1,12 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { Play, Search, Sparkles, Check, Github, Folder, X } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { PiPlay, PiMagnifyingGlass, PiSparkle, PiCheck, PiGithubLogo, PiFolder, PiX, PiCaretDown, PiCaretUp } from "react-icons/pi"
 import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
-import { ScanControls } from "@/components/scan/scan-controls"
 import { ScanHistoryPanel } from "@/components/scan/scan-history-panel"
 import { ScanProgressCard } from "@/components/scan/scan-progress-card"
 import { SeverityFilter } from "@/components/scan/severity-filter"
+import { CategoryScrubber, CATEGORY_CONFIG } from "@/components/scan/category-scrubber"
 import { Button } from "@/components/ui/button"
 import { useScanData } from "@/components/scan/hooks/use-scan-data"
 import { useScanRunner } from "@/components/scan/hooks/use-scan-runner"
@@ -17,15 +17,12 @@ import { formatDateTime } from "@/lib/utils/date"
 import { handleTauriError, showInfo, showSuccess } from "@/lib/utils/error-handler"
 import { apply_fix, generate_fix, get_violation, read_file_content, type Fix } from "@/lib/tauri/commands"
 
+// Category order for consistent rendering
+const CATEGORY_ORDER = ["CC6.1", "CC6.7", "CC7.2", "A1.2"]
+
 export function ScanResults() {
   const { selectedProject } = useProjectStore()
   const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
-  const [selectedControls, setSelectedControls] = useState<Record<string, boolean>>({
-    "CC6.1": true,
-    "CC6.7": true,
-    "CC7.2": true,
-    "A1.2": true,
-  })
 
   const {
     isLoading,
@@ -65,37 +62,18 @@ export function ScanResults() {
     onScanStopped: reload,
   })
 
-  const toggleControl = (control: string) => {
-    setSelectedControls((prev) => ({
-      ...prev,
-      [control]: !prev[control],
-    }))
-  }
-
   // Violation selection and search state
   const [selectedViolationId, setSelectedViolationId] = useState<number | null>(null)
   const [fileSearch, setFileSearch] = useState("")
 
-  // Check if any filter is active (for showing "Clear filters" button)
-  const hasActiveFilters = useMemo(() => {
-    return (
-      selectedSeverity !== "all" ||
-      Object.values(selectedControls).some(v => v === false) ||
-      fileSearch.trim() !== ""
-    )
-  }, [selectedSeverity, selectedControls, fileSearch])
+  // Category navigation refs
+  const violationsListRef = useRef<HTMLDivElement>(null)
+  const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  // Flag to prevent scroll listener from fighting with click handler during smooth scroll
+  const isScrollingProgrammatically = useRef(false)
+  const [isReasoningExpanded, setIsReasoningExpanded] = useState(false)
 
-  // Clear all filters at once
-  const clearAllFilters = useCallback(() => {
-    setSelectedSeverity("all")
-    setSelectedControls({
-      "CC6.1": true,
-      "CC6.7": true,
-      "CC7.2": true,
-      "A1.2": true,
-    })
-    setFileSearch("")
-  }, [])
 
   // Handle selecting a historical scan
   const handleSelectHistoricalScan = useCallback(async (scanId: number) => {
@@ -129,11 +107,9 @@ export function ScanResults() {
   const filteredViolations = useMemo(
     () =>
       activeViolations.filter((violation) => {
-        const matchesSeverity = selectedSeverity === "all" || violation.severity === selectedSeverity
-        const matchesControl = selectedControls[violation.controlId] !== false
-        return matchesSeverity && matchesControl
+        return selectedSeverity === "all" || violation.severity === selectedSeverity
       }),
-    [selectedSeverity, selectedControls, activeViolations],
+    [selectedSeverity, activeViolations],
   )
 
   const [isGeneratingFix, setIsGeneratingFix] = useState(false)
@@ -155,6 +131,72 @@ export function ScanResults() {
     return filteredViolations.filter((v) => v.filePath.toLowerCase().includes(term))
   }, [filteredViolations, fileSearch])
 
+  // Group violations by category (control ID)
+  const groupedViolations = useMemo(() => {
+    const groups: Record<string, Violation[]> = {}
+    for (const v of visibleViolations) {
+      if (!groups[v.controlId]) groups[v.controlId] = []
+      groups[v.controlId].push(v)
+    }
+    // Return in defined order
+    return CATEGORY_ORDER.filter(id => groups[id]?.length > 0).map(id => ({
+      categoryId: id,
+      violations: groups[id],
+    }))
+  }, [visibleViolations])
+
+  // Category counts for scrubber
+  const categoryInfos = useMemo(() => {
+    return CATEGORY_ORDER.map(id => ({
+      id,
+      count: visibleViolations.filter(v => v.controlId === id).length,
+    }))
+  }, [visibleViolations])
+
+  // Handle category click from scrubber
+  const handleCategoryClick = useCallback((categoryId: string) => {
+    const ref = categoryRefs.current[categoryId]
+    if (ref && violationsListRef.current) {
+      // Prevent scroll listener from overriding our selection during smooth scroll
+      isScrollingProgrammatically.current = true
+      setActiveCategory(categoryId)
+      ref.scrollIntoView({ behavior: "smooth", block: "start" })
+      // Re-enable scroll detection after animation completes (~500ms for smooth scroll)
+      setTimeout(() => {
+        isScrollingProgrammatically.current = false
+      }, 500)
+    }
+  }, [])
+
+  // Track active category on scroll
+  useEffect(() => {
+    const container = violationsListRef.current
+    if (!container) return
+
+    const handleScroll = () => {
+      // Skip if we're doing a programmatic scroll (from clicking a category)
+      if (isScrollingProgrammatically.current) return
+
+      const containerTop = container.getBoundingClientRect().top
+      let currentCategory: string | null = null
+
+      for (const categoryId of CATEGORY_ORDER) {
+        const ref = categoryRefs.current[categoryId]
+        if (ref) {
+          const rect = ref.getBoundingClientRect()
+          if (rect.top <= containerTop + 50) {
+            currentCategory = categoryId
+          }
+        }
+      }
+      setActiveCategory(currentCategory)
+    }
+
+    container.addEventListener("scroll", handleScroll)
+    handleScroll() // Initial check
+    return () => container.removeEventListener("scroll", handleScroll)
+  }, [groupedViolations])
+
   // Ensure selection stays in sync
   useEffect(() => {
     if (visibleViolations.length === 0) {
@@ -171,6 +213,7 @@ export function ScanResults() {
   useEffect(() => {
     setIsCodeExpanded(false)
     setFullFileContent(null)
+    setIsReasoningExpanded(false)
 
     // Load existing fix for this violation if one exists
     const loadExistingFix = async () => {
@@ -296,53 +339,59 @@ export function ScanResults() {
 
   if (!selectedProject) {
     return (
-      <div className="px-6 pt-8 pb-12 max-w-7xl mx-auto">
-        <div className="mb-4">
-          <h1 className="text-5xl font-bold leading-none tracking-tight mb-2">Scans</h1>
-          <p className="text-white/60">Select a project from the header to view and run scans.</p>
-        </div>
-        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6">
-          <p className="text-sm text-white/60">No project selected.</p>
+      <div className="h-[calc(100vh-64px)] flex items-center justify-center px-6">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center">
+            <PiFolder className="w-8 h-8 text-white/40" />
+          </div>
+          <h2 className="text-xl font-semibold text-white/90 mb-2">No project selected</h2>
+          <p className="text-sm text-white/50">Select a project from the header to view and run compliance scans.</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="px-6 pt-8 pb-12 max-w-7xl mx-auto space-y-6">
-      {/* Top bar: title + primary actions */}
-      <div className="flex flex-wrap items-center justify-between gap-4 animate-fade-in-up">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Scans</h1>
-          <p className="text-xs text-white/40 flex items-center gap-1.5">
+    <div className="h-[calc(100vh-64px)] flex flex-col px-6 pt-4 pb-4 max-w-7xl mx-auto">
+      {/* Top bar: project info + primary actions */}
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-4 pb-3 animate-fade-in-up">
+        {/* Project badge */}
+        <div className="flex items-center gap-3">
+          <div className={`
+            flex items-center justify-center w-10 h-10 rounded-xl
+            ${selectedProject.path.includes("ryn-github-cache")
+              ? "bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/20"
+              : "bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/20"
+            }
+          `}>
             {selectedProject.path.includes("ryn-github-cache") ? (
-              <>
-                <Github className="w-3 h-3" />
-                <span>{selectedProject.name}</span>
-              </>
+              <PiGithubLogo className="w-5 h-5 text-purple-400" />
             ) : (
-              <>
-                <Folder className="w-3 h-3" />
-                <span>{selectedProject.name}</span>
-              </>
+              <PiFolder className="w-5 h-5 text-blue-400" />
             )}
-          </p>
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-white/95 tracking-tight">{selectedProject.name}</h1>
+            <p className="text-[11px] text-white/40 font-mono truncate max-w-[300px]">
+              {selectedProject.path.includes("ryn-github-cache") ? "GitHub Repository" : selectedProject.path}
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={handleStartScan}
-            disabled={isScanning || isLoading}
-            size="sm"
-            className="gap-2"
-          >
-            <Play className="w-4 h-4" />
-            {isScanning ? "Scanning..." : "Start scan"}
-          </Button>
-        </div>
+
+        <Button
+          onClick={handleStartScan}
+          disabled={isScanning || isLoading}
+          size="sm"
+          className="gap-2"
+        >
+          <PiPlay className="w-4 h-4" />
+          {isScanning ? "Scanning..." : "Start scan"}
+        </Button>
       </div>
 
       {/* Scan History Panel */}
-      <ScanHistoryPanel
+      <div className="shrink-0 pb-2">
+        <ScanHistoryPanel
         scans={allScans}
         selectedScanId={selectedScanId}
         onSelectScan={handleSelectHistoricalScan}
@@ -359,29 +408,18 @@ export function ScanResults() {
           cost: lastCostDisplay,
         }}
         currentScanCost={lastScanCost}
-      />
+        />
+      </div>
 
       {/* Filters row */}
-      <div className="flex items-center justify-end gap-3 text-xs animate-fade-in-up delay-100">
-        <ScanControls selectedControls={selectedControls} onToggle={toggleControl} />
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-white/55">Severity</span>
-          <SeverityFilter selected={selectedSeverity} onSelect={setSelectedSeverity} violations={activeViolations} />
-        </div>
-        {hasActiveFilters && (
-          <button
-            onClick={clearAllFilters}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white/5 hover:bg-white/10 text-xs text-white/60 hover:text-white transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <X className="w-3 h-3" />
-            Clear filters
-          </button>
-        )}
+      <div className="shrink-0 flex items-center gap-2 text-xs pb-3 animate-fade-in-up delay-100">
+        <span className="text-[11px] text-white/55">Severity</span>
+        <SeverityFilter selected={selectedSeverity} onSelect={setSelectedSeverity} violations={activeViolations} />
       </div>
 
       {/* Historical scan banner */}
       {isViewingHistorical && (
-        <div className="flex items-center justify-between gap-4 px-4 py-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg animate-fade-in-up">
+        <div className="shrink-0 flex items-center justify-between gap-4 px-4 py-2 mb-3 bg-amber-500/10 border border-amber-500/20 rounded-lg animate-fade-in-up">
           <span className="text-sm text-amber-200">
             Viewing historical scan from {formatDateTime(allScans.find(s => s.id === selectedScanId)?.completedAt || "")}
           </span>
@@ -392,7 +430,7 @@ export function ScanResults() {
             }}
             className="flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200 transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98]"
           >
-            <X className="w-3.5 h-3.5" />
+            <PiX className="w-3.5 h-3.5" />
             View latest
           </button>
         </div>
@@ -400,64 +438,103 @@ export function ScanResults() {
 
       {isScanning && <ScanProgressCard progress={progress} aiActivity={aiActivity} onCancel={cancelScan} />}
 
-      <div className="rounded-2xl border border-white/[0.04] bg-white/5 p-5 grid gap-6 xl:grid-cols-[380px_1fr] items-stretch min-h-[560px] animate-fade-in-up delay-200">
-        {/* Violations */}
-        <div className="flex flex-col gap-3 xl:border-r xl:border-white/[0.06] xl:pr-5">
-          <div className="flex items-center justify-between text-sm text-white/75">
-            <div className="font-semibold">Violations</div>
-            <div className="text-[11px] text-white/50">{filteredViolations.length} total</div>
+      {/* Main content - flex-1 takes remaining space */}
+      <div className="flex-1 min-h-0 grid xl:grid-cols-[420px_1fr] gap-4 animate-fade-in-up delay-200">
+        {/* Violations Panel with Scrubber */}
+        <div className="flex flex-col min-h-0 rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+          {/* Header */}
+          <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-white/90">Violations</span>
+              <span className="text-[11px] text-white/40 bg-white/[0.06] px-1.5 py-0.5 rounded">{filteredViolations.length}</span>
+            </div>
           </div>
 
-          {/* Search within violations */}
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-            <input
-              value={fileSearch}
-              onChange={(e) => setFileSearch(e.target.value)}
-              placeholder="Filter by file..."
-              className="w-full rounded-lg bg-white/[0.03] border border-white/[0.06] px-9 py-2 text-xs text-white/85 placeholder:text-white/40 focus:outline-none focus:border-white/20 transition-colors"
-            />
+          {/* Search */}
+          <div className="shrink-0 px-3 py-2 border-b border-white/[0.04]">
+            <div className="relative">
+              <PiMagnifyingGlass className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40" />
+              <input
+                value={fileSearch}
+                onChange={(e) => setFileSearch(e.target.value)}
+                placeholder="Filter by file..."
+                className="w-full rounded-md bg-white/[0.04] border border-white/[0.06] pl-8 pr-3 py-1.5 text-xs text-white/85 placeholder:text-white/40 focus:outline-none focus:border-white/15 transition-colors"
+              />
+            </div>
           </div>
 
-          <div className="flex-1 overflow-auto rounded-lg bg-white/[0.02] divide-y divide-white/[0.04] border border-white/[0.04]">
-            {visibleViolations.length === 0 && (
-              <div className="text-xs text-white/50 px-4 py-8 text-center">No violations match these filters.</div>
-            )}
-            {visibleViolations.map((v) => {
-              const isActive = v.id === selectedViolation?.id
-              const fileName = v.filePath.split("/").pop() || v.filePath
-              return (
-                <button
-                  key={v.id}
-                  onClick={() => setSelectedViolationId(v.id)}
-                  className={`w-full text-left px-4 py-3 transition-colors ${
-                    isActive
-                      ? "bg-white/[0.08]"
-                      : "hover:bg-white/[0.04]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`h-2 w-2 rounded-full ${
-                      v.severity === "critical" ? "bg-red-400" :
-                      v.severity === "high" ? "bg-orange-400" :
-                      v.severity === "medium" ? "bg-yellow-400" :
-                      "bg-white/40"
-                    }`} />
-                    <span className="text-xs font-mono text-white/50">{v.controlId}</span>
-                    <span className="text-[10px] text-white/40">{v.detectionMethod}</span>
-                  </div>
-                  <p className="text-sm text-white/90 leading-snug line-clamp-2 mb-1.5">{v.description}</p>
-                  <div className="text-[11px] text-white/40 font-mono truncate">{fileName}:{v.lineNumber}</div>
-                </button>
-              )
-            })}
+          {/* Violations list with scrubber */}
+          <div className="flex-1 flex min-h-0">
+            {/* Scrollable violations list */}
+            <div ref={violationsListRef} className="flex-1 overflow-y-auto">
+              {visibleViolations.length === 0 ? (
+                <div className="text-xs text-white/50 px-4 py-8 text-center">No violations match these filters.</div>
+              ) : (
+                groupedViolations.map(({ categoryId, violations: categoryViolations }) => {
+                  const config = CATEGORY_CONFIG[categoryId]
+                  return (
+                    <div
+                      key={categoryId}
+                      ref={(el) => { categoryRefs.current[categoryId] = el }}
+                    >
+                      {/* Sticky category header */}
+                      <div
+                        className="sticky top-0 z-10 flex items-center gap-2 px-4 py-2 bg-[#0a0a0a]/95 backdrop-blur-sm border-b border-white/[0.06]"
+                        style={{ borderLeftColor: config?.color, borderLeftWidth: 3 }}
+                      >
+                        <span className="text-[11px] font-mono font-medium text-white/70">{categoryId}</span>
+                        <span className="text-[10px] text-white/40">{config?.label}</span>
+                        <span className="text-[10px] text-white/30 ml-auto">{categoryViolations.length}</span>
+                      </div>
+
+                      {/* Violations in this category */}
+                      {categoryViolations.map((v) => {
+                        const isActive = v.id === selectedViolation?.id
+                        const fileName = v.filePath.split("/").pop() || v.filePath
+                        return (
+                          <button
+                            key={v.id}
+                            onClick={() => setSelectedViolationId(v.id)}
+                            className={`w-full text-left px-4 py-2.5 border-b border-white/[0.04] transition-colors ${
+                              isActive ? "bg-white/[0.08]" : "hover:bg-white/[0.04]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className={`h-1.5 w-1.5 rounded-full ${
+                                v.severity === "critical" ? "bg-red-400" :
+                                v.severity === "high" ? "bg-orange-400" :
+                                v.severity === "medium" ? "bg-yellow-400" :
+                                "bg-white/40"
+                              }`} />
+                              <span className="text-[10px] text-white/40">{v.detectionMethod}</span>
+                            </div>
+                            <p className="text-[13px] text-white/85 leading-snug line-clamp-2 mb-1">{v.description}</p>
+                            <div className="text-[10px] text-white/40 font-mono truncate">{fileName}:{v.lineNumber}</div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Category scrubber */}
+            <div className="shrink-0 border-l border-white/[0.06] bg-white/[0.02]">
+              <CategoryScrubber
+                categories={categoryInfos}
+                activeCategory={activeCategory}
+                onCategoryClick={handleCategoryClick}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Detail */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between text-[12px] text-white/70">
-            <div className="flex items-center gap-2">
+        {/* Detail Panel - constrained height with internal scroll */}
+        <div className="flex flex-col min-h-0 rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+          {/* Header */}
+          <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+            <div className="flex items-center gap-2 text-[12px]">
               {selectedViolation ? (
                 <>
                   <span className={`h-2 w-2 rounded-full ${
@@ -477,141 +554,160 @@ export function ScanResults() {
                   )}
                 </>
               ) : (
-                <span className="text-white/50">No violation selected</span>
+                <span className="text-sm font-semibold text-white/90">Detail</span>
               )}
             </div>
             {selectedViolation && (
-              <span className="text-[11px] text-white/60 font-mono">{selectedViolation.filePath}:{selectedViolation.lineNumber}</span>
+              <span className="text-[10px] text-white/50 font-mono">{selectedViolation.filePath}:{selectedViolation.lineNumber}</span>
             )}
           </div>
 
-          {selectedViolation && (
-            <div className="space-y-3">
-              <p className="text-base text-white/90 leading-snug">{selectedViolation.description}</p>
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {selectedViolation ? (
+              <div className="space-y-4">
+                <p className="text-[15px] text-white/90 leading-relaxed">{selectedViolation.description}</p>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-white/70">Code Snippet</span>
-                  <button
-                    onClick={handleExpandCode}
-                    disabled={isLoadingFile}
-                    className="text-xs text-white/60 hover:text-white transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
-                  >
-                    {isLoadingFile ? "Loading..." : isCodeExpanded ? "Show snippet only" : "Expand full file"}
-                  </button>
-                </div>
+                {/* Code Snippet - constrained height */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-white/70">Code Snippet</span>
+                    <button
+                      onClick={handleExpandCode}
+                      disabled={isLoadingFile}
+                      className="text-[11px] text-white/50 hover:text-white transition-colors disabled:opacity-50"
+                    >
+                      {isLoadingFile ? "Loading..." : isCodeExpanded ? "Collapse" : "Expand"}
+                    </button>
+                  </div>
 
-                <div className="rounded-lg border border-white/10 bg-[#0c0c0c] p-3 font-mono text-xs text-white/85 overflow-auto shadow-inner max-h-[400px]">
-                  {isCodeExpanded && fullFileContent ? (() => {
-                    const codeLines = fullFileContent.split(/\r?\n/)
-                    return (
-                      <div className="grid grid-cols-[auto,1fr] gap-x-3">
-                        {codeLines.map((line, idx) => {
-                          const lineNumber = idx + 1
-                          const isTarget = lineNumber === selectedViolation.lineNumber
-                          return (
-                            <div key={`${selectedViolation.id}-fullline-${idx}`} className="contents">
-                              <span className="text-white/30 text-right select-none">
-                                {lineNumber}
-                              </span>
-                              <pre
-                                className={`whitespace-pre-wrap font-mono leading-snug ${
-                                  isTarget ? "bg-white/10 text-white px-2 rounded" : ""
-                                }`}
-                              >
-                                {line || "\u00a0"}
-                              </pre>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })() : selectedViolation.codeSnippet ? (() => {
-                    const codeLines = selectedViolation.codeSnippet.split(/\r?\n/)
-                    const anchor = selectedViolation.lineNumber || 0
-                    const startLine = Math.max(1, anchor - Math.floor(codeLines.length / 2))
-                    return (
-                      <div className="grid grid-cols-[auto,1fr] gap-x-3">
-                        {codeLines.map((line, idx) => {
-                          const lineNumber = startLine + idx
-                          const isTarget = lineNumber === anchor
-                          return (
-                            <div key={`${selectedViolation.id}-line-${idx}`} className="contents">
-                              <span className="text-white/30 text-right select-none">
-                                {lineNumber > 0 ? lineNumber : ""}
-                              </span>
-                              <pre
-                                className={`whitespace-pre-wrap font-mono leading-relaxed ${
-                                  isTarget ? "bg-white/10 text-white px-2 rounded" : ""
-                                }`}
-                              >
-                                {line || "\u00a0"}
-                              </pre>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })() : (
-                    <div className="text-white/50">No code snippet available for this violation.</div>
-                  )}
-                </div>
-              </div>
-
-              {generatedFix && (
-                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-400/90 mb-2">Suggested Fix</div>
-                  <div className="rounded bg-[#0c0c0c] p-3 font-mono text-xs text-white/85 overflow-auto max-h-[300px]">
-                    <pre className="whitespace-pre-wrap">{generatedFix.fixed_code}</pre>
+                  <div className="rounded-lg border border-white/10 bg-[#0a0a0a] p-3 font-mono text-xs text-white/85 overflow-auto shadow-inner max-h-[200px]">
+                    {isCodeExpanded && fullFileContent ? (() => {
+                      const codeLines = fullFileContent.split(/\r?\n/)
+                      return (
+                        <div className="grid grid-cols-[auto,1fr] gap-x-3">
+                          {codeLines.map((line, idx) => {
+                            const lineNumber = idx + 1
+                            const isTarget = lineNumber === selectedViolation.lineNumber
+                            return (
+                              <div key={`${selectedViolation.id}-fullline-${idx}`} className="contents">
+                                <span className="text-white/30 text-right select-none">{lineNumber}</span>
+                                <pre className={`whitespace-pre-wrap font-mono leading-snug ${isTarget ? "bg-white/10 text-white px-2 rounded" : ""}`}>
+                                  {line || "\u00a0"}
+                                </pre>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })() : selectedViolation.codeSnippet ? (() => {
+                      const codeLines = selectedViolation.codeSnippet.split(/\r?\n/)
+                      const anchor = selectedViolation.lineNumber || 0
+                      const startLine = Math.max(1, anchor - Math.floor(codeLines.length / 2))
+                      return (
+                        <div className="grid grid-cols-[auto,1fr] gap-x-3">
+                          {codeLines.map((line, idx) => {
+                            const lineNumber = startLine + idx
+                            const isTarget = lineNumber === anchor
+                            return (
+                              <div key={`${selectedViolation.id}-line-${idx}`} className="contents">
+                                <span className="text-white/30 text-right select-none">{lineNumber > 0 ? lineNumber : ""}</span>
+                                <pre className={`whitespace-pre-wrap font-mono leading-relaxed ${isTarget ? "bg-white/10 text-white px-2 rounded" : ""}`}>
+                                  {line || "\u00a0"}
+                                </pre>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })() : (
+                      <div className="text-white/50">No code snippet available.</div>
+                    )}
                   </div>
                 </div>
-              )}
 
-              {(selectedViolation.llmReasoning || selectedViolation.regexReasoning) && (
-                <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/60 mb-1">Why this is flagged</div>
-                  <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">
-                    {selectedViolation.llmReasoning || selectedViolation.regexReasoning}
-                  </p>
-                </div>
-              )}
+                {/* Suggested Fix - constrained */}
+                {generatedFix && (
+                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/90 mb-2">Suggested Fix</div>
+                    <div className="rounded bg-[#0a0a0a] p-3 font-mono text-xs text-white/85 overflow-auto max-h-[150px]">
+                      <pre className="whitespace-pre-wrap">{generatedFix.fixed_code}</pre>
+                    </div>
+                  </div>
+                )}
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  onClick={handleSuggestFix}
-                  disabled={isGeneratingFix || generatedFix !== null}
-                  size="sm"
-                  variant="outline"
-                  className="gap-2"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  {isGeneratingFix ? "Generating..." : generatedFix ? "Suggested" : "Suggest Fix"}
-                </Button>
-                <div className="relative group/apply">
+                {/* Reasoning with Show more/less */}
+                {(selectedViolation.llmReasoning || selectedViolation.regexReasoning) && (() => {
+                  const reasoning = selectedViolation.llmReasoning || selectedViolation.regexReasoning || ""
+                  const isLong = reasoning.length > 300
+                  const displayText = isLong && !isReasoningExpanded ? reasoning.slice(0, 300) + "..." : reasoning
+
+                  return (
+                    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-white/50">Why this is flagged</span>
+                        {isLong && (
+                          <button
+                            onClick={() => setIsReasoningExpanded(!isReasoningExpanded)}
+                            className="flex items-center gap-1 text-[10px] text-white/40 hover:text-white/70 transition-colors"
+                          >
+                            {isReasoningExpanded ? (
+                              <>Less <PiCaretUp className="w-3 h-3" /></>
+                            ) : (
+                              <>More <PiCaretDown className="w-3 h-3" /></>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-sm text-white/70 leading-relaxed whitespace-pre-wrap">{displayText}</p>
+                    </div>
+                  )
+                })()}
+
+                {/* Action buttons */}
+                <div className="flex items-center gap-2 pt-2">
                   <Button
+                    onClick={handleSuggestFix}
+                    disabled={isGeneratingFix || generatedFix !== null}
                     size="sm"
                     variant="outline"
-                    onClick={handleApplyFix}
-                    disabled={isApplyingFix || generatedFix?.applied_at !== null || isGitHubSnapshot}
-                    className={`gap-2 ${isGitHubSnapshot ? "cursor-not-allowed opacity-50" : ""}`}
+                    className="gap-2"
                   >
-                    <Check className="w-4 h-4" />
-                    {generatedFix?.applied_at ? "Applied" : isApplyingFix ? "Applying..." : "Apply Fix"}
+                    <PiSparkle className="w-3.5 h-3.5" />
+                    {isGeneratingFix ? "Generating..." : generatedFix ? "Suggested" : "Suggest Fix"}
                   </Button>
-                  {isGitHubSnapshot && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-black/95 border border-white/20 text-white text-xs rounded-lg whitespace-nowrap opacity-0 invisible group-hover/apply:opacity-100 group-hover/apply:visible transition-all duration-200 z-50 shadow-lg">
-                      Cannot apply fixes to GitHub snapshots.
-                      <br />
-                      Clone the repo locally to apply fixes.
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white/20" />
+                  <div className="relative group/apply">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleApplyFix}
+                      disabled={isApplyingFix || generatedFix?.applied_at !== null || isGitHubSnapshot}
+                      className={`gap-2 ${isGitHubSnapshot ? "cursor-not-allowed opacity-50" : ""}`}
+                    >
+                      <PiCheck className="w-3.5 h-3.5" />
+                      {generatedFix?.applied_at ? "Applied" : isApplyingFix ? "Applying..." : "Apply Fix"}
+                    </Button>
+                    {isGitHubSnapshot && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-black/95 border border-white/20 text-white text-xs rounded-lg whitespace-nowrap opacity-0 invisible group-hover/apply:opacity-100 group-hover/apply:visible transition-all duration-200 z-50 shadow-lg">
+                        Cannot apply fixes to GitHub snapshots.
+                        <br />
+                        Clone the repo locally to apply fixes.
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white/20" />
                     </div>
                   )}
                 </div>
               </div>
             </div>
-          )}
+            ) : (
+              <div className="flex items-center justify-center h-full text-sm text-white/40">
+                Select a violation to view details
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Modals */}
       {costLimitPrompt.open && costLimitPrompt.data && (
         <CostLimitDialog
           currentCost={costLimitPrompt.data.currentCost}

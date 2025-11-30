@@ -5,7 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { open } from "@tauri-apps/plugin-dialog"
-import { Folder, Github } from "lucide-react"
+import { PiFolder, PiGithubLogo } from "react-icons/pi"
 import {
   create_project,
   detect_framework,
@@ -179,7 +179,7 @@ export function TopNav() {
             <SelectTrigger
               className="!gap-2 !text-[13px] !h-9 !px-3 !min-w-[216px] !rounded-[11px] !bg-white/[0.04] !border !border-white/8 hover:!bg-white/[0.07] hover:!border-white/12 shadow-sm backdrop-blur-sm !overflow-hidden"
             >
-              <Folder className="w-3 h-3" />
+              <PiFolder className="w-3 h-3" />
               <SelectValue
                 className="truncate text-left"
                 placeholder={
@@ -199,7 +199,7 @@ export function TopNav() {
                   {localProjects.length > 0 && (
                     <>
                       <div className="px-3 py-1.5 text-[10px] font-medium text-white/40 uppercase tracking-wider flex items-center gap-1.5">
-                        <Folder className="w-3 h-3" />
+                        <PiFolder className="w-3 h-3" />
                         Local Projects
                       </div>
                       {localProjects.map((project) => (
@@ -239,7 +239,7 @@ export function TopNav() {
                   {githubProjects.length > 0 && (
                     <>
                       <div className="px-3 py-1.5 text-[10px] font-medium text-white/40 uppercase tracking-wider flex items-center gap-1.5">
-                        <Github className="w-3 h-3" />
+                        <PiGithubLogo className="w-3 h-3" />
                         GitHub Snapshots
                       </div>
                       {githubProjects.map((project) => (

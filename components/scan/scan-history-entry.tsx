@@ -1,6 +1,6 @@
 "use client"
 
-import { Loader2 } from "lucide-react"
+import { PiSpinner } from "react-icons/pi"
 import type { ScanCost, ScanSummary } from "@/lib/types/scan"
 import type { DetailLevel } from "@/lib/stores/scan-history-store"
 import { formatDateTime, formatRelativeTime } from "@/lib/utils/date"
@@ -52,7 +52,7 @@ export function ScanHistoryEntry({
       <div className="flex items-center justify-between gap-2">
         {/* Left side: Date and mode */}
         <div className="flex items-center gap-2 min-w-0">
-          {isLoading && <Loader2 className="w-3 h-3 animate-spin text-white/60 shrink-0" />}
+          {isLoading && <PiSpinner className="w-3 h-3 animate-spin text-white/60 shrink-0" />}
 
           <span className="text-xs text-white/80 truncate">
             {detailLevel === "detailed"
@@ -78,7 +78,7 @@ export function ScanHistoryEntry({
         <div className="flex items-center gap-2 shrink-0">
           {isInProgress && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-300 font-medium flex items-center gap-1">
-              <Loader2 className="w-2.5 h-2.5 animate-spin" />
+              <PiSpinner className="w-2.5 h-2.5 animate-spin" />
               Running
             </span>
           )}

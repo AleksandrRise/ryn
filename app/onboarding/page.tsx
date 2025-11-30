@@ -9,15 +9,15 @@ import { RadioGroup } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import {
-  Folder,
-  ZapIcon,
-  BrainCircuitIcon,
-  ScanSearchIcon,
-  Bell,
-  CheckCircle2,
-  ChevronRight,
-  Shield,
-} from "lucide-react"
+  PiFolder,
+  PiLightning,
+  PiBrain,
+  PiMagnifyingGlass,
+  PiBell,
+  PiCheckCircle,
+  PiCaretRight,
+  PiShield,
+} from "react-icons/pi"
 import { open } from "@tauri-apps/plugin-dialog"
 import { create_project, detect_framework, get_settings, complete_onboarding } from "@/lib/tauri/commands"
 import { useProjectStore } from "@/lib/stores/project-store"
@@ -273,7 +273,7 @@ function OnboardingContent() {
             </p>
           </div>
           <div className="hidden sm:flex items-center gap-3 text-sm text-white/70">
-            <Shield className="w-4 h-4" />
+            <PiShield className="w-4 h-4" />
             Data stays on your machine when scanning locally.
           </div>
         </div>
@@ -321,7 +321,7 @@ function OnboardingContent() {
                 <motion.div key="step-project" variants={stepVariants} initial="initial" animate="animate" exit="exit">
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <Folder className="w-5 h-5 text-blue-300" />
+                  <PiFolder className="w-5 h-5 text-blue-300" />
                   <div>
                     <h2 className="text-xl font-semibold">Choose your project</h2>
                     <p className="text-white/60 text-sm">Pick the folder Ryn should scan. You can change this later.</p>
@@ -342,7 +342,7 @@ function OnboardingContent() {
                       </div>
                       <div className="flex gap-2">
                         <Button onClick={handleSelectProject} variant="outline" className="gap-2" disabled={!isTauri}>
-                          <Folder className="w-4 h-4" />
+                          <PiFolder className="w-4 h-4" />
                           Choose folder
                         </Button>
                         {selectedProject && <FrameworkBadge framework={selectedProject.framework} />}
@@ -381,7 +381,7 @@ function OnboardingContent() {
                     selected={selectedMode === "regex_only"}
                     title="Pattern-only"
                     badge="Free"
-                    icon={<ZapIcon className="w-4 h-4 text-yellow-400" />}
+                    icon={<PiLightning className="w-4 h-4 text-yellow-400" />}
                     description="Fast regex-based detection. Great for quick, zero-cost passes."
                     bullets={["Instant results", "No AI cost", "May miss semantic issues"]}
                     onSelect={() => setSelectedMode("regex_only")}
@@ -391,7 +391,7 @@ function OnboardingContent() {
                     selected={selectedMode === "smart"}
                     title="Smart (recommended)"
                     badge="Balanced"
-                    icon={<BrainCircuitIcon className="w-4 h-4 text-blue-300" />}
+                    icon={<PiBrain className="w-4 h-4 text-blue-300" />}
                     description="Combines patterns with AI on important files. Good coverage with sensible spend."
                     bullets={["Best balance", "Catches semantic issues", "Keeps costs low"]}
                     onSelect={() => setSelectedMode("smart")}
@@ -401,7 +401,7 @@ function OnboardingContent() {
                     selected={selectedMode === "analyze_all"}
                     title="Analyze all"
                     badge="Thorough"
-                    icon={<ScanSearchIcon className="w-4 h-4 text-purple-300" />}
+                    icon={<PiMagnifyingGlass className="w-4 h-4 text-purple-300" />}
                     description="AI analyzes every file. Use for first-time deep audits or high-risk code."
                     bullets={["Max coverage", "Higher cost", "Thorough review"]}
                     onSelect={() => setSelectedMode("analyze_all")}
@@ -440,7 +440,7 @@ function OnboardingContent() {
                 <motion.div key="step-notify" variants={stepVariants} initial="initial" animate="animate" exit="exit">
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <Bell className="w-5 h-5 text-emerald-300" />
+                  <PiBell className="w-5 h-5 text-emerald-300" />
                   <div>
                     <h2 className="text-xl font-semibold">Stay in the loop</h2>
                     <p className="text-white/60 text-sm">Desktop alerts for scan progress and cost limits.</p>
@@ -459,7 +459,7 @@ function OnboardingContent() {
                       className="gap-2"
                       disabled={!isTauri || isRequestingPermission}
                     >
-                      <Bell className="w-4 h-4" />
+                      <PiBell className="w-4 h-4" />
                       {notificationStatus === "granted" ? "Enabled" : "Enable"}
                     </Button>
                   </div>
@@ -480,7 +480,7 @@ function OnboardingContent() {
                 <motion.div key="step-finish" variants={stepVariants} initial="initial" animate="animate" exit="exit">
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-300" />
+                  <PiCheckCircle className="w-5 h-5 text-emerald-300" />
                   <div>
                     <h2 className="text-xl font-semibold">You’re set</h2>
                     <p className="text-white/60 text-sm">We’ll save these choices and launch the scan workspace.</p>
@@ -526,7 +526,7 @@ function OnboardingContent() {
                         className="rounded-lg border border-white/10 bg-black/40 p-3 text-left"
                       >
                         <div className="flex items-center gap-2 text-sm font-semibold">
-                          <ZapIcon className="w-4 h-4 text-yellow-300" /> Pattern-only
+                          <PiLightning className="w-4 h-4 text-yellow-300" /> Pattern-only
                         </div>
                         <div className="text-xs text-white/60 mt-1">Fast, zero-cost regex pass.</div>
                       </motion.button>
@@ -540,7 +540,7 @@ function OnboardingContent() {
                         className="rounded-lg border border-white/10 bg-black/40 p-3 text-left"
                       >
                         <div className="flex items-center gap-2 text-sm font-semibold">
-                          <BrainCircuitIcon className="w-4 h-4 text-blue-300" /> Smart
+                          <PiBrain className="w-4 h-4 text-blue-300" /> Smart
                         </div>
                         <div className="text-xs text-white/60 mt-1">Balanced coverage with AI on key files.</div>
                       </motion.button>
@@ -554,7 +554,7 @@ function OnboardingContent() {
                         className="rounded-lg border border-white/10 bg-black/40 p-3 text-left"
                       >
                         <div className="flex items-center gap-2 text-sm font-semibold">
-                          <ScanSearchIcon className="w-4 h-4 text-purple-300" /> Analyze all
+                          <PiMagnifyingGlass className="w-4 h-4 text-purple-300" /> Analyze all
                         </div>
                         <div className="text-xs text-white/60 mt-1">AI on every file for maximum depth.</div>
                       </motion.button>
@@ -580,12 +580,12 @@ function OnboardingContent() {
               {currentStep.id !== "finish" ? (
                 <Button onClick={handleNext} className="gap-2">
                   Continue
-                  <ChevronRight className="w-4 h-4" />
+                  <PiCaretRight className="w-4 h-4" />
                 </Button>
               ) : (
                 <Button onClick={handleFinish} className="gap-2" disabled={isSaving || isScanning}>
                   {isScanning ? "Starting first scan..." : "Start using Ryn"}
-                  <ChevronRight className="w-4 h-4" />
+                  <PiCaretRight className="w-4 h-4" />
                 </Button>
               )}
             </div>

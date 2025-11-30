@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import * as SelectPrimitive from '@radix-ui/react-select'
-import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
+import { PiCheck, PiCaretDown, PiCaretUp } from 'react-icons/pi'
 
 import { cn } from '@/lib/utils'
 
@@ -51,7 +51,7 @@ function SelectTrigger({
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="size-4 opacity-50 transition-transform duration-200 data-[state=open]:rotate-180" />
+        <PiCaretDown className="size-4 opacity-50 transition-transform duration-200 data-[state=open]:rotate-180" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
@@ -127,7 +127,7 @@ function SelectItem({
     >
       <span className="absolute right-2 flex size-3.5 items-center justify-center">
         <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="size-4 transition-transform duration-200 scale-0 data-[state=checked]:scale-100" />
+          <PiCheck className="size-4 transition-transform duration-200 scale-0 data-[state=checked]:scale-100" />
         </SelectPrimitive.ItemIndicator>
       </span>
       <div className="flex flex-col gap-0.5 min-w-0">
@@ -164,7 +164,7 @@ function SelectScrollUpButton({
       )}
       {...props}
     >
-      <ChevronUpIcon className="size-4" />
+      <PiCaretUp className="size-4" />
     </SelectPrimitive.ScrollUpButton>
   )
 }
@@ -182,7 +182,7 @@ function SelectScrollDownButton({
       )}
       {...props}
     >
-      <ChevronDownIcon className="size-4" />
+      <PiCaretDown className="size-4" />
     </SelectPrimitive.ScrollDownButton>
   )
 }

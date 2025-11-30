@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import type { ScanProgress, AiActivity, AiFileStream, SelectionReason } from "@/lib/types/scan"
-import { FileSearch, Brain, X, CheckCircle2, Loader2, FileCode } from "lucide-react"
+import { PiFileMagnifyingGlass, PiBrain, PiX, PiCheckCircle, PiSpinner, PiFileCode } from "react-icons/pi"
 import { Button } from "@/components/ui/button"
 
 interface ScanProgressCardProps {
@@ -63,7 +63,7 @@ function AiStreamCard({ stream }: { stream: AiFileStream }) {
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <FileCode className="w-3.5 h-3.5 text-white/50 shrink-0" />
+            <PiFileCode className="w-3.5 h-3.5 text-white/50 shrink-0" />
             <span className="text-sm font-medium text-white truncate">{fileName}</span>
           </div>
           {dir && (
@@ -77,9 +77,9 @@ function AiStreamCard({ stream }: { stream: AiFileStream }) {
             {reasonLabels[stream.selectionReason]}
           </span>
           {isComplete ? (
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <PiCheckCircle className="w-4 h-4 text-emerald-400" />
           ) : (
-            <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+            <PiSpinner className="w-4 h-4 text-purple-400 animate-spin" />
           )}
         </div>
       </div>
@@ -133,9 +133,9 @@ export function ScanProgressCard({ progress, aiActivity, onCancel }: ScanProgres
       <div className="flex items-center gap-4 mb-4">
         <div className={`p-3 ${isAiAnalyzing || isWaitingForAI ? "bg-purple-500/20" : "bg-blue-500/20"} rounded-xl animate-pulse`}>
           {isAiAnalyzing || isWaitingForAI ? (
-            <Brain className="w-6 h-6 text-purple-400" />
+            <PiBrain className="w-6 h-6 text-purple-400" />
           ) : (
-            <FileSearch className="w-6 h-6 text-blue-400" />
+            <PiFileMagnifyingGlass className="w-6 h-6 text-blue-400" />
           )}
         </div>
         <div className="flex-1">
@@ -154,7 +154,7 @@ export function ScanProgressCard({ progress, aiActivity, onCancel }: ScanProgres
                 variant="ghost"
                 className="h-7 px-3 gap-1.5 text-xs text-white/60 hover:text-white hover:bg-white/10"
               >
-                <X className="w-3.5 h-3.5" />
+                <PiX className="w-3.5 h-3.5" />
                 Cancel
               </Button>
             )}
@@ -193,7 +193,7 @@ export function ScanProgressCard({ progress, aiActivity, onCancel }: ScanProgres
         <div className="mt-4 pt-4 border-t border-white/10">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-sm font-medium text-white/80 flex items-center gap-2">
-              <Brain className="w-4 h-4 text-purple-400" />
+              <PiBrain className="w-4 h-4 text-purple-400" />
               Live AI Analysis
             </h4>
             <span className="text-xs text-white/50">

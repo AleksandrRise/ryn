@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Download, FileSearch, CheckCircle, AlertCircle, Play, Filter, Loader2 } from "lucide-react"
+import { PiDownloadSimple, PiFileMagnifyingGlass, PiCheckCircle, PiWarningCircle, PiPlay, PiFunnel, PiSpinner } from "react-icons/pi"
 import {
   get_audit_events,
   export_data,
@@ -120,13 +120,13 @@ export function AuditTrail() {
   const getEventIcon = (type: string) => {
     // Map backend event types to icons
     if (type.includes("scan")) {
-      return <FileSearch className="w-5 h-5" />
+      return <PiFileMagnifyingGlass className="w-5 h-5" />
     } else if (type.includes("fix")) {
-      return <CheckCircle className="w-5 h-5" />
+      return <PiCheckCircle className="w-5 h-5" />
     } else if (type.includes("violation")) {
-      return <AlertCircle className="w-5 h-5" />
+      return <PiWarningCircle className="w-5 h-5" />
     } else {
-      return <Play className="w-5 h-5" />
+      return <PiPlay className="w-5 h-5" />
     }
   }
 
@@ -164,7 +164,7 @@ export function AuditTrail() {
           </p>
         </div>
         <Button size="lg" variant="outline" className="gap-2" onClick={handleExportReport}>
-          <Download className="w-4 h-4" />
+          <PiDownloadSimple className="w-4 h-4" />
           Export Report
         </Button>
       </div>
@@ -174,45 +174,45 @@ export function AuditTrail() {
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 bg-blue-500/20 rounded-lg">
-              <FileSearch className="w-5 h-5 text-blue-400" />
+              <PiFileMagnifyingGlass className="w-5 h-5 text-blue-400" />
             </div>
             <h3 className="text-sm font-semibold text-white/60">Total Scans</h3>
           </div>
           <p className="text-3xl font-bold tabular-nums">
-            {isLoading ? <Loader2 className="w-8 h-8 animate-spin" /> : stats.totalScans}
+            {isLoading ? <PiSpinner className="w-8 h-8 animate-spin" /> : stats.totalScans}
           </p>
         </div>
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 bg-green-500/20 rounded-lg">
-              <CheckCircle className="w-5 h-5 text-green-400" />
+              <PiCheckCircle className="w-5 h-5 text-green-400" />
             </div>
             <h3 className="text-sm font-semibold text-white/60">Fixes Applied</h3>
           </div>
           <p className="text-3xl font-bold tabular-nums">
-            {isLoading ? <Loader2 className="w-8 h-8 animate-spin" /> : stats.fixesApplied}
+            {isLoading ? <PiSpinner className="w-8 h-8 animate-spin" /> : stats.fixesApplied}
           </p>
         </div>
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 bg-red-500/20 rounded-lg">
-              <AlertCircle className="w-5 h-5 text-red-400" />
+              <PiWarningCircle className="w-5 h-5 text-red-400" />
             </div>
             <h3 className="text-sm font-semibold text-white/60">Violations</h3>
           </div>
           <p className="text-3xl font-bold tabular-nums">
-            {isLoading ? <Loader2 className="w-8 h-8 animate-spin" /> : stats.violations}
+            {isLoading ? <PiSpinner className="w-8 h-8 animate-spin" /> : stats.violations}
           </p>
         </div>
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-3">
             <div className="p-2 bg-white/5 rounded-lg">
-              <Filter className="w-5 h-5 text-white/60" />
+              <PiFunnel className="w-5 h-5 text-white/60" />
             </div>
             <h3 className="text-sm font-semibold text-white/60">Total Events</h3>
           </div>
           <p className="text-3xl font-bold tabular-nums">
-            {isLoading ? <Loader2 className="w-8 h-8 animate-spin" /> : stats.totalEvents}
+            {isLoading ? <PiSpinner className="w-8 h-8 animate-spin" /> : stats.totalEvents}
           </p>
         </div>
       </div>
@@ -238,13 +238,13 @@ export function AuditTrail() {
       <div className="relative animate-fade-in-up delay-300">
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-12 h-12 animate-spin text-white/40" />
+            <PiSpinner className="w-12 h-12 animate-spin text-white/40" />
           </div>
         ) : filteredEvents.length === 0 ? (
           <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-12 text-center">
             <div className="flex flex-col items-center gap-4">
               <div className="p-4 bg-white/5 rounded-full">
-                <Filter className="w-8 h-8 text-white/40" />
+                <PiFunnel className="w-8 h-8 text-white/40" />
               </div>
               <div>
                 <h3 className="text-xl font-semibold mb-2">No audit events found</h3>
