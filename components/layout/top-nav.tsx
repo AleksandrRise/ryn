@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { FrameworkBadge } from "@/components/ui/framework-badge"
+import { Tooltip } from "@/components/ui/tooltip"
 
 export function TopNav() {
   const pathname = usePathname()
@@ -33,10 +34,10 @@ export function TopNav() {
   const [isDeleting, setIsDeleting] = useState(false)
 
   const links = [
-    { href: "/", label: "Dashboard" },
-    { href: "/scan/", label: "Scans" },
-    { href: "/audit/", label: "Audit Trail" },
-    { href: "/settings/", label: "Settings" },
+    { href: "/", label: "Dashboard", tooltip: "View compliance overview" },
+    { href: "/scan/", label: "Scans", tooltip: "Run and manage scans" },
+    { href: "/audit/", label: "Audit Trail", tooltip: "View audit history" },
+    { href: "/settings/", label: "Settings", tooltip: "Configure preferences" },
   ]
 
   const loadProjects = async () => {
@@ -160,143 +161,146 @@ export function TopNav() {
               const normalizedHref = link.href.replace(/\/$/, "") || ""
               const isActive = normalizedPathname === normalizedHref
               return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`text-xs font-medium ${
-                    isActive ? "text-white" : "text-white/60 hover:text-white/90"
-                  } transition-colors`}
-                >
-                  {link.label}
-                </Link>
+                <Tooltip key={link.href} content={link.tooltip} side="bottom" sideOffset={8}>
+                  <Link
+                    href={link.href}
+                    className={`text-xs font-medium ${
+                      isActive ? "text-white" : "text-white/60 hover:text-white/90"
+                    } transition-colors`}
+                  >
+                    {link.label}
+                  </Link>
+                </Tooltip>
               )
             })}
           </div>
         </div>
 
         <div className="ml-auto flex items-center">
-          <Select value={currentProjectId} onValueChange={handleProjectChange}>
-            <SelectTrigger
-              className="!gap-2 !text-[13px] !h-9 !px-3 !min-w-[216px] !rounded-[11px] !bg-white/[0.04] !border !border-white/8 hover:!bg-white/[0.07] hover:!border-white/12 shadow-sm backdrop-blur-sm !overflow-hidden"
-            >
-              <PiFolder className="w-3 h-3" />
-              <SelectValue
-                className="truncate text-left"
-                placeholder={
-                  isLoadingProjects
-                    ? "Loading projects..."
-                    : selectedProject
-                    ? selectedProject.name
-                    : "Select project"
-                }
-                aria-label={selectedProject?.name || undefined}
-              />
-            </SelectTrigger>
-            <SelectContent className="!bg-black/85 !border !border-white/10 !backdrop-blur-2xl !rounded-2xl !shadow-2xl px-1 py-1">
-              {projects.length > 0 ? (
-                <>
-                  {/* Local Projects Section */}
-                  {localProjects.length > 0 && (
+          <Tooltip content="Select or add a project" side="bottom" sideOffset={8}>
+            <div>
+              <Select value={currentProjectId} onValueChange={handleProjectChange}>
+                <SelectTrigger className="!gap-2 !text-[13px] !h-9 !px-3 !min-w-[216px] !rounded-[11px] !bg-white/[0.04] !border !border-white/8 hover:!bg-white/[0.07] hover:!border-white/12 shadow-sm backdrop-blur-sm !overflow-hidden">
+                  <PiFolder className="w-3 h-3" />
+                  <SelectValue
+                    className="truncate text-left"
+                    placeholder={
+                      isLoadingProjects
+                        ? "Loading projects..."
+                        : selectedProject
+                        ? selectedProject.name
+                        : "Select project"
+                    }
+                    aria-label={selectedProject?.name || undefined}
+                  />
+                </SelectTrigger>
+                <SelectContent className="!bg-black/85 !border !border-white/10 !backdrop-blur-2xl !rounded-2xl !shadow-2xl px-1 py-1">
+                  {projects.length > 0 ? (
                     <>
-                      <div className="px-3 py-1.5 text-[10px] font-medium text-white/40 uppercase tracking-wider flex items-center gap-1.5">
-                        <PiFolder className="w-3 h-3" />
-                        Local Projects
-                      </div>
-                      {localProjects.map((project) => (
-                        <div key={project.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-white/5">
-                          <SelectItem
-                            value={String(project.id)}
-                            textValue={project.name}
-                            className="flex-1 rounded-lg px-0 py-0 hover:bg-transparent focus:bg-transparent"
-                            label={project.name}
-                            description={
-                              <span className="flex items-center gap-1.5">
-                                <FrameworkBadge framework={project.framework} showLabel={false} className="!bg-transparent !border-0 !p-0" />
-                                <span className="truncate max-w-[180px]">{project.framework || project.path}</span>
-                              </span>
-                            }
-                          />
-                          <button
-                            className="text-red-400 hover:text-red-300 px-2 py-1 rounded-md hover:bg-red-500/10 transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeleteProject(project.id, project.name)
-                            }}
-                            disabled={isDeleting}
-                            title="Delete project"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </>
-                  )}
+                      {/* Local Projects Section */}
+                      {localProjects.length > 0 && (
+                        <>
+                          <div className="px-3 py-1.5 text-[10px] font-medium text-white/40 uppercase tracking-wider flex items-center gap-1.5">
+                            <PiFolder className="w-3 h-3" />
+                            Local Projects
+                          </div>
+                          {localProjects.map((project) => (
+                            <div key={project.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-white/5">
+                              <SelectItem
+                                value={String(project.id)}
+                                textValue={project.name}
+                                className="flex-1 rounded-lg px-0 py-0 hover:bg-transparent focus:bg-transparent"
+                                label={project.name}
+                                description={
+                                  <span className="flex items-center gap-1.5">
+                                    <FrameworkBadge framework={project.framework} showLabel={false} className="!bg-transparent !border-0 !p-0" />
+                                    <span className="truncate max-w-[180px]">{project.framework || project.path}</span>
+                                  </span>
+                                }
+                              />
+                              <button
+                                className="text-red-400 hover:text-red-300 px-2 py-1 rounded-md hover:bg-red-500/10 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDeleteProject(project.id, project.name)
+                                }}
+                                disabled={isDeleting}
+                                title="Delete project"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </>
+                      )}
 
-                  {/* Divider between sections */}
-                  {localProjects.length > 0 && githubProjects.length > 0 && <SelectSeparator />}
+                      {/* Divider between sections */}
+                      {localProjects.length > 0 && githubProjects.length > 0 && <SelectSeparator />}
 
-                  {/* GitHub Projects Section */}
-                  {githubProjects.length > 0 && (
-                    <>
-                      <div className="px-3 py-1.5 text-[10px] font-medium text-white/40 uppercase tracking-wider flex items-center gap-1.5">
-                        <PiGithubLogo className="w-3 h-3" />
-                        GitHub Snapshots
-                      </div>
-                      {githubProjects.map((project) => (
-                        <div key={project.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-white/5">
-                          <SelectItem
-                            value={String(project.id)}
-                            textValue={project.name}
-                            className="flex-1 rounded-lg px-0 py-0 hover:bg-transparent focus:bg-transparent"
-                            label={project.name}
-                            description={
-                              <span className="flex items-center gap-1.5">
-                                <FrameworkBadge framework={project.framework} showLabel={false} className="!bg-transparent !border-0 !p-0" />
-                                <span className="truncate max-w-[180px]">{project.framework || "GitHub"}</span>
-                              </span>
-                            }
-                          />
-                          <button
-                            className="text-red-400 hover:text-red-300 px-2 py-1 rounded-md hover:bg-red-500/10 transition-colors"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeleteProject(project.id, project.name)
-                            }}
-                            disabled={isDeleting}
-                            title="Delete project"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
+                      {/* GitHub Projects Section */}
+                      {githubProjects.length > 0 && (
+                        <>
+                          <div className="px-3 py-1.5 text-[10px] font-medium text-white/40 uppercase tracking-wider flex items-center gap-1.5">
+                            <PiGithubLogo className="w-3 h-3" />
+                            GitHub Snapshots
+                          </div>
+                          {githubProjects.map((project) => (
+                            <div key={project.id} className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 hover:bg-white/5">
+                              <SelectItem
+                                value={String(project.id)}
+                                textValue={project.name}
+                                className="flex-1 rounded-lg px-0 py-0 hover:bg-transparent focus:bg-transparent"
+                                label={project.name}
+                                description={
+                                  <span className="flex items-center gap-1.5">
+                                    <FrameworkBadge framework={project.framework} showLabel={false} className="!bg-transparent !border-0 !p-0" />
+                                    <span className="truncate max-w-[180px]">{project.framework || "GitHub"}</span>
+                                  </span>
+                                }
+                              />
+                              <button
+                                className="text-red-400 hover:text-red-300 px-2 py-1 rounded-md hover:bg-red-500/10 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDeleteProject(project.id, project.name)
+                                }}
+                                disabled={isDeleting}
+                                title="Delete project"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </>
+                      )}
                     </>
+                  ) : (
+                    <SelectItem value="__no_projects__" label="No projects yet" disabled />
                   )}
-                </>
-              ) : (
-                <SelectItem value="__no_projects__" label="No projects yet" disabled />
-              )}
-              <SelectSeparator />
-              <SelectItem
-                value="__add_new__"
-                label="Add new project…"
-                className="rounded-lg px-3 py-2 hover:bg-white/5 focus:bg-white/8"
-              />
-              {projects.length > 0 && (
-                <div className="px-3 py-2">
-                  <button
-                    className="text-[12px] text-red-400 hover:text-red-300 hover:bg-red-500/10 w-full rounded-md px-3 py-2 transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeleteAll()
-                    }}
-                    disabled={isDeleting}
-                  >
-                    Delete all projects
-                  </button>
-                </div>
-              )}
-            </SelectContent>
-          </Select>
+                  <SelectSeparator />
+                  <SelectItem
+                    value="__add_new__"
+                    label="Add new project…"
+                    className="rounded-lg px-3 py-2 hover:bg-white/5 focus:bg-white/8"
+                  />
+                  {projects.length > 0 && (
+                    <div className="px-3 py-2">
+                      <button
+                        className="text-[12px] text-red-400 hover:text-red-300 hover:bg-red-500/10 w-full rounded-md px-3 py-2 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteAll()
+                        }}
+                        disabled={isDeleting}
+                      >
+                        Delete all projects
+                      </button>
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </Tooltip>
         </div>
       </div>
     </nav>

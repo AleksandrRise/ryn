@@ -110,6 +110,10 @@ export function Dashboard() {
   const localHighCount = localViolations.filter(v => v.severity === "high").length
   const hasLocalScanData = !!localLastScan
 
+  // Show chart CTA (clickable area to open file picker or connect GitHub) when:
+  // - Not connected to GitHub AND not in local mode with existing scan data
+  const showChartCta = !connectionStatus?.connected && !(isLocalMode && hasLocalScanData)
+
   const checkConnection = useCallback(async () => {
     try {
       const status = await check_github_connection()
@@ -689,18 +693,18 @@ export function Dashboard() {
             {/* Chart - Large - With connection CTA when not connected */}
             <div
               className={`col-span-9 relative rounded-2xl overflow-hidden transition-all duration-300 border ${
-                !connectionStatus?.connected
+                showChartCta
                   ? isLocalMode
                     ? "bg-[#0a0b10]/90 border-white/10 cursor-pointer group/card"
                     : "bg-gradient-to-br from-emerald-400/[0.12] via-emerald-500/[0.04] to-transparent border-emerald-500/10 hover:border-emerald-500/25 cursor-pointer group/card"
                   : "bg-[#08080c]/80 border-white/[0.05]"
               }`}
-              onClick={!connectionStatus?.connected ? handlePrimaryConnect : undefined}
-              role={!connectionStatus?.connected ? "button" : undefined}
-              tabIndex={!connectionStatus?.connected ? 0 : undefined}
-              aria-label={!connectionStatus?.connected ? (isLocalMode ? "Open local project" : "Connect GitHub") : undefined}
+              onClick={showChartCta ? handlePrimaryConnect : undefined}
+              role={showChartCta ? "button" : undefined}
+              tabIndex={showChartCta ? 0 : undefined}
+              aria-label={showChartCta ? (isLocalMode ? "Open local project" : "Connect GitHub") : undefined}
               onKeyDown={
-                !connectionStatus?.connected
+                showChartCta
                   ? (event) => {
                       if (isActivationKey(event)) {
                         event.preventDefault()
