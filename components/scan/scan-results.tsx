@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Play, Search, FolderTree, Sparkles, Check, Github, Folder, X } from "lucide-react"
+import { Play, Search, Sparkles, Check, Github, Folder, X } from "lucide-react"
 import { CostLimitDialog } from "@/components/scan/cost-limit-dialog"
 import { ScanControls } from "@/components/scan/scan-controls"
 import { ScanHistoryPanel } from "@/components/scan/scan-history-panel"
@@ -72,8 +72,7 @@ export function ScanResults() {
     }))
   }
 
-  // File selection and search state (must be declared before hasActiveFilters)
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
+  // Violation selection and search state
   const [selectedViolationId, setSelectedViolationId] = useState<number | null>(null)
   const [fileSearch, setFileSearch] = useState("")
 
@@ -96,7 +95,6 @@ export function ScanResults() {
       "A1.2": true,
     })
     setFileSearch("")
-    setSelectedFilePath(null)
   }, [])
 
   // Handle selecting a historical scan
@@ -150,59 +148,12 @@ export function ScanResults() {
   const lastMode = lastScan?.scanMode ? lastScan.scanMode : "regex_only"
   const isGitHubSnapshot = selectedProject?.path.includes("ryn-github-cache") ?? false
 
-  const severityTone = (sev: Severity) =>
-    sev === "critical"
-      ? "text-red-300"
-      : sev === "high"
-        ? "text-orange-300"
-        : sev === "medium"
-          ? "text-yellow-200"
-          : "text-white/60"
-
-  // Build file groups from the currently filtered violations
-  const fileGroups = useMemo(() => {
-    const groups = new Map<string, { filePath: string; violations: typeof filteredViolations; counts: Record<Severity, number> }>()
-
-    filteredViolations.forEach((v) => {
-      if (!groups.has(v.filePath)) {
-        groups.set(v.filePath, {
-          filePath: v.filePath,
-          violations: [],
-          counts: { critical: 0, high: 0, medium: 0, low: 0 },
-        })
-      }
-      const entry = groups.get(v.filePath)!
-      entry.violations.push(v)
-      entry.counts[v.severity] += 1
-    })
-
-    const order: Severity[] = ["critical", "high", "medium", "low"]
-
-    return Array.from(groups.values()).sort((a, b) => {
-      // Sort by highest-severity count, then total count, then path
-      for (const sev of order) {
-        const diff = (b.counts[sev] ?? 0) - (a.counts[sev] ?? 0)
-        if (diff !== 0) return diff
-      }
-      const totalDiff = b.violations.length - a.violations.length
-      if (totalDiff !== 0) return totalDiff
-      return a.filePath.localeCompare(b.filePath)
-    })
-  }, [filteredViolations])
-
-  const visibleFileGroups = useMemo(() => {
-    const term = fileSearch.trim().toLowerCase()
-    if (!term) return fileGroups
-    return fileGroups.filter((group) =>
-      group.filePath.toLowerCase().includes(term)
-    )
-  }, [fileGroups, fileSearch])
-
-  // Current violation list narrowed by file selection
+  // Current violation list narrowed by file search
   const visibleViolations = useMemo(() => {
-    if (!selectedFilePath) return filteredViolations
-    return filteredViolations.filter((v) => v.filePath === selectedFilePath)
-  }, [filteredViolations, selectedFilePath])
+    const term = fileSearch.trim().toLowerCase()
+    if (!term) return filteredViolations
+    return filteredViolations.filter((v) => v.filePath.toLowerCase().includes(term))
+  }, [filteredViolations, fileSearch])
 
   // Ensure selection stays in sync
   useEffect(() => {
@@ -345,7 +296,7 @@ export function ScanResults() {
 
   if (!selectedProject) {
     return (
-      <div className="px-8 py-8 max-w-[1800px] mx-auto">
+      <div className="px-6 pt-8 pb-12 max-w-7xl mx-auto">
         <div className="mb-4">
           <h1 className="text-5xl font-bold leading-none tracking-tight mb-2">Scans</h1>
           <p className="text-white/60">Select a project from the header to view and run scans.</p>
@@ -358,23 +309,22 @@ export function ScanResults() {
   }
 
   return (
-    <div className="px-6 py-6 max-w-[1400px] mx-auto space-y-4">
+    <div className="px-6 pt-8 pb-12 max-w-7xl mx-auto space-y-6">
       {/* Top bar: title + primary actions */}
       <div className="flex flex-wrap items-center justify-between gap-4 animate-fade-in-up">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Scans</h1>
-          <p className="text-xs text-white/50 flex items-center gap-2">
-            <span>Project: {selectedProject.name}</span>
+          <p className="text-xs text-white/40 flex items-center gap-1.5">
             {selectedProject.path.includes("ryn-github-cache") ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 text-[10px] font-medium">
+              <>
                 <Github className="w-3 h-3" />
-                GitHub Snapshot
-              </span>
+                <span>{selectedProject.name}</span>
+              </>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 text-[10px] font-medium">
+              <>
                 <Folder className="w-3 h-3" />
-                Local
-              </span>
+                <span>{selectedProject.name}</span>
+              </>
             )}
           </p>
         </div>
@@ -450,123 +400,54 @@ export function ScanResults() {
 
       {isScanning && <ScanProgressCard progress={progress} aiActivity={aiActivity} onCancel={cancelScan} />}
 
-      <div className="rounded-xl border border-white/10 bg-black/25 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.45)] grid gap-5 xl:grid-cols-[260px_360px_1fr] items-stretch min-h-[520px] animate-fade-in-up delay-200">
-        {/* Files */}
-        <div className="flex flex-col gap-3 xl:border-r xl:border-white/10 xl:pr-4">
+      <div className="rounded-2xl border border-white/[0.04] bg-white/5 p-5 grid gap-6 xl:grid-cols-[380px_1fr] items-stretch min-h-[560px] animate-fade-in-up delay-200">
+        {/* Violations */}
+        <div className="flex flex-col gap-3 xl:border-r xl:border-white/[0.06] xl:pr-5">
           <div className="flex items-center justify-between text-sm text-white/75">
-            <div className="flex items-center gap-2 font-semibold">
-              <FolderTree className="w-4 h-4" />
-              Files
-            </div>
-            <span className="text-[11px] text-white/50">
-              {visibleFileGroups.length || filteredViolations.length} files
-            </span>
+            <div className="font-semibold">Violations</div>
+            <div className="text-[11px] text-white/50">{filteredViolations.length} total</div>
           </div>
 
+          {/* Search within violations */}
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
             <input
               value={fileSearch}
               onChange={(e) => setFileSearch(e.target.value)}
-              placeholder="Filter files"
-              className="w-full rounded-md bg-white/5 border border-white/10 px-9 py-2 text-xs text-white/85 placeholder:text-white/45 focus:outline-none focus:border-white/30"
+              placeholder="Filter by file..."
+              className="w-full rounded-lg bg-white/[0.03] border border-white/[0.06] px-9 py-2 text-xs text-white/85 placeholder:text-white/40 focus:outline-none focus:border-white/20 transition-colors"
             />
           </div>
 
-          <div className="space-y-1 max-h-[640px] overflow-auto pr-1">
-            <button
-              className={`w-full text-left rounded-md px-3 py-2 text-xs font-semibold transition-all duration-150 ease-out hover:scale-[1.01] active:scale-[0.99] ${
-                selectedFilePath === null
-                  ? "bg-white/10 text-white"
-                  : "bg-transparent text-white/75 hover:bg-white/5 hover:text-white"
-              }`}
-              onClick={() => setSelectedFilePath(null)}
-            >
-              All files ({filteredViolations.length})
-            </button>
-
-            {visibleFileGroups.length === 0 && (
-              <div className="text-[11px] text-white/50 px-2 py-2">No files match that filter.</div>
-            )}
-
-            {visibleFileGroups.map((group) => {
-              const isActive = selectedFilePath === group.filePath
-              const name = group.filePath.split("/").pop() || group.filePath
-              const dir = group.filePath.includes("/") ? group.filePath.slice(0, group.filePath.lastIndexOf("/")) : ""
-              return (
-                <button
-                  key={group.filePath}
-                  className={`w-full text-left rounded-md px-3 py-2 text-xs transition-all duration-150 ease-out hover:scale-[1.01] active:scale-[0.99] flex flex-col gap-1 ${
-                    isActive
-                      ? "bg-white/10 text-white"
-                      : "bg-transparent text-white/80 hover:bg-white/5 hover:text-white"
-                  }`}
-                  onClick={() => setSelectedFilePath(group.filePath)}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold">{name}</span>
-                    <span className="text-[11px] text-white/50">{group.violations.length}</span>
-                  </div>
-                  {dir && <span className="text-[10px] text-white/45 truncate">{dir}</span>}
-                  <div className="flex items-center gap-3 mt-1 text-[11px] text-white/60">
-                    {(["critical", "high", "medium", "low"] as Severity[]).map((sev) => (
-                      <span key={sev} className={`inline-flex items-center gap-1 ${severityTone(sev)}`}>
-                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
-                        {group.counts[sev] || 0}
-                      </span>
-                    ))}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Violations */}
-        <div className="flex flex-col gap-3 xl:border-r xl:border-white/10 xl:pr-4">
-          <div className="flex items-center justify-between text-sm text-white/75">
-            <div className="font-semibold">Violations</div>
-            <div className="text-[11px] text-white/60">{visibleViolations.length} shown</div>
-          </div>
-          <div className="max-h-[640px] overflow-auto rounded-md bg-white/5 divide-y divide-white/5 border border-white/10">
+          <div className="flex-1 overflow-auto rounded-lg bg-white/[0.02] divide-y divide-white/[0.04] border border-white/[0.04]">
             {visibleViolations.length === 0 && (
-              <div className="text-[12px] text-white/60 px-3 py-6 text-center">No violations match these filters.</div>
+              <div className="text-xs text-white/50 px-4 py-8 text-center">No violations match these filters.</div>
             )}
             {visibleViolations.map((v) => {
               const isActive = v.id === selectedViolation?.id
+              const fileName = v.filePath.split("/").pop() || v.filePath
               return (
                 <button
                   key={v.id}
                   onClick={() => setSelectedViolationId(v.id)}
-                  className={`w-full text-left px-3 py-3 transition-all duration-150 ease-out hover:scale-[1.01] active:scale-[0.99] ${
+                  className={`w-full text-left px-4 py-3 transition-colors ${
                     isActive
-                      ? "bg-white/10 text-white"
-                      : "bg-transparent text-white/85 hover:bg-white/5"
+                      ? "bg-white/[0.08]"
+                      : "hover:bg-white/[0.04]"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2 text-[12px]">
-                      <span className={`inline-flex items-center gap-1 font-semibold ${severityTone(v.severity)}`}>
-                        <span className="h-2 w-2 rounded-full bg-current" />
-                        {v.severity}
-                      </span>
-                      <span className="text-white/60 text-[11px]">{v.detectionMethod}</span>
-                      {v.confidenceScore !== undefined && v.confidenceScore > 0 && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                          v.confidenceScore >= 0.8
-                            ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/25"
-                            : v.confidenceScore >= 0.6
-                              ? "bg-amber-500/15 text-amber-300 border-amber-500/25"
-                              : "bg-white/10 text-white/60 border-white/20"
-                        }`}>
-                          {Math.round(v.confidenceScore * 100)}% conf
-                        </span>
-                      )}
-                      <span className="font-mono text-[11px] text-white/70">{v.controlId}</span>
-                    </div>
-                    <span className="text-[11px] text-white/60 font-mono shrink-0">{v.filePath}:{v.lineNumber}</span>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`h-2 w-2 rounded-full ${
+                      v.severity === "critical" ? "bg-red-400" :
+                      v.severity === "high" ? "bg-orange-400" :
+                      v.severity === "medium" ? "bg-yellow-400" :
+                      "bg-white/40"
+                    }`} />
+                    <span className="text-xs font-mono text-white/50">{v.controlId}</span>
+                    <span className="text-[10px] text-white/40">{v.detectionMethod}</span>
                   </div>
-                  <p className="text-sm text-white/90 leading-snug line-clamp-2 mt-1">{v.description}</p>
+                  <p className="text-sm text-white/90 leading-snug line-clamp-2 mb-1.5">{v.description}</p>
+                  <div className="text-[11px] text-white/40 font-mono truncate">{fileName}:{v.lineNumber}</div>
                 </button>
               )
             })}
@@ -576,29 +457,27 @@ export function ScanResults() {
         {/* Detail */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between text-[12px] text-white/70">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {selectedViolation ? (
                 <>
-                  <span className={`inline-flex items-center gap-1 font-semibold ${severityTone(selectedViolation.severity)}`}>
-                    <span className="h-2 w-2 rounded-full bg-current" />
-                    {selectedViolation.severity}
-                  </span>
-                  <span className="text-white/60 text-[11px]">{selectedViolation.detectionMethod}</span>
+                  <span className={`h-2 w-2 rounded-full ${
+                    selectedViolation.severity === "critical" ? "bg-red-400" :
+                    selectedViolation.severity === "high" ? "bg-orange-400" :
+                    selectedViolation.severity === "medium" ? "bg-yellow-400" :
+                    "bg-white/40"
+                  }`} />
+                  <span className="font-mono text-white/60">{selectedViolation.controlId}</span>
+                  <span className="text-white/40">·</span>
+                  <span className="text-white/50">{selectedViolation.detectionMethod}</span>
                   {selectedViolation.confidenceScore !== undefined && selectedViolation.confidenceScore > 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                      selectedViolation.confidenceScore >= 0.8
-                        ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/25"
-                        : selectedViolation.confidenceScore >= 0.6
-                          ? "bg-amber-500/15 text-amber-300 border-amber-500/25"
-                          : "bg-white/10 text-white/60 border-white/20"
-                    }`}>
-                      {Math.round(selectedViolation.confidenceScore * 100)}% confidence
-                    </span>
+                    <>
+                      <span className="text-white/40">·</span>
+                      <span className="text-white/50">{Math.round(selectedViolation.confidenceScore * 100)}%</span>
+                    </>
                   )}
-                  <span className="font-mono text-[11px] text-white/70">{selectedViolation.controlId}</span>
                 </>
               ) : (
-                <span className="text-white/60">No violation selected.</span>
+                <span className="text-white/50">No violation selected</span>
               )}
             </div>
             {selectedViolation && (

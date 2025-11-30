@@ -127,7 +127,8 @@ export function ScanProgressCard({ progress, aiActivity, onCancel }: ScanProgres
     : []
 
   return (
-    <div className="mb-8 bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 animate-fade-in-up delay-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
+      <div className="w-full max-w-2xl mx-4 bg-[#0a0a0a] border border-white/[0.06] rounded-2xl p-6 shadow-2xl animate-fade-in-up">
       {/* Main progress header */}
       <div className="flex items-center gap-4 mb-4">
         <div className={`p-3 ${isAiAnalyzing || isWaitingForAI ? "bg-purple-500/20" : "bg-blue-500/20"} rounded-xl animate-pulse`}>
@@ -209,6 +210,7 @@ export function ScanProgressCard({ progress, aiActivity, onCancel }: ScanProgres
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
