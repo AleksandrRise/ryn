@@ -19,7 +19,7 @@ pub use github::{
     GitHubConnectionStatus, GitHubRepo, GitHubTreeItem, GitHubTreeResponse, GitHubUser,
     RepoCheckResult, TrackedRepo, TrackedRepoWithDetails,
 };
-pub use project::Project;
+pub use project::{Project, ProjectTrackingStatus};
 pub use scan::{Scan, ScanStatus};
 pub use scan_cost::{GrokPricing, ScanCost};
 pub use settings::Settings;

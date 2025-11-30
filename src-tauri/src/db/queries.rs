@@ -21,7 +21,11 @@ pub fn insert_project(
 
 pub fn select_projects(conn: &Connection) -> Result<Vec<Project>> {
     let mut stmt = conn
-        .prepare("SELECT id, name, path, framework, created_at, updated_at FROM projects ORDER BY created_at DESC")
+        .prepare(
+            "SELECT id, name, path, framework, created_at, updated_at,
+                    is_tracking_enabled, last_file_change_detected, tracking_started_at, source_type
+             FROM projects ORDER BY created_at DESC",
+        )
         .context("Failed to prepare select projects query")?;
 
     let projects = stmt
@@ -33,6 +37,10 @@ pub fn select_projects(conn: &Connection) -> Result<Vec<Project>> {
                 framework: row.get(3)?,
                 created_at: row.get(4)?,
                 updated_at: row.get(5)?,
+                is_tracking_enabled: row.get::<_, Option<i64>>(6)?.map(|v| v == 1),
+                last_file_change_detected: row.get(7)?,
+                tracking_started_at: row.get(8)?,
+                source_type: row.get(9)?,
             })
         })
         .context("Failed to map projects from query")?
@@ -45,7 +53,9 @@ pub fn select_projects(conn: &Connection) -> Result<Vec<Project>> {
 pub fn select_project(conn: &Connection, id: i64) -> Result<Option<Project>> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, path, framework, created_at, updated_at FROM projects WHERE id = ?",
+            "SELECT id, name, path, framework, created_at, updated_at,
+                    is_tracking_enabled, last_file_change_detected, tracking_started_at, source_type
+             FROM projects WHERE id = ?",
         )
         .context("Failed to prepare select project query")?;
 
@@ -58,6 +68,10 @@ pub fn select_project(conn: &Connection, id: i64) -> Result<Option<Project>> {
                 framework: row.get(3)?,
                 created_at: row.get(4)?,
                 updated_at: row.get(5)?,
+                is_tracking_enabled: row.get::<_, Option<i64>>(6)?.map(|v| v == 1),
+                last_file_change_detected: row.get(7)?,
+                tracking_started_at: row.get(8)?,
+                source_type: row.get(9)?,
             })
         })
         .optional()
@@ -69,7 +83,9 @@ pub fn select_project(conn: &Connection, id: i64) -> Result<Option<Project>> {
 pub fn select_project_by_path(conn: &Connection, path: &str) -> Result<Option<Project>> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, name, path, framework, created_at, updated_at FROM projects WHERE path = ?",
+            "SELECT id, name, path, framework, created_at, updated_at,
+                    is_tracking_enabled, last_file_change_detected, tracking_started_at, source_type
+             FROM projects WHERE path = ?",
         )
         .context("Failed to prepare select project by path query")?;
 
@@ -82,6 +98,10 @@ pub fn select_project_by_path(conn: &Connection, path: &str) -> Result<Option<Pr
                 framework: row.get(3)?,
                 created_at: row.get(4)?,
                 updated_at: row.get(5)?,
+                is_tracking_enabled: row.get::<_, Option<i64>>(6)?.map(|v| v == 1),
+                last_file_change_detected: row.get(7)?,
+                tracking_started_at: row.get(8)?,
+                source_type: row.get(9)?,
             })
         })
         .optional()

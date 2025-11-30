@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react"
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import { open } from "@tauri-apps/plugin-dialog"
@@ -14,10 +14,13 @@ import {
   scan_github_repo,
   create_project,
   get_projects,
+  get_scans,
   get_scan_progress,
   get_settings,
   type GitHubConnectionStatus,
   type TrackedRepoWithDetails,
+  type Project,
+  type ScanResult,
 } from "@/lib/tauri/commands"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { GitHubOAuthModal } from "./github-oauth-modal"
@@ -25,6 +28,7 @@ import { GitHubRepoManager } from "./github-repo-manager"
 import { useRouter } from "next/navigation"
 import { useScanData } from "@/components/scan/hooks/use-scan-data"
 import { formatRelativeTime } from "@/lib/utils/date"
+import { Tooltip } from "@/components/ui/tooltip"
 
 // Platform configuration
 const PLATFORMS = [
@@ -35,6 +39,18 @@ const PLATFORMS = [
 const AUTO_POLL_INTERVAL_MS = 90_000
 const isActivationKey = (event: React.KeyboardEvent) =>
   event.key === "Enter" || event.key === " "
+
+// Unified activity item for both local projects and GitHub repos
+interface RecentActivityItem {
+  id: string
+  source: "local" | "github"
+  name: string
+  timestamp: string
+  totalViolations: number
+  criticalViolations: number
+  projectId?: number
+  trackedRepoId?: number
+}
 
 export function Dashboard() {
   const router = useRouter()
@@ -54,6 +70,8 @@ export function Dashboard() {
   const [projectModalLoading, setProjectModalLoading] = useState(false)
   const [lastAutoCheck, setLastAutoCheck] = useState<Date | null>(null)
   const [defaultScanMode, setDefaultScanMode] = useState<string>("smart")
+  const [localProjects, setLocalProjects] = useState<Project[]>([])
+  const [localProjectScans, setLocalProjectScans] = useState<Map<number, ScanResult[]>>(new Map())
   const projectModalRunId = useRef(0)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [menuPos, setMenuPos] = useState<{ left: number; top: number; width: number }>({ left: 0, top: 0, width: 0 })
@@ -77,6 +95,26 @@ export function Dashboard() {
   useEffect(() => {
     localStorage.setItem("ryn-monitoring-paused", String(isMonitoringPaused))
   }, [isMonitoringPaused])
+
+  // Load local projects and their scans for Recent Activity
+  useEffect(() => {
+    async function loadLocalProjects() {
+      try {
+        const projects = await get_projects()
+        setLocalProjects(projects)
+
+        const scansMap = new Map<number, ScanResult[]>()
+        for (const project of projects) {
+          const scans = await get_scans(project.id)
+          scansMap.set(project.id, scans)
+        }
+        setLocalProjectScans(scansMap)
+      } catch {
+        // Failed to load local projects - continue with GitHub-only activity
+      }
+    }
+    loadLocalProjects()
+  }, [])
 
   const isLocalMode = selectedPlatform.id === "local"
   const hasLocalProject = Boolean(selectedProject)
@@ -534,10 +572,46 @@ export function Dashboard() {
   const healthyCount = scannedRepos.filter(r => (r.total_violations ?? 0) === 0).length
   const hasScanData = scannedRepos.length > 0
 
-  const recentActivity = [...trackedRepos]
-    .filter(r => r.last_scanned_at)
-    .sort((a, b) => new Date(b.last_scanned_at || 0).getTime() - new Date(a.last_scanned_at || 0).getTime())
-    .slice(0, 6)
+  const recentActivity = useMemo(() => {
+    const items: RecentActivityItem[] = []
+
+    // Add GitHub repos
+    trackedRepos
+      .filter(r => r.last_scanned_at)
+      .forEach(repo => {
+        items.push({
+          id: `github-${repo.id}`,
+          source: "github",
+          name: repo.github_repo.name,
+          timestamp: repo.last_scanned_at!,
+          totalViolations: repo.total_violations || 0,
+          criticalViolations: repo.critical_violations || 0,
+          trackedRepoId: repo.id,
+        })
+      })
+
+    // Add local projects
+    localProjects.forEach(project => {
+      const scans = localProjectScans.get(project.id) || []
+      const lastScan = scans.find(s => s.status === "completed")
+      if (lastScan?.completed_at) {
+        items.push({
+          id: `local-${project.id}-${lastScan.id}`,
+          source: "local",
+          name: project.name,
+          timestamp: lastScan.completed_at,
+          totalViolations: lastScan.violations_found || 0,
+          criticalViolations: lastScan.critical_count || 0,
+          projectId: project.id,
+        })
+      }
+    })
+
+    // Sort by most recent and take top 6
+    return items
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 6)
+  }, [trackedRepos, localProjects, localProjectScans])
 
   return (
     <>
@@ -944,31 +1018,45 @@ export function Dashboard() {
             {/* Activity Feed */}
             <div className="col-span-4 bg-gradient-to-br from-purple-500/[0.08] to-transparent rounded-2xl p-5 border border-white/[0.04]">
               <h2 className="text-sm font-medium mb-4">Recent Activity</h2>
-              {connectionStatus?.connected ? (
+              {connectionStatus?.connected || localProjects.length > 0 ? (
                 <div className="space-y-3">
                   {recentActivity.length === 0 ? (
-                    <div className="text-xs text-white/40">Scan a repository to see activity.</div>
+                    <div className="text-xs text-white/40">
+                      Scan a {connectionStatus?.connected ? "repository" : "project"} to see activity.
+                    </div>
                   ) : (
                     recentActivity.map((item, index) => {
-                      const severity = (item.critical_violations || 0) > 0 ? "critical" : (item.total_violations || 0) > 0 ? "warning" : "success"
+                      const severity = item.criticalViolations > 0 ? "critical" : item.totalViolations > 0 ? "warning" : "success"
+                      const severityTooltip = severity === "critical"
+                        ? "Critical issues detected"
+                        : severity === "warning"
+                          ? "Issues detected"
+                          : "No issues"
                       return (
                         <div
                           key={item.id}
                           className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.05] transition-all duration-200 animate-slideIn"
                           style={{ animationDelay: `${index * 50}ms` }}
                         >
-                          <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${
-                            severity === "critical" ? "bg-red-400" :
-                            severity === "success" ? "bg-emerald-400" :
-                            "bg-amber-400"
-                          }`} />
+                          <div className="mt-0.5 flex items-center gap-2">
+                            <i className={`${item.source === "github" ? "lab la-github" : "las la-folder-open"} text-xs text-white/40`} />
+                            <Tooltip content={severityTooltip} side="top" sideOffset={6}>
+                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                severity === "critical" ? "bg-red-400" :
+                                severity === "success" ? "bg-emerald-400" :
+                                "bg-amber-400"
+                              }`} />
+                            </Tooltip>
+                          </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-white/80 truncate">
-                              <span className="font-medium">{item.github_repo.name}</span>
+                              <span className="font-medium">{item.name}</span>
                               <span className="text-white/30 mx-1.5">·</span>
-                              <span className="text-white/50">Last scan {item.last_scanned_at ? new Date(item.last_scanned_at).toLocaleString() : "pending"}</span>
+                              <span className="text-white/50">
+                                {formatRelativeTime(item.timestamp)}
+                              </span>
                             </p>
-                            <p className="text-xs text-white/30 mt-0.5">{item.total_violations || 0} issues, {item.critical_violations || 0} critical</p>
+                            <p className="text-xs text-white/30 mt-0.5">{item.totalViolations} issues, {item.criticalViolations} critical</p>
                           </div>
                         </div>
                       )
@@ -985,11 +1073,13 @@ export function Dashboard() {
               )}
             </div>
 
-            {/* Repositories Table */}
+            {/* Repositories Table (context-aware for Local vs GitHub mode) */}
             <div className="col-span-8 bg-gradient-to-br from-white/[0.04] to-transparent rounded-2xl overflow-hidden border border-white/[0.04]">
               <div className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-3">
-                  <h2 className="text-sm font-medium">Tracked Repositories</h2>
+                  <h2 className="text-sm font-medium">
+                    {isLocalMode ? "Tracked Projects" : "Tracked Repositories"}
+                  </h2>
                   {connectionStatus?.connected && (
                     <div className="flex items-center gap-2 text-[11px] text-white/50">
                       <span className={`px-2 py-1 rounded-md flex items-center gap-1 ${
@@ -1176,14 +1266,58 @@ export function Dashboard() {
                     <p className="text-sm text-white/40 mb-3">No repositories match this filter</p>
                   </div>
                 )
+              ) : isLocalMode && hasLocalProject ? (
+                /* Show the current local project in the tracking section */
+                <div className="px-2 pb-2">
+                  <button
+                    type="button"
+                    className="w-full text-left px-4 py-3.5 flex items-center gap-4 hover:bg-white/[0.03] transition-all duration-200 rounded-xl mx-1 mb-1"
+                    onClick={() => router.push("/scan")}
+                    aria-label={`Open ${selectedProject?.name} project`}
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{selectedProject?.name}</span>
+                        <span className="text-xs text-white/30 truncate max-w-[300px]">{selectedProject?.path}</span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5 text-xs text-white/40">
+                        {selectedProject?.framework && <span>{selectedProject.framework}</span>}
+                        {localLastScan && (
+                          <span>Last scan: {formatRelativeTime(localLastScan.started_at)}</span>
+                        )}
+                        <span className="px-2 py-0.5 rounded-md bg-white/[0.05] text-white/60">Local project</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {(localScanStats?.critical ?? 0) > 0 && (
+                        <span className="px-2.5 py-1 rounded-lg bg-red-500/15 text-xs text-red-400">
+                          {localScanStats?.critical} critical
+                        </span>
+                      )}
+                      {localViolations.length === 0 && localLastScan && (
+                        <span className="px-2.5 py-1 rounded-lg bg-emerald-500/15 text-xs text-emerald-400">Clean</span>
+                      )}
+                      {!localLastScan && (
+                        <span className="px-2.5 py-1 rounded-lg bg-white/10 text-xs text-white/60">Not scanned</span>
+                      )}
+                    </div>
+                    <div className="w-14 text-right">
+                      <div className="text-lg font-semibold">{localViolations.length}</div>
+                      <div className="text-[10px] text-white/30 uppercase">issues</div>
+                    </div>
+                  </button>
+                </div>
               ) : (
                 <div className="py-16 text-center">
                   <div className="w-14 h-14 mx-auto rounded-2xl bg-white/[0.04] flex items-center justify-center mb-4">
-                    <i className="lab la-github text-2xl text-white/20"></i>
+                    <i className={`${isLocalMode ? "las la-folder-open" : "lab la-github"} text-2xl text-white/20`}></i>
                   </div>
-                  <p className="text-sm text-white/40 mb-3">No repositories tracked</p>
+                  <p className="text-sm text-white/40 mb-3">
+                    {isLocalMode ? "No local projects tracked" : "No repositories tracked"}
+                  </p>
                   <button onClick={handlePrimaryConnect} className="text-sm text-emerald-400 hover:text-emerald-300 transition-colors">
-                    {selectedPlatform.id === "local" ? "Open a local project" : "Connect GitHub to get started"}
+                    {isLocalMode ? "Open a local project" : "Connect GitHub to get started"}
                   </button>
                 </div>
               )}

@@ -49,7 +49,7 @@ fn main() {
     // If this fails, log detailed error and exit gracefully
     if let Err(e) = builder
         .invoke_handler(tauri::generate_handler![
-            // Project Commands (3)
+            // Project Commands (10)
             project::select_project_folder,
             project::create_project,
             project::get_projects,
@@ -100,6 +100,11 @@ fn main() {
             project::delete_all_projects,
             // File Reading Command
             project::read_file_content,
+            // Project Tracking Commands (4)
+            project::enable_project_tracking,
+            project::disable_project_tracking,
+            project::get_project_tracking_status,
+            project::update_last_file_change,
         ])
         .run(tauri::generate_context!())
     {

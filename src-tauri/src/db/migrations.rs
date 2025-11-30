@@ -329,6 +329,72 @@ fn migrate_to_v7(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migrate from v7 to v8 (Local project tracking)
+/// Adds tracking fields to projects table for continuous file watching:
+/// - is_tracking_enabled: Whether file watcher is active for this project
+/// - last_file_change_detected: Timestamp of last detected file change
+/// - tracking_started_at: When tracking was enabled
+/// - source_type: 'local' or 'github' (replaces path-based detection)
+fn migrate_to_v8(conn: &Connection) -> Result<()> {
+    // ============================================================
+    // PROJECTS TABLE: Add tracking columns
+    // ============================================================
+
+    // is_tracking_enabled: Whether file watching is active (0 = false, 1 = true)
+    conn.execute(
+        "ALTER TABLE projects ADD COLUMN is_tracking_enabled INTEGER NOT NULL DEFAULT 0",
+        [],
+    )
+    .context("Failed to add projects.is_tracking_enabled column")?;
+
+    // last_file_change_detected: Timestamp of last detected file change
+    conn.execute(
+        "ALTER TABLE projects ADD COLUMN last_file_change_detected TEXT",
+        [],
+    )
+    .context("Failed to add projects.last_file_change_detected column")?;
+
+    // tracking_started_at: When tracking was enabled
+    conn.execute(
+        "ALTER TABLE projects ADD COLUMN tracking_started_at TEXT",
+        [],
+    )
+    .context("Failed to add projects.tracking_started_at column")?;
+
+    // source_type: 'local' or 'github' (replaces path-based detection)
+    conn.execute(
+        "ALTER TABLE projects ADD COLUMN source_type TEXT NOT NULL DEFAULT 'local'",
+        [],
+    )
+    .context("Failed to add projects.source_type column")?;
+
+    // ============================================================
+    // INDEXES for tracking queries
+    // ============================================================
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_projects_is_tracking_enabled ON projects(is_tracking_enabled)",
+        [],
+    )
+    .context("Failed to create idx_projects_is_tracking_enabled index")?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_projects_source_type ON projects(source_type)",
+        [],
+    )
+    .context("Failed to create idx_projects_source_type index")?;
+
+    // ============================================================
+    // BACKFILL: Mark GitHub projects based on path pattern
+    // ============================================================
+    conn.execute(
+        "UPDATE projects SET source_type = 'github' WHERE path LIKE '%ryn-github-cache%'",
+        [],
+    )
+    .context("Failed to backfill source_type for GitHub projects")?;
+
+    Ok(())
+}
+
 /// Backfill scan_mode for historical scans that used LLM analysis
 ///
 /// Rules (deterministic, no inference beyond stored data):
@@ -392,6 +458,7 @@ pub fn seed_settings(conn: &Connection) -> Result<()> {
 /// - v5: GitHub integration (github_connections, github_repos, tracked_repos)
 /// - v6: Smart polling (last_commit_sha, last_checked_at in tracked_repos)
 /// - v7: Incremental scanning (file_hashes table for change detection)
+/// - v8: Local project tracking (is_tracking_enabled, source_type in projects)
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     let current_version = get_schema_version(conn)?;
 
@@ -429,6 +496,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 7 {
         migrate_to_v7(conn)?;
         set_schema_version(conn, 7)?;
+    }
+
+    if current_version < 8 {
+        migrate_to_v8(conn)?;
+        set_schema_version(conn, 8)?;
     }
 
     // Seed default settings (idempotent - won't overwrite existing values)

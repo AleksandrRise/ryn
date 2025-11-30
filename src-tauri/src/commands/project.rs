@@ -3,8 +3,9 @@
 //! Handles project creation, listing, and selection via Tauri IPC
 
 use crate::db::{self, queries};
-use crate::models::Project;
+use crate::models::{Project, ProjectTrackingStatus};
 use crate::utils::create_audit_event;
+use rusqlite::params;
 use std::path::Path;
 
 /// DEPRECATED: Use @tauri-apps/plugin-dialog in frontend instead
@@ -244,6 +245,136 @@ pub async fn read_file_content(file_path: String) -> Result<String, String> {
 
     std::fs::read_to_string(path)
         .map_err(|e| format!("Failed to read file: {}", e))
+}
+
+// ===== PROJECT TRACKING COMMANDS =====
+
+/// Enable tracking for a local project
+///
+/// Sets is_tracking_enabled = true in the database. The frontend should also
+/// call watch_project to start the file watcher. When both are active,
+/// file changes will trigger automatic scans.
+///
+/// # Arguments
+/// * `project_id` - ID of the project to enable tracking for
+///
+/// Returns: Unit or error
+#[tauri::command]
+pub async fn enable_project_tracking(project_id: i64) -> Result<(), String> {
+    println!(
+        "[ryn] enable_project_tracking called: project_id={}",
+        project_id
+    );
+
+    let conn = db::get_connection();
+
+    // Update tracking fields
+    conn.execute(
+        "UPDATE projects SET is_tracking_enabled = 1, tracking_started_at = datetime('now') WHERE id = ?",
+        params![project_id],
+    )
+    .map_err(|e| format!("Failed to enable project tracking: {}", e))?;
+
+    println!(
+        "[ryn] enable_project_tracking success: project_id={}",
+        project_id
+    );
+    Ok(())
+}
+
+/// Disable tracking for a local project
+///
+/// Sets is_tracking_enabled = false in the database. The frontend should also
+/// call stop_watching to stop the file watcher.
+///
+/// # Arguments
+/// * `project_id` - ID of the project to disable tracking for
+///
+/// Returns: Unit or error
+#[tauri::command]
+pub async fn disable_project_tracking(project_id: i64) -> Result<(), String> {
+    println!(
+        "[ryn] disable_project_tracking called: project_id={}",
+        project_id
+    );
+
+    let conn = db::get_connection();
+
+    // Update tracking field
+    conn.execute(
+        "UPDATE projects SET is_tracking_enabled = 0 WHERE id = ?",
+        params![project_id],
+    )
+    .map_err(|e| format!("Failed to disable project tracking: {}", e))?;
+
+    println!(
+        "[ryn] disable_project_tracking success: project_id={}",
+        project_id
+    );
+    Ok(())
+}
+
+/// Get tracking status for a project
+///
+/// Returns the current tracking state including whether tracking is enabled,
+/// when it was started, and the last detected file change.
+///
+/// # Arguments
+/// * `project_id` - ID of the project to check
+///
+/// Returns: ProjectTrackingStatus with tracking state
+#[tauri::command]
+pub async fn get_project_tracking_status(project_id: i64) -> Result<ProjectTrackingStatus, String> {
+    println!(
+        "[ryn] get_project_tracking_status called: project_id={}",
+        project_id
+    );
+
+    let conn = db::get_connection();
+
+    let status = conn
+        .query_row(
+            "SELECT is_tracking_enabled, tracking_started_at, last_file_change_detected
+             FROM projects WHERE id = ?",
+            params![project_id],
+            |row| {
+                Ok(ProjectTrackingStatus {
+                    project_id,
+                    is_tracking_enabled: row.get::<_, i64>(0).unwrap_or(0) == 1,
+                    tracking_started_at: row.get(1)?,
+                    last_file_change_detected: row.get(2)?,
+                })
+            },
+        )
+        .map_err(|e| format!("Failed to get project tracking status: {}", e))?;
+
+    println!(
+        "[ryn] get_project_tracking_status success: project_id={}, enabled={}",
+        project_id, status.is_tracking_enabled
+    );
+    Ok(status)
+}
+
+/// Update the last file change timestamp for a project
+///
+/// Called by the file watcher when changes are detected. This updates
+/// the last_file_change_detected timestamp in the database.
+///
+/// # Arguments
+/// * `project_id` - ID of the project with the change
+///
+/// Returns: Unit or error
+#[tauri::command]
+pub async fn update_last_file_change(project_id: i64) -> Result<(), String> {
+    let conn = db::get_connection();
+
+    conn.execute(
+        "UPDATE projects SET last_file_change_detected = datetime('now') WHERE id = ?",
+        params![project_id],
+    )
+    .map_err(|e| format!("Failed to update last file change: {}", e))?;
+
+    Ok(())
 }
 
 #[cfg(test)]

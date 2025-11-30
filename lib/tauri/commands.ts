@@ -14,6 +14,18 @@ export interface Project {
   path: string
   framework?: string
   created_at?: string
+  // Tracking fields (added in v8 migration)
+  is_tracking_enabled?: boolean
+  last_file_change_detected?: string
+  tracking_started_at?: string
+  source_type?: "local" | "github"
+}
+
+export interface ProjectTrackingStatus {
+  project_id: number
+  is_tracking_enabled: boolean
+  tracking_started_at?: string
+  last_file_change_detected?: string
 }
 
 export interface ScanResult {
@@ -573,4 +585,50 @@ export async function scan_github_repo(
     trackedRepoId: tracked_repo_id,
     scanMode: scan_mode,
   })
+}
+
+// ============================================================================
+// PROJECT TRACKING COMMANDS
+// ============================================================================
+
+/**
+ * Enable tracking for a local project
+ * Sets is_tracking_enabled = true. Should be combined with watch_project()
+ * to start the file watcher for auto-scanning.
+ * @param projectId - The ID of the project to track
+ */
+export async function enable_project_tracking(projectId: number): Promise<void> {
+  await invoke<void>("enable_project_tracking", { projectId })
+}
+
+/**
+ * Disable tracking for a local project
+ * Sets is_tracking_enabled = false. Should be combined with stop_watching()
+ * to stop the file watcher.
+ * @param projectId - The ID of the project to stop tracking
+ */
+export async function disable_project_tracking(projectId: number): Promise<void> {
+  await invoke<void>("disable_project_tracking", { projectId })
+}
+
+/**
+ * Get tracking status for a project
+ * Returns whether tracking is enabled, when it was started, and last file change
+ * @param projectId - The ID of the project to check
+ */
+export async function get_project_tracking_status(
+  projectId: number
+): Promise<ProjectTrackingStatus> {
+  return await invoke<ProjectTrackingStatus>("get_project_tracking_status", {
+    projectId,
+  })
+}
+
+/**
+ * Update the last file change timestamp for a project
+ * Called by the file watcher when changes are detected
+ * @param projectId - The ID of the project with the change
+ */
+export async function update_last_file_change(projectId: number): Promise<void> {
+  await invoke<void>("update_last_file_change", { projectId })
 }

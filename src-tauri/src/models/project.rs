@@ -9,6 +9,32 @@ pub struct Project {
     pub framework: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+
+    // Local project tracking fields (added in v8 migration)
+    /// Whether file watching is active for this project
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_tracking_enabled: Option<bool>,
+
+    /// Timestamp of last detected file change
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_file_change_detected: Option<String>,
+
+    /// When tracking was enabled
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tracking_started_at: Option<String>,
+
+    /// 'local' or 'github' - project source type
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_type: Option<String>,
+}
+
+/// Tracking status for a project (returned by get_project_tracking_status command)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectTrackingStatus {
+    pub project_id: i64,
+    pub is_tracking_enabled: bool,
+    pub tracking_started_at: Option<String>,
+    pub last_file_change_detected: Option<String>,
 }
 
 impl Project {
@@ -20,6 +46,11 @@ impl Project {
             framework: None,
             created_at: chrono::Utc::now().to_rfc3339(),
             updated_at: chrono::Utc::now().to_rfc3339(),
+            // Tracking fields default to None (not tracking)
+            is_tracking_enabled: Some(false),
+            last_file_change_detected: None,
+            tracking_started_at: None,
+            source_type: Some("local".to_string()),
         }
     }
 
