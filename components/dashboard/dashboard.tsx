@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
+import { open } from "@tauri-apps/plugin-dialog"
 import { ChartSelector, ChartContainer } from "./charts"
 import { useDashboardChartStore } from "@/lib/stores/dashboard-chart-store"
 import {
@@ -13,7 +14,6 @@ import {
   scan_github_repo,
   create_project,
   get_projects,
-  select_project_folder,
   get_scan_progress,
   get_settings,
   type GitHubConnectionStatus,
@@ -421,9 +421,14 @@ export function Dashboard() {
       try {
         console.log("[platform-select] local chosen -> opening picker")
         toast("Opening local folder picker…")
-        const folder = await select_project_folder()
-        if (!folder || folder === "/path/to/project") {
-          console.log("[platform-select] local picker cancelled or placeholder path", folder)
+        const folder = await open({
+          title: "Select Project Folder",
+          directory: true,
+          multiple: false,
+          recursive: true,
+        })
+        if (!folder || typeof folder !== "string") {
+          console.log("[platform-select] local picker cancelled")
           return
         }
 

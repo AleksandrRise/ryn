@@ -119,7 +119,7 @@ export function WaterBackground({
   }, [speed, intensity, rippleCount])
 
   return (
-    <div className={cn("fixed inset-0 -z-10", className)} {...props}>
+    <div className={cn("fixed inset-x-0 top-0 bottom-0 -z-10", className)} {...props}>
       <canvas ref={canvasRef} className="h-full w-full" />
     </div>
   )

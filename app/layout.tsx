@@ -33,10 +33,10 @@ export default function RootLayout({
         <ErrorBoundary>
           <ConsoleLogger />
           <WaterBackground />
-          <div className="fixed inset-0 bg-black/78 backdrop-blur-[2px] z-[5]" />
+          <div className="fixed inset-x-0 top-0 bottom-0 bg-black/78 backdrop-blur-[2px] z-[5]" />
           <div className="relative z-10">
             <TopNav />
-            <div className="pt-16 md:pt-18">{children}</div>
+            <div className="pt-16">{children}</div>
           </div>
           <Toaster theme="dark" richColors />
         </ErrorBoundary>

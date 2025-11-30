@@ -7,30 +7,21 @@ use crate::models::Project;
 use crate::utils::create_audit_event;
 use std::path::Path;
 
-/// Open a file dialog to select a project folder
+/// DEPRECATED: Use @tauri-apps/plugin-dialog in frontend instead
 ///
-/// Uses the native file picker to let users choose a directory
+/// This command is deprecated and will be removed in a future version.
+/// Use the dialog plugin directly from your frontend code:
 ///
-/// Returns: Path to selected directory or error if cancelled
+/// ```typescript
+/// import { open } from '@tauri-apps/plugin-dialog';
+/// const folder = await open({ directory: true, title: "Select Folder" });
+/// ```
+#[deprecated(since = "0.2.0", note = "Use frontend dialog plugin instead")]
 #[tauri::command]
 pub async fn select_project_folder() -> Result<String, String> {
-    println!("[ryn] select_project_folder called");
-
-    // Use tauri-plugin-dialog for native file picker
-    // In production, this would use the Tauri dialog plugin
-    // For now, return a placeholder that would be replaced with actual dialog call
-
-    // Example: tauri::async_runtime::spawn(async move {
-    //     tauri_plugin_dialog::FileDialogBuilder::new()
-    //         .pick_folder()
-    //         .await
-    // })
-
-    // Placeholder implementation - returns success with a path
-    // This would be called from frontend with the dialog result
-    let path = "/path/to/project".to_string();
-    println!("[ryn] select_project_folder success: path={}", path);
-    Ok(path)
+    eprintln!("[ryn] WARNING: select_project_folder command is deprecated");
+    eprintln!("[ryn] Use @tauri-apps/plugin-dialog from frontend instead");
+    Err("This command is deprecated. Use @tauri-apps/plugin-dialog from frontend.".to_string())
 }
 
 /// Create a new project in the database
@@ -262,10 +253,12 @@ mod tests {
     use std::path::Path;
 
     #[tokio::test]
-    async fn test_select_project_folder_returns_path() {
+    async fn test_select_project_folder_deprecated() {
         let result = select_project_folder().await;
-        assert!(result.is_ok());
-        assert!(!result.unwrap().is_empty());
+        // Command should now return an error indicating deprecation
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.contains("deprecated"));
     }
 
     #[tokio::test]

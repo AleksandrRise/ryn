@@ -2,6 +2,7 @@
 // Real implementations using Tauri's invoke API
 
 import { invoke } from "@tauri-apps/api/core"
+import { open } from "@tauri-apps/plugin-dialog"
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -112,9 +113,21 @@ export interface ScanCost {
 
 /**
  * Open a native file dialog to select a project folder
+ * Uses frontend dialog plugin for Tauri 2.0 compatibility
  */
 export async function select_project_folder(): Promise<string> {
-  return await invoke<string>("select_project_folder")
+  const result = await open({
+    title: "Select Project Folder",
+    directory: true,
+    multiple: false,
+    recursive: true,
+  })
+
+  if (!result || typeof result !== "string") {
+    throw new Error("Folder selection cancelled")
+  }
+
+  return result
 }
 
 /**
