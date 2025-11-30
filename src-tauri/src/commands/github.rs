@@ -357,6 +357,103 @@ pub async fn check_repo_for_changes(tracked_repo_id: i64) -> Result<bool, String
     Ok(has_changes)
 }
 
+/// Check multiple tracked repos for changes in a single batch call
+/// This eliminates N+1 queries and significantly improves dashboard performance
+/// Returns a vector of { repo_id, has_changes } for each repo
+#[tauri::command]
+pub async fn check_repos_for_changes_batch(tracked_repo_ids: Vec<i64>) -> Result<Vec<crate::models::RepoCheckResult>, String> {
+    println!("[ryn] Batch checking {} repos for changes", tracked_repo_ids.len());
+
+    if tracked_repo_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Get GitHub connection once
+    let access_token = {
+        let conn = db::get_connection();
+        let connection = queries::select_github_connection(&conn)
+            .map_err(|e| format!("Failed to get GitHub connection: {}", e))?
+            .ok_or_else(|| "Not connected to GitHub".to_string())?;
+        connection.access_token.clone()
+    };
+
+    let client =
+        GitHubClient::from_env().map_err(|e| format!("Failed to create GitHub client: {}", e))?;
+
+    let mut results = Vec::new();
+
+    for tracked_repo_id in tracked_repo_ids {
+        // Get tracked repo details
+        let (repo_owner, repo_name, repo_branch, last_commit_sha) = {
+            let conn = db::get_connection();
+            let tracked_repos = queries::select_tracked_repos_with_details(&conn)
+                .map_err(|e| format!("Failed to get tracked repos: {}", e))?;
+
+            let tracked_repo = tracked_repos
+                .into_iter()
+                .find(|r| r.id == tracked_repo_id)
+                .ok_or_else(|| format!("Tracked repo {} not found", tracked_repo_id))?;
+
+            (
+                tracked_repo.github_repo.owner.clone(),
+                tracked_repo.github_repo.name.clone(),
+                tracked_repo.github_repo.default_branch.clone(),
+                tracked_repo.last_commit_sha.clone(),
+            )
+        };
+
+        // Get latest commit SHA from GitHub
+        let latest_sha = match client
+            .get_latest_commit_sha(&access_token, &repo_owner, &repo_name, &repo_branch)
+            .await
+        {
+            Ok(sha) => sha,
+            Err(e) => {
+                println!("[ryn] Failed to check repo {}: {}", tracked_repo_id, e);
+                // Continue checking other repos even if one fails
+                results.push(crate::models::RepoCheckResult {
+                    repo_id: tracked_repo_id,
+                    has_changes: false,
+                });
+                continue;
+            }
+        };
+
+        // Update last_checked_at and last_commit_sha
+        {
+            let conn = db::get_connection();
+            let now = chrono::Utc::now().to_rfc3339();
+            let _ = conn.execute(
+                "UPDATE tracked_repos SET last_checked_at = ?, last_commit_sha = ? WHERE id = ?",
+                rusqlite::params![now, latest_sha, tracked_repo_id],
+            );
+        }
+
+        // Check if commit changed
+        let has_changes = match last_commit_sha {
+            None => {
+                println!("[ryn] First check for repo {} - will scan", tracked_repo_id);
+                true
+            }
+            Some(last_sha) if last_sha != latest_sha => {
+                println!("[ryn] New commit detected for repo {} - will scan", tracked_repo_id);
+                true
+            }
+            _ => {
+                println!("[ryn] No changes detected for repo {}", tracked_repo_id);
+                false
+            }
+        };
+
+        results.push(crate::models::RepoCheckResult {
+            repo_id: tracked_repo_id,
+            has_changes,
+        });
+    }
+
+    Ok(results)
+}
+
 /// Scan a GitHub repository by materializing it locally and reusing the existing scanner pipeline
 #[tauri::command]
 pub async fn scan_github_repo<R: tauri::Runtime>(

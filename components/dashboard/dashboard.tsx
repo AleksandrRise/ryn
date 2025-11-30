@@ -8,6 +8,7 @@ import { ChartSelector, ChartContainer } from "./charts"
 import { useDashboardChartStore } from "@/lib/stores/dashboard-chart-store"
 import {
   check_github_connection,
+  check_repos_for_changes_batch,
   disconnect_github,
   get_tracked_repos,
   check_repo_for_changes,
@@ -282,6 +283,7 @@ export function Dashboard() {
   }, [platformDropdownOpen])
 
   // Background polling: keep data fresh and auto-scan when commits change
+  // Optimized to batch check all repos in a single call instead of N+1 sequential checks
   useEffect(() => {
     if (!connectionStatus?.connected) {
       if (autoPollTimerRef.current) {
@@ -304,46 +306,72 @@ export function Dashboard() {
           return
         }
 
-        let scanned = false
+        // Get repos that aren't currently scanning/checking
+        const reposToCheck = repos.filter(
+          repo =>
+            !scanningReposRef.current.has(repo.id) && !checkingReposRef.current.has(repo.id)
+        )
 
-        for (const repo of repos) {
-          if (cancelled) break
-          if (scanningReposRef.current.has(repo.id) || checkingReposRef.current.has(repo.id)) {
-            continue
+        if (reposToCheck.length === 0) {
+          setLastAutoCheck(new Date())
+          return
+        }
+
+        // Mark all repos as checking
+        const repoIds = reposToCheck.map(r => r.id)
+        setCheckingRepos(prev => {
+          const next = new Set(prev)
+          repoIds.forEach(id => next.add(id))
+          checkingReposRef.current = next
+          return next
+        })
+
+        try {
+          // Batch check all repos in one call (eliminates N+1 pattern)
+          const checkResults = await check_repos_for_changes_batch(repoIds)
+          if (cancelled) return
+
+          let scanned = false
+
+          // Process results and trigger scans for changed repos
+          for (const result of checkResults) {
+            if (cancelled) break
+
+            // Update repo changes map
+            setRepoChanges(prev => {
+              const next = new Map(prev)
+              next.set(result.repo_id, result.has_changes)
+              return next
+            })
+
+            if (result.has_changes) {
+              const repo = repos.find(r => r.id === result.repo_id)
+              if (repo) {
+                scanned = true
+                toast("Auto-scan started", {
+                  description: `${repo.github_repo.full_name} has new commits. Running compliance scan...`,
+                })
+                await runScanForRepo(result.repo_id, "auto-change-detected", true)
+              }
+            }
           }
 
+          if (!scanned && !cancelled) {
+            await loadTrackedRepos()
+          }
+        } catch (error) {
+          console.warn(`Batch repo check failed:`, error)
+          // Fall back to loading repos to get fresh data
+          if (!cancelled) {
+            await loadTrackedRepos()
+          }
+        } finally {
           setCheckingRepos(prev => {
             const next = new Set(prev)
-            next.add(repo.id)
+            repoIds.forEach(id => next.delete(id))
             checkingReposRef.current = next
             return next
           })
-
-          try {
-            const hasChanges = await checkRepoAndFlag(repo.id)
-            if (cancelled) break
-
-            if (hasChanges) {
-              scanned = true
-              toast("Auto-scan started", {
-                description: `${repo.github_repo.full_name} has new commits. Running compliance scan...`,
-              })
-              await runScanForRepo(repo.id, "auto-change-detected", true)
-            }
-          } catch (error) {
-            console.warn(`Auto check failed for repo ${repo.id}`, error)
-          } finally {
-            setCheckingRepos(prev => {
-              const next = new Set(prev)
-              next.delete(repo.id)
-              checkingReposRef.current = next
-              return next
-            })
-          }
-        }
-
-        if (!scanned) {
-          await loadTrackedRepos()
         }
       } finally {
         setLastAutoCheck(new Date())
@@ -363,7 +391,7 @@ export function Dashboard() {
         clearTimeout(autoPollTimerRef.current)
       }
     }
-  }, [connectionStatus?.connected, runScanForRepo, checkRepoAndFlag, loadTrackedRepos, isMonitoringPaused])
+  }, [connectionStatus?.connected, runScanForRepo, loadTrackedRepos, isMonitoringPaused])
 
   // Track repo id set for change detection (no auto-scan)
   useEffect(() => {

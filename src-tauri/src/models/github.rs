@@ -124,6 +124,13 @@ pub struct GitHubConnectionStatus {
     pub tracked_count: i64,
 }
 
+/// Batch check result for a single tracked repo
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepoCheckResult {
+    pub repo_id: i64,
+    pub has_changes: bool,
+}
+
 /// GitHub tree API response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitHubTreeResponse {

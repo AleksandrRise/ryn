@@ -17,7 +17,7 @@ pub use fix::{Fix, TrustLevel};
 pub use github::{
     AccessTokenResponse, DeviceCodeResponse, GitHubApiRepo, GitHubConnection,
     GitHubConnectionStatus, GitHubRepo, GitHubTreeItem, GitHubTreeResponse, GitHubUser,
-    TrackedRepo, TrackedRepoWithDetails,
+    RepoCheckResult, TrackedRepo, TrackedRepoWithDetails,
 };
 pub use project::Project;
 pub use scan::{Scan, ScanStatus};

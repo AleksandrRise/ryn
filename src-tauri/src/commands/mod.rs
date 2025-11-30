@@ -61,9 +61,9 @@ pub use analytics::get_scan_costs;
 pub use audit::get_audit_events;
 pub use fix::{apply_fix, generate_fix};
 pub use github::{
-    check_github_connection, check_repo_for_changes, disconnect_github, fetch_github_repos,
-    get_github_repos, get_tracked_repos, poll_github_oauth, scan_github_repo, start_github_oauth,
-    track_repo, untrack_repo,
+    check_github_connection, check_repo_for_changes, check_repos_for_changes_batch,
+    disconnect_github, fetch_github_repos, get_github_repos, get_tracked_repos, poll_github_oauth,
+    scan_github_repo, start_github_oauth, track_repo, untrack_repo,
 };
 pub use logger::log_frontend_message;
 pub use project::{
