@@ -13,10 +13,10 @@ import type { BarDataPoint } from "@/lib/utils/chart-data"
 
 interface RepoComparisonBarProps {
   data: BarDataPoint[]
-  height?: number
+  height?: number | string
 }
 
-export function RepoComparisonBar({ data, height = 220 }: RepoComparisonBarProps) {
+export function RepoComparisonBar({ data, height = "100%" }: RepoComparisonBarProps) {
   if (data.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-sm text-white/40">

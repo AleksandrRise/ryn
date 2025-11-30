@@ -10,11 +10,10 @@
     "dev": "next dev --turbo -H localhost -p 3000",
     "lint": "eslint .",
     "start": "next start",
-    "test": "vitest --exclude \"e2e-tests/*.mjs\"",
+    "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "test:e2e": "wdio run e2e-tests/wdio.conf.js"
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@radix-ui/react-label": "2.1.1",
@@ -54,10 +53,6 @@
     "@typescript-eslint/parser": "^8.47.0",
     "@vitejs/plugin-react": "^4.3.0",
     "@vitest/coverage-v8": "^2.1.9",
-    "@wdio/cli": "^9.20.0",
-    "@wdio/local-runner": "^9.20.0",
-    "@wdio/mocha-framework": "^9.20.0",
-    "@wdio/spec-reporter": "^9.20.0",
     "eslint": "^9.39.1",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",

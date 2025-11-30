@@ -5,10 +5,10 @@ import type { DonutDataPoint } from "@/lib/utils/chart-data"
 
 interface SeverityDonutProps {
   data: DonutDataPoint[]
-  height?: number
+  height?: number | string
 }
 
-export function SeverityDonut({ data, height = 220 }: SeverityDonutProps) {
+export function SeverityDonut({ data, height = "100%" }: SeverityDonutProps) {
   if (data.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-sm text-white/40">

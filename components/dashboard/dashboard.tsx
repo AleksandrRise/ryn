@@ -759,7 +759,7 @@ export function Dashboard() {
                 {connectionStatus?.connected ? (
                   <div className="animate-fadeIn">
                     {/* Customizable Chart */}
-                    <div className="h-52">
+                    <div className="flex-1 min-h-[200px]">
                       <ChartContainer
                         chartType={currentChartType}
                         mode="github"
@@ -767,7 +767,6 @@ export function Dashboard() {
                         scans={[]}
                         trackedRepos={trackedRepos}
                         timeRange={trendTimeRange}
-                        height={200}
                       />
                     </div>
 
@@ -833,7 +832,6 @@ export function Dashboard() {
                             violations={localViolations}
                             scans={localScans}
                             timeRange={trendTimeRange}
-                            height={180}
                           />
                         </div>
 

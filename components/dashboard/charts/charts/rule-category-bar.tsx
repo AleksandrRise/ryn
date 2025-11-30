@@ -13,10 +13,10 @@ import type { BarDataPoint } from "@/lib/utils/chart-data"
 
 interface RuleCategoryBarProps {
   data: BarDataPoint[]
-  height?: number
+  height?: number | string
 }
 
-export function RuleCategoryBar({ data, height = 220 }: RuleCategoryBarProps) {
+export function RuleCategoryBar({ data, height = "100%" }: RuleCategoryBarProps) {
   if (data.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-sm text-white/40">

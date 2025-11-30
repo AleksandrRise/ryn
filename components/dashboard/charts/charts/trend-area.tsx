@@ -8,16 +8,17 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
+  CartesianGrid,
 } from "recharts"
 import type { TrendDataPoint } from "@/lib/utils/chart-data"
 import { SEVERITY_COLORS } from "@/lib/utils/chart-data"
 
 interface TrendAreaProps {
   data: TrendDataPoint[]
-  height?: number
+  height?: number | string
 }
 
-export function TrendArea({ data, height = 220 }: TrendAreaProps) {
+export function TrendArea({ data, height = "100%" }: TrendAreaProps) {
   if (data.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-sm text-white/40">
@@ -28,7 +29,7 @@ export function TrendArea({ data, height = 220 }: TrendAreaProps) {
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={data} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+      <AreaChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -20 }}>
         <defs>
           <linearGradient id="gradCritical" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={SEVERITY_COLORS.critical} stopOpacity={0.35} />
@@ -48,6 +49,12 @@ export function TrendArea({ data, height = 220 }: TrendAreaProps) {
           </linearGradient>
         </defs>
 
+        <CartesianGrid
+          strokeDasharray="3 3"
+          stroke="rgba(255,255,255,0.06)"
+          vertical={false}
+        />
+
         <XAxis
           dataKey="name"
           axisLine={false}
@@ -59,6 +66,7 @@ export function TrendArea({ data, height = 220 }: TrendAreaProps) {
           axisLine={false}
           tickLine={false}
           tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }}
+          domain={[0, (dataMax: number) => Math.max(dataMax + 5, 10)]}
         />
 
         <Tooltip
@@ -77,7 +85,7 @@ export function TrendArea({ data, height = 220 }: TrendAreaProps) {
           align="right"
           iconType="circle"
           iconSize={8}
-          wrapperStyle={{ paddingBottom: 10 }}
+          wrapperStyle={{ paddingBottom: 6 }}
           formatter={(value: string) => (
             <span className="text-xs text-white/50">{value}</span>
           )}
@@ -91,6 +99,8 @@ export function TrendArea({ data, height = 220 }: TrendAreaProps) {
           stroke={SEVERITY_COLORS.critical}
           strokeWidth={2}
           fill="url(#gradCritical)"
+          dot={{ r: 3, strokeWidth: 1, fill: SEVERITY_COLORS.critical }}
+          activeDot={{ r: 5, strokeWidth: 2 }}
         />
         <Area
           type="monotone"
@@ -100,6 +110,8 @@ export function TrendArea({ data, height = 220 }: TrendAreaProps) {
           stroke={SEVERITY_COLORS.high}
           strokeWidth={2}
           fill="url(#gradHigh)"
+          dot={{ r: 3, strokeWidth: 1, fill: SEVERITY_COLORS.high }}
+          activeDot={{ r: 5, strokeWidth: 2 }}
         />
         <Area
           type="monotone"
@@ -109,6 +121,8 @@ export function TrendArea({ data, height = 220 }: TrendAreaProps) {
           stroke={SEVERITY_COLORS.medium}
           strokeWidth={2}
           fill="url(#gradMedium)"
+          dot={{ r: 3, strokeWidth: 1, fill: SEVERITY_COLORS.medium }}
+          activeDot={{ r: 5, strokeWidth: 2 }}
         />
         <Area
           type="monotone"
@@ -118,6 +132,8 @@ export function TrendArea({ data, height = 220 }: TrendAreaProps) {
           stroke="rgba(255,255,255,0.6)"
           strokeWidth={2}
           fill="url(#gradLow)"
+          dot={{ r: 3, strokeWidth: 1, fill: "rgba(255,255,255,0.6)" }}
+          activeDot={{ r: 5, strokeWidth: 2 }}
         />
       </AreaChart>
     </ResponsiveContainer>

@@ -4,7 +4,7 @@
 - Frontend (Next.js + React): `app/` (routes/layout + global styles), `components/` (feature-first: dashboard, scan, violation, ui), `public/` (assets).
 - Shared code: `lib/` (types, Tauri command adapters, utilities, stores, hooks), `data/` (DB file).
 - Backend (Tauri + Rust): `src-tauri/` (commands, scanner, DB, git helpers), `src-tauri/tauri.conf.json` (bundle/dev config).
-- Tests: `__tests__/`, `e2e-tests/` (WebdriverIO), `vitest.config.ts`/`vitest.setup.ts`. Build artifacts: `out/`, `src-tauri/target/`.
+- Tests: `__tests__/`, `vitest.config.ts`/`vitest.setup.ts`. Build artifacts: `out/`, `src-tauri/target/`.
 
 ## Build, Test, and Development Commands
 - Install deps: `pnpm install`.
@@ -12,7 +12,6 @@
 - Dev (Tauri app + Next dev): `./run-ryn-dev.sh` (loads `.env` and runs `pnpm tauri dev`).
 - Tauri prod bundle (codesign/ad-hoc as configured): `pnpm tauri build`.
 - Unit/UI tests: `pnpm test` (Vitest), `pnpm test:run`, `pnpm test:coverage`.
-- E2E (WebdriverIO): `pnpm test:e2e`.
 - Lint: `pnpm lint`.
 
 ## Coding Style & Naming Conventions
@@ -22,7 +21,7 @@
 - Keep UI split into data hooks and presentational components (e.g., scan/dashboard modules).
 
 ## Testing Guidelines
-- Framework: Vitest with `happy-dom`; WebdriverIO for E2E.
+- Framework: Vitest with `happy-dom`.
 - Place unit tests near source or in `__tests__/`; name with `.test.ts`/`.spec.ts`.
 - For UI-driven flows, prefer deterministic data and avoid networked calls; mock Tauri invokes where possible.
 

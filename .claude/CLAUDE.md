@@ -26,7 +26,6 @@ pnpm build && pnpm tauri build  # Production build
 cd src-tauri && cargo test  # Backend tests (660 total: 457 library + 200 integration + 3 doctests)
 pnpm test                   # Frontend unit tests
 pnpm test:coverage          # Frontend tests with coverage
-pnpm test:e2e               # End-to-end tests
 
 # Code quality
 pnpm lint && pnpm prettier --check "**/*.{ts,tsx}"
@@ -87,9 +86,6 @@ lib/tauri/        # TypeScript command wrappers
 - Path traversal protection via `validate_project_path()`
 - System directories blocked (`/etc`, `/usr`, etc.)
 - Parameterized SQL queries
-
-## Known Issues
-- Frontend E2E tests mock Tauri IPC instead of calling backend
 
 ## Key Instructions
 - Verify implementations before claiming features work

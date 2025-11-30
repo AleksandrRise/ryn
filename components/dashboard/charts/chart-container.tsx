@@ -19,6 +19,7 @@ import {
 // Import individual chart components
 import { SeverityDonut } from "./charts/severity-donut"
 import { TrendArea } from "./charts/trend-area"
+
 import { RuleCategoryBar } from "./charts/rule-category-bar"
 import { DetectionMethodDonut } from "./charts/detection-method-donut"
 import { TopFilesBar } from "./charts/top-files-bar"
@@ -34,7 +35,7 @@ interface ChartContainerProps {
   trackedRepos?: TrackedRepoWithDetails[]
   // Options
   timeRange?: TrendTimeRange
-  height?: number
+  height?: number | string
 }
 
 export function ChartContainer({
@@ -44,7 +45,7 @@ export function ChartContainer({
   scans,
   trackedRepos = [],
   timeRange = "last-10",
-  height = 220,
+  height = "100%",
 }: ChartContainerProps) {
   // Memoize data transformations to prevent unnecessary re-renders
   const severityData = useMemo(() => {
