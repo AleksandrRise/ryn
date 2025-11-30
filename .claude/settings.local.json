@@ -18,7 +18,9 @@
       "Bash(gh pr create:*)",
       "Bash(git checkout:*)",
       "Bash(git rebase:*)",
-      "Bash(GIT_EDITOR=true git rebase:*)"
+      "Bash(GIT_EDITOR=true git rebase:*)",
+      "Bash(find:*)",
+      "Bash(cargo check:*)"
     ],
     "deny": [],
     "additionalDirectories": [

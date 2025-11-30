@@ -1,0 +1,93 @@
+
+> ryn@0.1.0 tauri /Users/alexanderershov/Desktop/Coding_folder/Projects/ryn
+> tauri dev
+
+     Running BeforeDevCommand (`npm run dev:static:tauri`)
+     Running DevCommand (`cargo  run --no-default-features --color always --`)
+        Info Watching /Users/alexanderershov/Desktop/Coding_folder/Projects/ryn/src-tauri for changes...
+
+> ryn@0.1.0 dev:static:tauri
+> next build && node dev-static-server.mjs
+
+[1m[32m   Compiling[0m ryn v0.1.0 (/Users/alexanderershov/Desktop/Coding_folder/Projects/ryn/src-tauri)
+[1m[36m    Building[0m [=======================> ] 608/611: ryn(build)                     ▲ Next.js 16.0.1 (Turbopack)
+   - Environments: .env
+
+   Creating an optimized production build ...
+[1m[36m    Building[0m [=======================> ] 609/611: ryn                         [K[0m[1m[33mwarning[0m[0m[1m: field `interval` is never read[0m
+[0m  [0m[0m[1m[38;5;12m--> [0m[0msrc/commands/github.rs:24:5[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m[1m[38;5;12m22[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0mstruct DeviceCodeState {[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m        [0m[0m[1m[38;5;12m---------------[0m[0m [0m[0m[1m[38;5;12mfield in this struct[0m
+[0m[1m[38;5;12m23[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    device_code: String,[0m
+[0m[1m[38;5;12m24[0m[0m [0m[0m[1m[38;5;12m|[0m[0m [0m[0m    interval: i64,[0m
+[0m   [0m[0m[1m[38;5;12m|[0m[0m     [0m[0m[1m[33m^^^^^^^^[0m
+[0m   [0m[0m[1m[38;5;12m|[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `DeviceCodeState` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis[0m
+[0m   [0m[0m[1m[38;5;12m= [0m[0m[1mnote[0m[0m: `#[warn(dead_code)]` on by default[0m
+
+[1m[36m    Building[0m [=======================> ] 609/611: ryn                         [K[1m[33mwarning[0m[1m:[0m `ryn` (lib) generated 1 warning
+[1m[36m    Building[0m [=======================> ] 610/611: ryn(bin)                    [K[1m[32m    Finished[0m `dev` profile [unoptimized + debuginfo] target(s) in 2.94s
+[1m[32m     Running[0m `target/debug/ryn`
+[MCP] Tauri MCP Bridge initializing...
+[MCP] Socket server started
+[ryn] get_projects called
+[ryn] get_projects success: found 8 projects
+ ✓ Compiled successfully in 3.5s
+   Running TypeScript ...
+[ryn] get_projects called
+[ryn] get_projects success: found 8 projects
+[TAURI CONSOLE LOG] [MCP] MCPInit listeners initialized
+   Collecting page data ...
+   Generating static pages (0/11) ...
+   Generating static pages (2/11) 
+   Generating static pages (5/11) 
+   Generating static pages (8/11) 
+ ✓ Generating static pages (11/11) in 539.5ms
+   Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /analytics
+├ ○ /audit
+├ ○ /clear-storage
+├ ○ /onboarding
+├ ○ /scan
+├ ○ /settings
+├ ƒ /test-mcp
+└ ○ /violation
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+node:events:496
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1937:16)
+    at listenInCluster (node:net:1994:12)
+    at Server.listen (node:net:2099:7)
+    at file:///Users/alexanderershov/Desktop/Coding_folder/Projects/ryn/dev-static-server.mjs:90:8
+    at ModuleJob.run (node:internal/modules/esm/module_job:271:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:578:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:116:5)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:1973:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -48,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+
+Node.js v22.14.0
+       Error The "beforeDevCommand" terminated with a non-zero status code.
+ ELIFECYCLE  Command failed with exit code 1.
+[ryn] delete_all_projects called
+[ryn] get_projects called
+[ryn] get_projects success: found 0 projects
+[TAURI CONSOLE ERROR] [Unhandled Error] ResizeObserver loop completed with undelivered notifications. at http://localhost:3000/:0:0

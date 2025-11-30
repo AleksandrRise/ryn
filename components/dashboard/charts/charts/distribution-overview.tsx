@@ -1,6 +1,7 @@
 "use client"
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
+import { memo, useMemo } from "react"
 import type { DonutDataPoint } from "@/lib/utils/chart-data"
 
 interface DistributionOverviewProps {
@@ -10,7 +11,7 @@ interface DistributionOverviewProps {
   height?: number | string
 }
 
-function MiniDonut({
+function MiniDonutComponent({
   data,
   label,
   centerValue,
@@ -23,7 +24,7 @@ function MiniDonut({
   centerLabel: string
   secondaryLabel?: string
 }) {
-  const total = data.reduce((sum, d) => sum + d.value, 0)
+  const total = useMemo(() => data.reduce((sum, d) => sum + d.value, 0), [data])
 
   if (data.length === 0) {
     return (
@@ -125,17 +126,30 @@ function MiniDonut({
   )
 }
 
-export function DistributionOverview({
+const MiniDonut = memo(MiniDonutComponent, (prev, next) => {
+  return (
+    prev.data === next.data &&
+    prev.label === next.label &&
+    prev.centerValue === next.centerValue &&
+    prev.centerLabel === next.centerLabel &&
+    prev.secondaryLabel === next.secondaryLabel
+  )
+})
+
+function DistributionOverviewComponent({
   severityData,
   statusData,
   detectionMethodData,
 }: DistributionOverviewProps) {
-  const severityTotal = severityData.reduce((sum, d) => sum + d.value, 0)
-  const statusTotal = statusData.reduce((sum, d) => sum + d.value, 0)
-  const openCount = statusData.find((d) => d.name === "Open")?.value ?? 0
-  const fixedCount = statusData.find((d) => d.name === "Fixed")?.value ?? 0
-  const fixRate = statusTotal > 0 ? `${((fixedCount / statusTotal) * 100).toFixed(0)}% fixed` : undefined
-  const detectionTotal = detectionMethodData.reduce((sum, d) => sum + d.value, 0)
+  const severityTotal = useMemo(() => severityData.reduce((sum, d) => sum + d.value, 0), [severityData])
+  const statusTotal = useMemo(() => statusData.reduce((sum, d) => sum + d.value, 0), [statusData])
+  const openCount = useMemo(() => statusData.find((d) => d.name === "Open")?.value ?? 0, [statusData])
+  const fixedCount = useMemo(() => statusData.find((d) => d.name === "Fixed")?.value ?? 0, [statusData])
+  const fixRate = useMemo(
+    () => statusTotal > 0 ? `${((fixedCount / statusTotal) * 100).toFixed(0)}% fixed` : undefined,
+    [statusTotal, fixedCount]
+  )
+  const detectionTotal = useMemo(() => detectionMethodData.reduce((sum, d) => sum + d.value, 0), [detectionMethodData])
 
   return (
     <div className="h-full flex items-center justify-center gap-4 px-2">
@@ -161,3 +175,12 @@ export function DistributionOverview({
     </div>
   )
 }
+
+export const DistributionOverview = memo(DistributionOverviewComponent, (prev, next) => {
+  return (
+    prev.severityData === next.severityData &&
+    prev.statusData === next.statusData &&
+    prev.detectionMethodData === next.detectionMethodData &&
+    prev.height === next.height
+  )
+})

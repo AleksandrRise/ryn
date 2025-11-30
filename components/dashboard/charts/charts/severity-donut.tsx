@@ -1,6 +1,7 @@
 "use client"
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts"
+import { memo, useMemo } from "react"
 import type { DonutDataPoint } from "@/lib/utils/chart-data"
 
 interface SeverityDonutProps {
@@ -8,7 +9,9 @@ interface SeverityDonutProps {
   height?: number | string
 }
 
-export function SeverityDonut({ data, height = "100%" }: SeverityDonutProps) {
+function SeverityDonutComponent({ data, height = "100%" }: SeverityDonutProps) {
+  const total = useMemo(() => data.reduce((sum, d) => sum + d.value, 0), [data])
+
   if (data.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-sm text-white/40">
@@ -16,8 +19,6 @@ export function SeverityDonut({ data, height = "100%" }: SeverityDonutProps) {
       </div>
     )
   }
-
-  const total = data.reduce((sum, d) => sum + d.value, 0)
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -90,3 +91,7 @@ export function SeverityDonut({ data, height = "100%" }: SeverityDonutProps) {
     </ResponsiveContainer>
   )
 }
+
+export const SeverityDonut = memo(SeverityDonutComponent, (prev, next) => {
+  return prev.data === next.data && prev.height === next.height
+})

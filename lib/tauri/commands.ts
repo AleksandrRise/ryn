@@ -438,6 +438,11 @@ export interface GitHubRepo {
   fetched_at: string
 }
 
+export interface RepoCheckResult {
+  repo_id: number
+  has_changes: boolean
+}
+
 export interface TrackedRepoWithDetails {
   id: number
   github_repo: GitHubRepo
@@ -528,6 +533,20 @@ export async function get_tracked_repos(): Promise<TrackedRepoWithDetails[]> {
 export async function check_repo_for_changes(tracked_repo_id: number): Promise<boolean> {
   return await invoke<boolean>("check_repo_for_changes", {
     trackedRepoId: tracked_repo_id,
+  })
+}
+
+/**
+ * Check multiple tracked repos for changes in a single batch call
+ * This is more efficient than checking repos one by one
+ * @param tracked_repo_ids - Array of tracked repo IDs to check
+ * @returns Array of results with repo_id and has_changes for each repo
+ */
+export async function check_repos_for_changes_batch(
+  tracked_repo_ids: number[]
+): Promise<RepoCheckResult[]> {
+  return await invoke<RepoCheckResult[]>("check_repos_for_changes_batch", {
+    trackedRepoIds: tracked_repo_ids,
   })
 }
 
