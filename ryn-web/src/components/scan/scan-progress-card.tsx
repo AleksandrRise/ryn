@@ -1,8 +1,8 @@
 "use client"
 
+import type { ScanProgress } from "@/lib/types/scan"
 import { FileSearch, Brain, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { ScanProgress } from "@/components/scan/hooks/use-scan-runner"
 
 interface ScanProgressCardProps {
   progress: ScanProgress

@@ -1,14 +1,15 @@
 "use client"
 
-import type { ViolationSeverity, Violation } from "@/lib/types"
+import type { Severity } from "@/lib/types/violation"
+import type { Violation } from "@/lib/types/violation"
 
 interface SeverityFilterProps {
-  selected: ViolationSeverity | "all"
-  onSelect: (value: ViolationSeverity | "all") => void
+  selected: Severity | "all"
+  onSelect: (value: Severity | "all") => void
   violations: Violation[]
 }
 
-const OPTIONS: Array<ViolationSeverity | "all"> = ["all", "critical", "high", "medium", "low"]
+const OPTIONS: Array<Severity | "all"> = ["all", "critical", "high", "medium", "low"]
 
 export function SeverityFilter({ selected, onSelect, violations }: SeverityFilterProps) {
   return (
@@ -22,7 +23,7 @@ export function SeverityFilter({ selected, onSelect, violations }: SeverityFilte
           <button
             key={severity}
             onClick={() => onSelect(severity)}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wide transition-all border ${
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wide transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98] border ${
               selected === severity
                 ? "bg-white/15 text-white border-white/20 shadow-sm"
                 : "bg-white/5 text-white/60 border-white/10 hover:border-white/20 hover:text-white"

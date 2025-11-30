@@ -1,274 +1,242 @@
-"use client";
+"use client"
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/lib/supabase/client";
-import { X, Copy, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { useState, useEffect, useCallback, useRef, type KeyboardEvent } from "react"
+import { Button } from "@/components/ui/button"
+import {
+  start_github_oauth,
+  poll_github_oauth,
+  type DeviceCodeResponse,
+} from "@/lib/tauri/commands"
+import { open } from "@tauri-apps/plugin-shell"
 
 interface GitHubOAuthModalProps {
-  onSuccess: () => void;
-  onClose: () => void;
+  onSuccess: () => void
+  onClose: () => void
 }
 
-type OAuthState = "starting" | "waiting" | "polling" | "success" | "error";
+const isActivationKey = (event: KeyboardEvent) => event.key === "Enter" || event.key === " "
 
 export function GitHubOAuthModal({ onSuccess, onClose }: GitHubOAuthModalProps) {
-  const supabase = createClient();
-  const [state, setState] = useState<OAuthState>("starting");
-  const [deviceCode, setDeviceCode] = useState("");
-  const [userCode, setUserCode] = useState("");
-  const [pollInterval, setPollInterval] = useState(5000);
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [step, setStep] = useState<"starting" | "waiting" | "polling" | "success" | "error">("starting")
+  const [deviceCode, setDeviceCode] = useState<DeviceCodeResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Start OAuth flow
+  const startOAuth = useCallback(async () => {
+    try {
+      const response = await start_github_oauth()
+      setDeviceCode(response)
+      setStep("waiting")
+
+      await open(response.verification_uri)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setStep("error")
+    }
+  }, [])
+
   useEffect(() => {
-    const startOAuth = async () => {
+    // Starting OAuth on mount is intentional to avoid requiring an extra user click
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void startOAuth()
+  }, [startOAuth])
+
+  const startPolling = useCallback(() => {
+    if (!deviceCode) {
+      setError("Authorization device code missing. Please restart GitHub connect.")
+      setStep("error")
+      return
+    }
+
+    setStep("polling")
+
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current)
+    }
+
+    pollIntervalRef.current = setInterval(async () => {
       try {
-        setState("starting");
-        const response = await fetch("/api/github/device-code", {
-          method: "POST",
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to get device code");
-        }
-
-        const data = await response.json();
-        setDeviceCode(data.device_code);
-        setUserCode(data.user_code);
-        setPollInterval(data.interval * 1000 || 5000);
-        setState("waiting");
-      } catch (err: any) {
-        setError(err.message || "Failed to start GitHub authorization");
-        setState("error");
-      }
-    };
-
-    startOAuth();
-  }, []);
-
-  // Poll for authorization completion
-  useEffect(() => {
-    if (state !== "waiting" && state !== "polling") return;
-
-    const pollAuth = async () => {
-      try {
-        setState("polling");
-        const response = await fetch("/api/github/device-token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ device_code: deviceCode }),
-        });
-
-        if (!response.ok) {
-          if (response.status === 400 || response.status === 401) {
-            // Still waiting for user authorization
-            return;
+        const completed = await poll_github_oauth()
+        if (completed) {
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current)
           }
-          throw new Error("Failed to check authorization");
+          setStep("success")
+          setTimeout(() => {
+            onSuccess()
+          }, 1500)
         }
-
-        const data = await response.json();
-
-        // Save GitHub connection to database
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user && data.access_token) {
-          await supabase
-            .from("github_connections")
-            .upsert({
-              user_id: user.id,
-              access_token: data.access_token,
-              github_username: data.github_username,
-              connected_at: new Date().toISOString(),
-            });
+      } catch (err) {
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current)
         }
-
-        setState("success");
-        setTimeout(() => {
-          onSuccess();
-        }, 1500);
-      } catch (err: any) {
-        setError(err.message || "Authorization failed");
-        setState("error");
+        setError(err instanceof Error ? err.message : String(err))
+        setStep("error")
       }
-    };
+    }, (deviceCode.interval || 5) * 1000)
+  }, [deviceCode, onSuccess])
 
-    const interval = setInterval(pollAuth, pollInterval);
-    return () => clearInterval(interval);
-  }, [state, deviceCode, pollInterval, supabase, onSuccess]);
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+      }
+    }
+  }, [])
 
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(userCode);
-    setCopied(true);
-    toast.success("Code copied to clipboard");
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const copyCode = () => {
+    if (deviceCode?.user_code) {
+      navigator.clipboard.writeText(deviceCode.user_code)
+    }
+  }
 
-  const handleOpenGitHub = () => {
-    window.open(
-      `https://github.com/login/device?user_code=${userCode}`,
-      "_blank"
-    );
-  };
-
-  const handleRetry = () => {
-    setError(null);
-    setState("starting");
-    window.location.reload();
-  };
+  const canDismissOverlay = step === "error"
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-[1200] flex items-center justify-center">
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={state === "error" ? onClose : undefined}
+        className="absolute inset-0 bg-black/82 backdrop-blur-[10px] animate-fadeIn"
+        onClick={canDismissOverlay ? onClose : undefined}
+        role={canDismissOverlay ? "button" : undefined}
+        tabIndex={canDismissOverlay ? 0 : undefined}
+        aria-label={canDismissOverlay ? "Close GitHub OAuth dialog" : undefined}
+        onKeyDown={
+          canDismissOverlay
+            ? (event) => {
+                if (isActivationKey(event)) {
+                  event.preventDefault()
+                  onClose()
+                }
+              }
+            : undefined
+        }
+        aria-hidden={!canDismissOverlay}
       />
-
-      {/* Modal */}
-      <div className="relative w-full max-w-md mx-4 rounded-2xl bg-gradient-to-br from-[#0f0f16] to-[#1a1a24] border border-white/10 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/5">
-          <div>
-            <h2 className="text-lg font-semibold">Connect GitHub</h2>
-            <p className="text-xs text-white/50 mt-1">
-              {state === "success"
-                ? "Authorization complete"
-                : "Authorize with GitHub"}
-            </p>
+      <div
+        className="relative w-full max-w-xl overflow-hidden animate-fadeIn rounded-3xl border border-white/12 shadow-[0_40px_160px_rgba(0,0,0,0.65)]"
+        style={{
+          background: "linear-gradient(140deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)), rgba(10,11,15,0.96)",
+        }}
+      >
+        <div className="px-7 py-5 flex items-center justify-between bg-white/[0.03] border-b border-white/[0.08]">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-white/08 border border-white/12 flex items-center justify-center text-white shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+              <i className="lab la-github text-2xl"></i>
+            </div>
+            <div>
+              <h2 className="font-semibold text-lg tracking-tight">Connect GitHub</h2>
+              <p className="text-xs text-white/55">
+                {step === "starting" && "Initializing…"}
+                {step === "waiting" && "Authorize in browser"}
+                {step === "polling" && "Waiting for authorization…"}
+                {step === "success" && "Connected successfully!"}
+                {step === "error" && "Connection failed"}
+              </p>
+            </div>
           </div>
-          {state !== "polling" && state !== "waiting" && (
+          {step !== "polling" && (
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+              className="w-9 h-9 rounded-xl hover:bg-white/[0.08] flex items-center justify-center transition-colors text-white/50"
             >
-              <X className="w-5 h-5 text-white/60" />
+              <i className="las la-times text-lg"></i>
             </button>
           )}
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-6">
-          {state === "starting" && (
-            <div className="flex flex-col items-center justify-center py-8">
-              <div className="w-12 h-12 rounded-full border-2 border-blue-400/50 border-t-blue-400 animate-spin mb-4" />
-              <p className="text-white/70">Initializing...</p>
+        <div className="px-7 py-8">
+          {step === "starting" && (
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/06 border border-white/10 flex items-center justify-center animate-pulse">
+                <i className="lab la-github text-3xl text-white/80"></i>
+              </div>
+              <p className="text-sm text-white/50">Starting OAuth flow...</p>
             </div>
           )}
 
-          {state === "waiting" && userCode && (
-            <div className="space-y-6">
-              {/* Step 1: Copy Code */}
-              <div className="space-y-3">
-                <p className="text-sm text-white/80">
-                  Copy your authorization code:
-                </p>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={userCode}
-                    readOnly
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-center font-mono font-bold text-lg text-white/90 cursor-pointer"
-                  />
-                  <button
-                    onClick={handleCopyCode}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-white/10 rounded transition-colors"
-                  >
-                    {copied ? (
-                      <CheckCircle className="w-5 h-5 text-emerald-400" />
-                    ) : (
-                      <Copy className="w-5 h-5 text-white/60" />
-                    )}
-                  </button>
-                </div>
+          {step === "waiting" && deviceCode && (
+            <div className="text-center">
+              <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-white/08 border border-white/10 flex items-center justify-center">
+                <i className="lab la-github text-4xl text-white/85"></i>
               </div>
+              <h3 className="font-semibold mb-2">Enter this code</h3>
+              <p className="text-sm text-white/50 mb-4">A browser window should have opened. Enter this code:</p>
 
-              {/* Step 2: Open GitHub */}
-              <div className="space-y-3">
-                <p className="text-sm text-white/80">
-                  Go to GitHub and enter the code above:
-                </p>
+              <div className="flex items-center justify-center gap-2 mb-6">
+                <div className="px-6 py-4 bg-white/[0.06] rounded-xl border border-white/[0.12]">
+                  <div className="text-2xl font-mono font-bold tracking-widest">{deviceCode.user_code}</div>
+                </div>
                 <button
-                  onClick={handleOpenGitHub}
-                  className="w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2"
+                  onClick={copyCode}
+                  className="p-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] transition-colors border border-white/10"
+                  title="Copy code"
                 >
-                  <i className="lab la-github text-lg" />
-                  Open GitHub
+                  <i className="las la-copy text-white/60"></i>
                 </button>
               </div>
 
-              {/* Step 3: Wait */}
-              <p className="text-xs text-white/50 text-center">
-                We're waiting for you to authorize on GitHub...
-              </p>
-            </div>
-          )}
-
-          {state === "polling" && (
-            <div className="flex flex-col items-center justify-center py-8">
-              <div className="space-y-4 w-full">
-                {[0, 1, 2].map((i) => (
-                  <div
-                    key={i}
-                    className="h-2 bg-white/20 rounded-full overflow-hidden"
-                  >
-                    <div
-                      className="h-full bg-blue-500 rounded-full"
-                      style={{
-                        animation: `slideIn 1s ease-in-out infinite`,
-                        animationDelay: `${i * 0.2}s`,
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-              <p className="text-white/70 mt-6 text-center text-sm">
-                Checking authorization...
-              </p>
-            </div>
-          )}
-
-          {state === "success" && (
-            <div className="flex flex-col items-center justify-center py-8 space-y-4">
-              <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                <CheckCircle className="w-8 h-8 text-emerald-400" />
-              </div>
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-white">
-                  Connected!
-                </h3>
-                <p className="text-sm text-white/60 mt-1">
-                  Your GitHub account is now connected
-                </p>
-              </div>
-            </div>
-          )}
-
-          {state === "error" && (
-            <div className="space-y-4">
-              <div className="flex gap-3">
-                <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-red-400">
-                    Authorization failed
-                  </p>
-                  <p className="text-sm text-white/60 mt-1">{error}</p>
-                </div>
-              </div>
-              <div className="flex gap-3">
+              <div className="space-y-2 mb-6">
                 <button
-                  onClick={onClose}
-                  className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-colors"
+                  onClick={() => open(deviceCode.verification_uri)}
+                  className="w-full px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] transition-colors text-sm border border-white/10"
                 >
-                  Close
+                  <i className="las la-external-link-alt mr-2"></i>
+                  Open GitHub Authorization
                 </button>
-                <button
-                  onClick={handleRetry}
-                  className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium"
+              </div>
+
+              <button
+                onClick={startPolling}
+                className="group relative w-full px-6 py-3 rounded-xl font-medium text-sm overflow-hidden transition-all hover:scale-[1.02]"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 opacity-95 group-hover:opacity-100 transition-opacity"></div>
+                <span className="relative text-white">I&apos;ve authorized, continue</span>
+              </button>
+            </div>
+          )}
+
+          {step === "polling" && (
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/06 border border-white/10 flex items-center justify-center">
+                <i className="lab la-github text-3xl text-white/80 animate-pulse"></i>
+              </div>
+              <h3 className="font-semibold mb-2">Checking authorization...</h3>
+              <p className="text-sm text-white/50">This may take a few seconds</p>
+              <div className="mt-4 flex items-center justify-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: "300ms" }}></div>
+              </div>
+            </div>
+          )}
+
+          {step === "success" && (
+            <div className="text-center">
+              <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-white/08 border border-white/10 flex items-center justify-center shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+                <i className="las la-check text-4xl text-blue-300"></i>
+              </div>
+              <h3 className="font-semibold mb-2">Successfully Connected!</h3>
+              <p className="text-sm text-white/50">Loading your repositories...</p>
+            </div>
+          )}
+
+          {step === "error" && (
+            <div className="text-center">
+              <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-red-500/22 to-rose-500/18 border border-white/10 flex items-center justify-center shadow-[0_18px_55px_rgba(248,113,113,0.25)]">
+                <i className="las la-exclamation-triangle text-4xl text-red-200"></i>
+              </div>
+              <h3 className="font-semibold text-lg mb-2">Connection Failed</h3>
+              <p className="text-sm text-white/60 mb-6 leading-relaxed">{error || "An error occurred"}</p>
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1 border-white/12 bg-white/8 hover:bg-white/12" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-500 border-0 shadow-[0_12px_40px_rgba(59,130,246,0.4)] hover:brightness-110"
+                  onClick={startOAuth}
                 >
                   Try Again
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -276,18 +244,14 @@ export function GitHubOAuthModal({ onSuccess, onClose }: GitHubOAuthModalProps) 
       </div>
 
       <style jsx>{`
-        @keyframes slideIn {
-          0% {
-            width: 0%;
-          }
-          50% {
-            width: 100%;
-          }
-          100% {
-            width: 0%;
-          }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
         }
       `}</style>
     </div>
-  );
+  )
 }

@@ -14,8 +14,8 @@ interface ScanHistoryStore {
   setDetailLevel: (level: DetailLevel) => void
 
   // Selected historical scan (null = viewing latest)
-  selectedScanId: string | null
-  setSelectedScanId: (id: string | null) => void
+  selectedScanId: number | null
+  setSelectedScanId: (id: number | null) => void
 }
 
 /**
@@ -38,7 +38,7 @@ export const useScanHistoryStore = create<ScanHistoryStore>()(
       setSelectedScanId: (id) => set({ selectedScanId: id }),
     }),
     {
-      name: 'ryn-web-scan-history-prefs',
+      name: 'ryn-scan-history-prefs',
       storage: createJSONStorage(() => localStorage),
       // Only persist detailLevel, not transient UI state
       partialize: (state) => ({ detailLevel: state.detailLevel }),

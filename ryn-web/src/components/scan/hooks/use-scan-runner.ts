@@ -1,15 +1,10 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
-import type { Scan } from "@/lib/types"
-
-export interface ScanProgress {
-  percentage: number
-  currentFile: string
-  filesScanned: number
-  totalFiles: number
-}
+import { listen } from "@tauri-apps/api/event"
+import { cancel_scan, respond_to_cost_limit, scan_project } from "@/lib/tauri/commands"
+import { toScanSummary } from "@/lib/tauri/transformers"
+import type { ScanProgress, ScanSummary } from "@/lib/types/scan"
 
 interface CostLimitData {
   currentCost: number
@@ -19,8 +14,8 @@ interface CostLimitData {
 }
 
 interface UseScanRunnerOptions {
-  onScanCompleted?: (scan: Scan) => void | Promise<void>
-  onScanStopped?: (scanId: string) => void | Promise<void>
+  onScanCompleted?: (scan: ScanSummary) => void | Promise<void>
+  onScanStopped?: (scanId: number) => void | Promise<void>
 }
 
 const initialProgress: ScanProgress = {
@@ -31,12 +26,12 @@ const initialProgress: ScanProgress = {
 }
 
 export function useScanRunner(
-  projectId?: string,
+  projectId?: number,
   options: UseScanRunnerOptions = {}
 ) {
   const [isScanning, setIsScanning] = useState(false)
   const [progress, setProgress] = useState<ScanProgress>(initialProgress)
-  const [currentScanId, setCurrentScanId] = useState<string | null>(null)
+  const [currentScanId, setCurrentScanId] = useState<number | null>(null)
   const [costLimitPrompt, setCostLimitPrompt] = useState<{
     open: boolean
     data: CostLimitData | null
@@ -44,14 +39,19 @@ export function useScanRunner(
     open: false,
     data: null,
   })
-  const scanIdRef = useRef<string | null>(null)
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  // Ref to track scan ID for cleanup effects (avoids stale closure issues)
+  const scanIdRef = useRef<number | null>(null)
 
-  // Cleanup on project change
+  // Cancel scan when project changes
   useEffect(() => {
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current)
+      // Cleanup runs before effect runs again with new projectId
+      if (scanIdRef.current) {
+        console.log("[useScanRunner] Project changed, cancelling scan:", scanIdRef.current)
+        cancel_scan(scanIdRef.current).catch((e) => {
+          console.error("[useScanRunner] Failed to cancel scan on project change:", e)
+        })
+        scanIdRef.current = null
       }
     }
   }, [projectId])
@@ -61,117 +61,141 @@ export function useScanRunner(
       throw new Error("No project selected")
     }
 
+    // Reset state for new scan
     scanIdRef.current = null
     setCurrentScanId(null)
     setIsScanning(true)
     setProgress(initialProgress)
 
     try {
-      const supabase = createClient()
-
-      // Call the scan API endpoint
-      const response = await fetch("/api/scan", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          projectId,
-        }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || "Failed to start scan")
-      }
-
-      const { scanId } = await response.json()
-      scanIdRef.current = scanId
-      setCurrentScanId(scanId)
-
-      // Poll for scan completion
-      let completed = false
-      const pollCount = 0
-      const maxPolls = 300 // 5 minutes with 1 second intervals
-
-      while (!completed && pollCount < maxPolls) {
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-
-        const { data: scan, error } = await supabase
-          .from("scans")
-          .select("*")
-          .eq("id", scanId)
-          .single()
-
-        if (error) {
-          console.error("Failed to poll scan status:", error)
-          continue
-        }
-
-        if (scan) {
-          // Update progress
-          setProgress({
-            percentage:
-              scan.total_files > 0
-                ? Math.round((scan.files_scanned / scan.total_files) * 100)
-                : 0,
-            currentFile: `Processed ${scan.files_scanned} files`,
-            filesScanned: scan.files_scanned,
-            totalFiles: scan.total_files,
-          })
-
-          if (scan.status === "completed" || scan.status === "failed") {
-            completed = true
-            setIsScanning(false)
-
-            if (scan.status === "completed") {
-              await options.onScanCompleted?.(scan)
-            }
-          }
-        }
-      }
-
-      return await supabase
-        .from("scans")
-        .select("*")
-        .eq("id", scanId)
-        .single()
-        .then(({ data }) => data)
-    } catch (error) {
+      const scan = await scan_project(projectId)
+      const mapped = toScanSummary(scan)
+      setCurrentScanId(mapped.id)
+      await options.onScanCompleted?.(mapped)
+      return mapped
+    } finally {
       setIsScanning(false)
-      console.error("Failed to start scan:", error)
-      throw error
     }
   }, [projectId, options])
 
   const continueAfterCostLimit = useCallback(async () => {
-    // Placeholder for cost limit continuation
+    if (!currentScanId) return
+    await respond_to_cost_limit(currentScanId, true)
     setCostLimitPrompt({ open: false, data: null })
-  }, [])
+  }, [currentScanId])
 
   const stopAfterCostLimit = useCallback(async () => {
-    if (currentScanId) {
-      await options.onScanStopped?.(currentScanId)
-    }
-    setIsScanning(false)
+    if (!currentScanId) return
+    await respond_to_cost_limit(currentScanId, false)
     setCostLimitPrompt({ open: false, data: null })
+    setIsScanning(false)
+    await options.onScanStopped?.(currentScanId)
   }, [currentScanId, options])
 
   const cancelScan = useCallback(async () => {
+    // Cancel on the backend first to stop AI processing
     if (currentScanId) {
       try {
-        await fetch(`/api/scan/${currentScanId}`, {
-          method: "DELETE",
-        })
-      } catch (error) {
-        console.error("Failed to cancel scan:", error)
+        await cancel_scan(currentScanId)
+      } catch (e) {
+        console.error("[useScanRunner] Failed to cancel scan on backend:", e)
       }
-      await options.onScanStopped?.(currentScanId)
+      void options.onScanStopped?.(currentScanId)
     }
     setIsScanning(false)
     setProgress(initialProgress)
     setCostLimitPrompt({ open: false, data: null })
   }, [currentScanId, options])
+
+  // Listen for scan progress events when a scan is running
+  useEffect(() => {
+    if (!isScanning) return
+
+    let unlisten: (() => void) | null = null
+
+    const register = async () => {
+      unlisten = await listen<{
+        scan_id: number
+        files_scanned: number
+        total_files: number
+        violations_found: number
+        current_file: string
+      }>("scan-progress", (event) => {
+        const payload = event.payload
+        // Capture scan_id from progress events (emitted before scan_project returns)
+        if (payload.scan_id && !scanIdRef.current) {
+          scanIdRef.current = payload.scan_id
+          setCurrentScanId(payload.scan_id)
+        }
+        setProgress({
+          percentage: payload.total_files > 0
+            ? Math.round((payload.files_scanned / payload.total_files) * 100)
+            : 0,
+          currentFile: payload.current_file,
+          filesScanned: payload.files_scanned,
+          totalFiles: payload.total_files,
+        })
+      })
+    }
+
+    void register()
+
+    return () => {
+      if (unlisten) {
+        unlisten()
+      }
+    }
+  }, [isScanning])
+
+  // Listen for cost limit prompts while scanning
+  useEffect(() => {
+    if (!isScanning) return
+
+    let unlisten: (() => void) | null = null
+
+    const register = async () => {
+      unlisten = await listen<{
+        scan_id: number
+        current_cost_usd: number
+        cost_limit_usd: number
+        files_analyzed: number
+        total_files: number
+      }>("cost-limit-reached", (event) => {
+        const data = event.payload
+        setCurrentScanId((prev) => prev ?? data.scan_id)
+        setCostLimitPrompt({
+          open: true,
+          data: {
+            currentCost: data.current_cost_usd,
+            costLimit: data.cost_limit_usd,
+            filesAnalyzed: data.files_analyzed,
+            totalFiles: data.total_files,
+          },
+        })
+      })
+    }
+
+    void register()
+
+    return () => {
+      if (unlisten) {
+        unlisten()
+      }
+    }
+  }, [isScanning])
+
+  // Cleanup: Cancel scan on component unmount (page navigation, project switch)
+  useEffect(() => {
+    return () => {
+      // If scan is running when component unmounts, cancel it on the backend
+      if (scanIdRef.current) {
+        console.log("[useScanRunner] Component unmounting, cancelling scan:", scanIdRef.current)
+        cancel_scan(scanIdRef.current).catch((e) => {
+          console.error("[useScanRunner] Failed to cancel scan on unmount:", e)
+        })
+      }
+    }
+  }, [])
 
   return {
     isScanning,

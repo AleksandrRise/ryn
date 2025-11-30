@@ -2,25 +2,28 @@
 
 import { ChevronDown, ChevronRight, Clock3 } from "lucide-react"
 import { ScanHistoryEntry } from "@/components/scan/scan-history-entry"
+import type { ScanCost, ScanSummary } from "@/lib/types/scan"
 import type { DetailLevel } from "@/lib/stores/scan-history-store"
-import type { Scan } from "@/lib/types"
+import { formatDateTime } from "@/lib/utils/date"
 
 interface ScanHistoryPanelProps {
-  scans: Scan[]
-  selectedScanId: string | null
-  onSelectScan: (scanId: string) => void
+  scans: ScanSummary[]
+  selectedScanId: number | null
+  onSelectScan: (scanId: number) => void
   detailLevel: DetailLevel
   onDetailLevelChange: (level: DetailLevel) => void
   isExpanded: boolean
   onToggleExpanded: () => void
-  loadingScanId: string | null
+  loadingScanId: number | null
   // Current scan info for collapsed view
   currentScanStats: {
     filesScanned: number
     violationsFound: number
     completedAt: string
     mode: string
+    cost: string
   }
+  currentScanCost?: ScanCost | null
 }
 
 const detailOptions: { value: DetailLevel; label: string }[] = [
@@ -48,6 +51,9 @@ export function ScanHistoryPanel({
 }: ScanHistoryPanelProps) {
   const completedScans = scans.filter(s => s.status === "completed")
   const latestScanId = completedScans[0]?.id
+
+  // Get cost map for completed scans (we'll load costs lazily)
+  const costMap = new Map<number, ScanCost | null>()
 
   return (
     <div className="animate-fade-in-up delay-100">
@@ -78,15 +84,17 @@ export function ScanHistoryPanel({
 
         {/* Collapsed: show current scan stats inline */}
         {!isExpanded && currentScanStats.completedAt && (
-          <div className="flex items-center gap-2 text-white/55 text-[11px]">
+          <div className="flex items-center gap-2 text-white/55">
             <Clock3 className="w-3.5 h-3.5" />
-            <span>{new Date(currentScanStats.completedAt).toLocaleDateString()}</span>
+            <span>{formatDateTime(currentScanStats.completedAt)}</span>
             <span className="text-white/30">·</span>
             <span>{modeLabels[currentScanStats.mode] || currentScanStats.mode}</span>
             <span className="text-white/30">·</span>
             <span>{currentScanStats.filesScanned} files</span>
             <span className="text-white/30">·</span>
             <span>{currentScanStats.violationsFound} violations</span>
+            <span className="text-white/30">·</span>
+            <span>{currentScanStats.cost}</span>
           </div>
         )}
 
@@ -96,13 +104,14 @@ export function ScanHistoryPanel({
             className="flex items-center gap-1 bg-white/5 rounded-md p-0.5"
             role="group"
             aria-label="Detail level options"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
           >
             {detailOptions.map((option) => (
               <button
                 key={option.value}
-                onClick={() => onDetailLevelChange(option.value)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onDetailLevelChange(option.value)
+                }}
                 className={`
                   px-2 py-1 rounded text-[10px] font-medium transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98]
                   ${detailLevel === option.value
@@ -130,6 +139,7 @@ export function ScanHistoryPanel({
               <ScanHistoryEntry
                 key={scan.id}
                 scan={scan}
+                cost={costMap.get(scan.id)}
                 isSelected={selectedScanId === scan.id || (selectedScanId === null && index === 0)}
                 isLatest={scan.id === latestScanId}
                 detailLevel={detailLevel}

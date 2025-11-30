@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@tauri-apps/*": ["./src/tauri-shim/@tauri-apps/*"]
     }
   },
   "include": [

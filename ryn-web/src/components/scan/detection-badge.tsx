@@ -1,5 +1,5 @@
 import { SearchCodeIcon, SparklesIcon, Combine } from "lucide-react"
-import type { DetectionMethod } from "@/lib/types"
+import type { DetectionMethod } from "@/lib/types/violation"
 
 interface DetectionBadgeProps {
   method: DetectionMethod

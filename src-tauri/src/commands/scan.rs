@@ -490,6 +490,191 @@ pub async fn scan_project_internal<R: tauri::Runtime>(
     Ok(scan)
 }
 
+/// HTTP-friendly scan entry point for the web backend.
+///
+/// This reuses the same database, rules, and tree-sitter enrichment logic as the
+/// Tauri command, but runs entirely server-side without emitting Tauri events
+/// or supporting interactive cost-limit prompts and cancellation.
+///
+/// It currently performs regex-based scanning only; LLM analysis can be wired
+/// in later using the same underlying Grok integration.
+pub async fn scan_project_http(project_id: i64) -> Result<Scan, String> {
+    // Query settings and create scan record (scoped to drop connection before async operations)
+    let (llm_scan_mode, project, scan_id) = {
+        let conn = db::get_connection();
+
+        // Query LLM scan mode from settings (regex_only, smart, or analyze_all)
+        // Defaults to "regex_only" if setting not found
+        let llm_scan_mode = queries::select_setting(&conn, "llm_scan_mode")
+            .ok()
+            .flatten()
+            .map(|s| s.value)
+            .unwrap_or_else(|| "regex_only".to_string());
+
+        // Get project from database
+        let project = queries::select_project(&conn, project_id)
+            .map_err(|e| format!("Failed to fetch project: {}", e))?
+            .ok_or_else(|| format!("Project not found: {}", project_id))?;
+
+        // Validate project path to prevent scanning system directories
+        path_validation::validate_project_path(Path::new(&project.path))
+            .map_err(|e| format!("Security: Invalid project path: {}", e))?;
+
+        // Create scan record
+        let scan_id = queries::insert_scan(&conn, project_id, &llm_scan_mode)
+            .map_err(|e| format!("Failed to create scan: {}", e))?;
+
+        (llm_scan_mode, project, scan_id)
+    }; // Connection dropped here
+
+    println!(
+        "[ryn-web] Starting HTTP scan: project_id={}, mode={}",
+        project_id, llm_scan_mode
+    );
+
+    // Count total files before scanning (for accurate progress tracking in stats)
+    let total_files = WalkDir::new(&project.path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .filter(|e| !should_skip_path(e.path()))
+        .count() as i32;
+
+    // Walk through project files
+    let mut files_scanned = 0;
+    let mut violations_found = 0;
+    let mut regex_violations: Vec<Violation> = Vec::new(); // Collect all regex violations
+
+    for entry in WalkDir::new(&project.path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+    {
+        let file_path = entry.path();
+
+        // Skip common non-source directories
+        if should_skip_path(file_path) {
+            continue;
+        }
+
+        // Read file content
+        match std::fs::read_to_string(file_path) {
+            Ok(content) => {
+                files_scanned += 1;
+
+                // Update database every 50 files for persistence
+                if files_scanned % 50 == 0 {
+                    let conn = db::get_connection();
+                    let _ = queries::update_scan_results(
+                        &conn,
+                        scan_id,
+                        files_scanned,
+                        total_files,
+                        violations_found,
+                    );
+                }
+
+                // Detect language and run rules only for supported files
+                if let Some(_language) = FrameworkDetector::detect_language(file_path) {
+                    // Security: File MUST be within project path
+                    let relative_path = file_path
+                        .strip_prefix(&project.path)
+                        .map_err(|e| {
+                            format!(
+                                "Security: File outside project path: {} (project: {}). Error: {}",
+                                file_path.display(),
+                                project.path,
+                                e
+                            )
+                        })?
+                        .to_string_lossy()
+                        .to_string();
+
+                    // Run all 4 rule engines and collect violations (don't insert yet)
+                    let mut violations = run_all_rules(&content, &relative_path, scan_id);
+                    regex_violations.append(&mut violations);
+                }
+            }
+            Err(_) => {
+                // Skip files that can't be read
+                continue;
+            }
+        }
+    }
+
+    println!(
+        "[ryn-web] HTTP scan collected {} regex violations",
+        regex_violations.len()
+    );
+
+    // No LLM analysis in HTTP mode yet; use regex-only violations.
+    let merged_violations = regex_violations;
+
+    // Enrich violations with tree-sitter context (function_name, class_name)
+    let enriched_violations = enrich_violations_with_context(merged_violations, &project.path);
+
+    // Insert all enriched violations into database
+    {
+        let conn = db::get_connection();
+        for violation in &enriched_violations {
+            if queries::insert_violation(&conn, violation).is_ok() {
+                violations_found += 1;
+            }
+        }
+    } // Connection dropped here
+
+    println!(
+        "[ryn-web] HTTP scan inserted {} violations",
+        violations_found
+    );
+
+    // Update scan with results and fetch final data (scoped to drop connection)
+    let scan = {
+        let conn = db::get_connection();
+
+        // Update scan with results
+        let completed_at = chrono::Utc::now().to_rfc3339();
+        queries::update_scan_status(&conn, scan_id, "completed", Some(&completed_at))
+            .map_err(|e| format!("Failed to update scan status: {}", e))?;
+
+        queries::update_scan_results(&conn, scan_id, files_scanned, total_files, violations_found)
+            .map_err(|e| format!("Failed to update scan results: {}", e))?;
+
+        // Log audit event
+        if let Ok(event) = create_audit_event(
+            &conn,
+            "scan_completed",
+            Some(project_id),
+            None,
+            None,
+            &format!(
+                "Scanned {} files, found {} violations",
+                files_scanned, violations_found
+            ),
+        ) {
+            let _ = queries::insert_audit_event(&conn, &event);
+        }
+
+        // Fetch complete scan with severity counts
+        let mut scan = queries::select_scan(&conn, scan_id)
+            .map_err(|e| format!("Failed to fetch scan: {}", e))?
+            .ok_or_else(|| "Scan was created but could not be retrieved".to_string())?;
+
+        // Calculate severity counts - propagate errors instead of hiding them
+        let (critical, high, medium, low) = queries::get_severity_counts(&conn, scan_id)
+            .map_err(|e| format!("Failed to calculate severity counts: {}", e))?;
+
+        scan.critical_count = critical;
+        scan.high_count = high;
+        scan.medium_count = medium;
+        scan.low_count = low;
+
+        scan
+    }; // Connection dropped here
+
+    Ok(scan)
+}
+
 /// Start watching a project for file changes
 ///
 /// Spawns a FileWatcher on the project directory and emits "file-changed" events

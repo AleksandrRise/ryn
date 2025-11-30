@@ -30,36 +30,9 @@
   }
 }
 
-@theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
-  --font-sans: var(--font-inter);
-  --font-mono: var(--font-jetbrains-mono);
-}
-
-* {
-  box-sizing: border-box;
-}
-
 html {
   background-color: #000;
   overscroll-behavior: none;
-  scroll-behavior: smooth;
 }
 
 body {
@@ -76,30 +49,7 @@ body {
   font-size: 0.875rem;
 }
 
-::selection {
-  background: rgba(59, 130, 246, 0.3);
-}
-
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #111;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #444;
-}
-
-/* Global cursor pointer for interactive elements */
+/* Global cursor pointer for all interactive elements */
 button,
 [role="button"],
 [type="button"],
@@ -169,7 +119,7 @@ h6 {
   color: rgba(255, 255, 255, 0.6);
 }
 
-/* Numbers and metrics */
+/* Numbers and metrics - tabular for alignment */
 .tabular-nums {
   font-feature-settings: "tnum" 1, "kern" 1;
   font-variant-numeric: tabular-nums;
@@ -191,7 +141,7 @@ a:hover {
   transition: transform 0.2s ease;
 }
 
-/* Smooth transitions */
+/* Smooth transitions for all interactive elements */
 button,
 [role="button"],
 a,
@@ -201,13 +151,13 @@ summary {
   transition: all 0.2s ease-in-out;
 }
 
-/* Focus states */
+/* Better focus states - reuse subtle ring color instead of harsh white */
 *:focus-visible {
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* Select styling */
+/* Soften select trigger + dropdown borders globally */
 [data-slot="select-trigger"] {
   border-color: rgba(255, 255, 255, 0.12) !important;
   background-color: rgba(255, 255, 255, 0.05) !important;
@@ -234,7 +184,6 @@ summary {
   backdrop-filter: blur(16px);
 }
 
-/* Animations */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -268,15 +217,6 @@ summary {
   }
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .animate-fade-in-up {
   animation: fadeInUp 0.6s ease-out forwards;
 }
@@ -287,10 +227,6 @@ summary {
 
 .animate-fade-in-right {
   animation: fadeInRight 0.6s ease-out forwards;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
 }
 
 .delay-100 { animation-delay: 0.1s; }

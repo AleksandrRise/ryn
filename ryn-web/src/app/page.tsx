@@ -9,7 +9,6 @@ import {
   XCircle,
   Lock,
   FileCode,
-  Github,
   Download,
   Server,
   Database,
@@ -159,7 +158,9 @@ const BootLoader = ({ onComplete }: BootLoaderProps) => {
         }
       }, delay);
     });
-  }, []);
+    // logLines is a constant array; onComplete is stable for the lifetime
+    // of this component instance.
+  }, [logLines, onComplete]);
 
   return (
     <motion.div
@@ -314,6 +315,8 @@ const RynInterface = () => {
 
   useEffect(() => {
     if (step === 0) {
+      // Reset progress when returning to scanning state
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setScanProgress(0);
       const scanner = setInterval(() => {
         setScanProgress((p) => Math.min(p + 5, 100));
@@ -659,16 +662,6 @@ export default function Home() {
                 <span className="font-bold text-lg tracking-tight">Ryn</span>
               </div>
               <div className="flex items-center space-x-3">
-                <a href="/auth/signin">
-                  <Button variant="outline" className="h-9 px-4 text-sm">
-                    Sign In
-                  </Button>
-                </a>
-                <a href="/auth/signup">
-                  <Button variant="secondary" className="h-9 px-4 text-sm">
-                    Sign Up
-                  </Button>
-                </a>
                 <a href="/dashboard">
                   <Button variant="primary" className="h-9 px-4 text-sm">
                     Enter Web Version
@@ -962,12 +955,12 @@ export default function Home() {
                       </a>
                     </li>
                     <li>
-                      <a href="#" className="hover:text-blue-400">
+                      <a href="https://discord.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
                         Discord
                       </a>
                     </li>
                     <li>
-                      <a href="#" className="hover:text-blue-400">
+                      <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
                         Twitter
                       </a>
                     </li>
