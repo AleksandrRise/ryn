@@ -8,6 +8,7 @@ import { ScanProgressCard } from "@/components/scan/scan-progress-card"
 import { SeverityFilter } from "@/components/scan/severity-filter"
 import { CategoryScrubber, CATEGORY_CONFIG } from "@/components/scan/category-scrubber"
 import { Button } from "@/components/ui/button"
+import { CodeSnippet, CodeBlock } from "@/components/ui/code-display"
 import { useScanData } from "@/components/scan/hooks/use-scan-data"
 import { useScanRunner } from "@/components/scan/hooks/use-scan-runner"
 import { useProjectStore } from "@/lib/stores/project-store"
@@ -581,58 +582,47 @@ export function ScanResults() {
                     </button>
                   </div>
 
-                  <div className="rounded-lg border border-white/10 bg-[#0a0a0a] p-3 font-mono text-xs text-white/85 overflow-auto shadow-inner max-h-[200px]">
-                    {isCodeExpanded && fullFileContent ? (() => {
-                      const codeLines = fullFileContent.split(/\r?\n/)
-                      return (
-                        <div className="grid grid-cols-[auto,1fr] gap-x-3">
-                          {codeLines.map((line, idx) => {
-                            const lineNumber = idx + 1
-                            const isTarget = lineNumber === selectedViolation.lineNumber
-                            return (
-                              <div key={`${selectedViolation.id}-fullline-${idx}`} className="contents">
-                                <span className="text-white/30 text-right select-none">{lineNumber}</span>
-                                <pre className={`whitespace-pre-wrap font-mono leading-snug ${isTarget ? "bg-white/10 text-white px-2 rounded" : ""}`}>
-                                  {line || "\u00a0"}
-                                </pre>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    })() : selectedViolation.codeSnippet ? (() => {
-                      const codeLines = selectedViolation.codeSnippet.split(/\r?\n/)
-                      const anchor = selectedViolation.lineNumber || 0
-                      const startLine = Math.max(1, anchor - Math.floor(codeLines.length / 2))
-                      return (
-                        <div className="grid grid-cols-[auto,1fr] gap-x-3">
-                          {codeLines.map((line, idx) => {
-                            const lineNumber = startLine + idx
-                            const isTarget = lineNumber === anchor
-                            return (
-                              <div key={`${selectedViolation.id}-line-${idx}`} className="contents">
-                                <span className="text-white/30 text-right select-none">{lineNumber > 0 ? lineNumber : ""}</span>
-                                <pre className={`whitespace-pre-wrap font-mono leading-relaxed ${isTarget ? "bg-white/10 text-white px-2 rounded" : ""}`}>
-                                  {line || "\u00a0"}
-                                </pre>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    })() : (
-                      <div className="text-white/50">No code snippet available.</div>
-                    )}
-                  </div>
+                  {isCodeExpanded && fullFileContent ? (
+                    <CodeSnippet
+                      code={fullFileContent}
+                      filePath={selectedViolation.filePath}
+                      startLineNumber={1}
+                      highlightLines={[selectedViolation.lineNumber]}
+                      maxHeight="200px"
+                      className="shadow-inner"
+                    />
+                  ) : selectedViolation.codeSnippet ? (() => {
+                    const codeLines = selectedViolation.codeSnippet.split(/\r?\n/)
+                    const anchor = selectedViolation.lineNumber || 0
+                    const startLine = Math.max(1, anchor - Math.floor(codeLines.length / 2))
+                    return (
+                      <CodeSnippet
+                        code={selectedViolation.codeSnippet}
+                        filePath={selectedViolation.filePath}
+                        startLineNumber={startLine}
+                        highlightLines={[anchor]}
+                        maxHeight="200px"
+                        className="shadow-inner"
+                      />
+                    )
+                  })() : (
+                    <div className="rounded-lg border border-white/10 bg-[#0a0a0a] p-4 text-white/50 text-sm">
+                      No code snippet available.
+                    </div>
+                  )}
                 </div>
 
                 {/* Suggested Fix - constrained */}
                 {generatedFix && (
                   <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
                     <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/90 mb-2">Suggested Fix</div>
-                    <div className="rounded bg-[#0a0a0a] p-3 font-mono text-xs text-white/85 overflow-auto max-h-[150px]">
-                      <pre className="whitespace-pre-wrap">{generatedFix.fixed_code}</pre>
-                    </div>
+                    <CodeBlock
+                      code={generatedFix.fixed_code}
+                      filePath={selectedViolation.filePath}
+                      showLineNumbers={true}
+                      customStyle={{ maxHeight: "150px", overflow: "auto", padding: "0.75rem" }}
+                      className="rounded"
+                    />
                   </div>
                 )}
 

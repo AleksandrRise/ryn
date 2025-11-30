@@ -1,98 +1,14 @@
 "use client"
 
-import { useState, memo, useMemo, useEffect } from "react"
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
+import { useState, useEffect } from "react"
 import { get_violation, generate_fix, apply_fix, dismiss_violation, type ViolationDetail as ViolationDetailType } from "@/lib/tauri/commands"
+import { CodeBlock, CodeDiff } from "@/components/ui/code-display"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
 import { DetectionBadge } from "@/components/scan/detection-badge"
 
 interface ViolationDetailProps {
   violationId: number
 }
-
-// Memoized code block component
-const MemoizedCodeBlock = memo(function MemoizedCodeBlock({
-  code,
-  language,
-}: {
-  code: string
-  language: string
-}) {
-  const customStyle = useMemo(
-    () => ({
-      margin: 0,
-      padding: "1.5rem",
-      background: "#0a0a0a",
-      fontSize: "13px",
-    }),
-    []
-  )
-
-  return (
-    <div className="border border-[#1a1a1a] overflow-hidden">
-      <SyntaxHighlighter
-        language={language}
-        style={vscDarkPlus}
-        customStyle={customStyle}
-      >
-        {code}
-      </SyntaxHighlighter>
-    </div>
-  )
-})
-
-// Memoized diff block component
-const MemoizedDiffBlock = memo(function MemoizedDiffBlock({
-  beforeCode,
-  afterCode,
-  language,
-}: {
-  beforeCode: string
-  afterCode: string
-  language: string
-}) {
-  const customStyle = useMemo(
-    () => ({
-      margin: 0,
-      padding: "1rem",
-      background: "#0a0a0a",
-      fontSize: "12px",
-    }),
-    []
-  )
-
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      <div className="border border-[#1a1a1a] overflow-hidden">
-        <div className="bg-[#050505] px-4 py-2 border-b border-[#1a1a1a]">
-          <p className="text-[11px] uppercase tracking-wider text-[#aaaaaa]">Before</p>
-        </div>
-        <SyntaxHighlighter
-          language={language}
-          style={vscDarkPlus}
-          customStyle={customStyle}
-          showLineNumbers
-        >
-          {beforeCode}
-        </SyntaxHighlighter>
-      </div>
-      <div className="border border-[#1a1a1a] overflow-hidden">
-        <div className="bg-[#050505] px-4 py-2 border-b border-[#1a1a1a]">
-          <p className="text-[11px] uppercase tracking-wider text-[#10b981]">After (Proposed)</p>
-        </div>
-        <SyntaxHighlighter
-          language={language}
-          style={vscDarkPlus}
-          customStyle={customStyle}
-          showLineNumbers
-        >
-          {afterCode}
-        </SyntaxHighlighter>
-      </div>
-    </div>
-  )
-})
 
 export function ViolationDetail({ violationId }: ViolationDetailProps) {
   const [showDiff, setShowDiff] = useState(false)
@@ -118,27 +34,6 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
 
     loadViolation()
   }, [violationId])
-
-  // Derive language from file extension
-  const getLanguage = (filePath: string): string => {
-    const ext = filePath.split(".").pop()?.toLowerCase() || ""
-    const langMap: Record<string, string> = {
-      py: "python",
-      js: "javascript",
-      ts: "typescript",
-      tsx: "typescript",
-      jsx: "javascript",
-      rs: "rust",
-      go: "go",
-      java: "java",
-      rb: "ruby",
-      php: "php",
-      cs: "csharp",
-      cpp: "cpp",
-      c: "c",
-    }
-    return langMap[ext] || "text"
-  }
 
   const getConfidenceBadge = (trustLevel: string) => {
     const colors = {
@@ -217,7 +112,6 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
   }
 
   const { violation, control, fix } = violationDetail
-  const language = getLanguage(violation.file_path)
   const trustLevel = fix?.trust_level || "review"
 
   return (
@@ -274,12 +168,16 @@ export function ViolationDetail({ violationId }: ViolationDetailProps) {
           {/* Code display with syntax highlighting */}
           <div className="mb-8">
             {!showDiff || !fix ? (
-              <MemoizedCodeBlock code={violation.code_snippet} language={language} />
+              <CodeBlock
+                code={violation.code_snippet}
+                filePath={violation.file_path}
+                customStyle={{ padding: "1.5rem" }}
+              />
             ) : (
-              <MemoizedDiffBlock
+              <CodeDiff
                 beforeCode={fix.original_code}
                 afterCode={fix.fixed_code}
-                language={language}
+                filePath={violation.file_path}
               />
             )}
           </div>
