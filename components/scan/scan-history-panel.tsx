@@ -68,7 +68,7 @@ export function ScanHistoryPanel({
             onToggleExpanded()
           }
         }}
-        className="w-full flex items-center justify-between gap-4 text-xs text-white/65 hover:text-white/80 transition-colors py-1 cursor-pointer"
+        className="w-full flex items-center justify-between gap-4 text-xs text-white/65 hover:text-white/80 transition-all duration-150 ease-out hover:scale-[1.005] active:scale-[0.995] py-1 cursor-pointer"
       >
         <div className="flex items-center gap-2">
           {isExpanded ? (
@@ -112,7 +112,7 @@ export function ScanHistoryPanel({
                 key={option.value}
                 onClick={() => onDetailLevelChange(option.value)}
                 className={`
-                  px-2 py-1 rounded text-[10px] font-medium transition-colors
+                  px-2 py-1 rounded text-[10px] font-medium transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98]
                   ${detailLevel === option.value
                     ? "bg-white/10 text-white"
                     : "text-white/50 hover:text-white/70"

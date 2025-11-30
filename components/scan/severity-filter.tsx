@@ -23,7 +23,7 @@ export function SeverityFilter({ selected, onSelect, violations }: SeverityFilte
           <button
             key={severity}
             onClick={() => onSelect(severity)}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wide transition-all border ${
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold uppercase tracking-wide transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98] border ${
               selected === severity
                 ? "bg-white/15 text-white border-white/20 shadow-sm"
                 : "bg-white/5 text-white/60 border-white/10 hover:border-white/20 hover:text-white"

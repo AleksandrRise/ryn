@@ -40,7 +40,7 @@ export function ScanHistoryEntry({
       onClick={onClick}
       disabled={isLoading || isInProgress}
       className={`
-        w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150
+        w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 ease-out hover:scale-[1.01] active:scale-[0.99]
         ${isSelected
           ? "bg-white/10 border border-white/20"
           : "bg-white/[0.03] border border-transparent hover:bg-white/5 hover:border-white/10"

@@ -71,6 +71,33 @@ export function ScanResults() {
     }))
   }
 
+  // File selection and search state (must be declared before hasActiveFilters)
+  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
+  const [selectedViolationId, setSelectedViolationId] = useState<number | null>(null)
+  const [fileSearch, setFileSearch] = useState("")
+
+  // Check if any filter is active (for showing "Clear filters" button)
+  const hasActiveFilters = useMemo(() => {
+    return (
+      selectedSeverity !== "all" ||
+      Object.values(selectedControls).some(v => v === false) ||
+      fileSearch.trim() !== ""
+    )
+  }, [selectedSeverity, selectedControls, fileSearch])
+
+  // Clear all filters at once
+  const clearAllFilters = useCallback(() => {
+    setSelectedSeverity("all")
+    setSelectedControls({
+      "CC6.1": true,
+      "CC6.7": true,
+      "CC7.2": true,
+      "A1.2": true,
+    })
+    setFileSearch("")
+    setSelectedFilePath(null)
+  }, [])
+
   // Handle selecting a historical scan
   const handleSelectHistoricalScan = useCallback(async (scanId: number) => {
     // If selecting the latest scan, clear historical selection
@@ -110,9 +137,6 @@ export function ScanResults() {
     [selectedSeverity, selectedControls, activeViolations],
   )
 
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null)
-  const [selectedViolationId, setSelectedViolationId] = useState<number | null>(null)
-  const [fileSearch, setFileSearch] = useState("")
   const [isGeneratingFix, setIsGeneratingFix] = useState(false)
   const [generatedFix, setGeneratedFix] = useState<Fix | null>(null)
   const [isApplyingFix, setIsApplyingFix] = useState(false)
@@ -393,6 +417,15 @@ export function ScanResults() {
           <span className="text-[11px] text-white/55">Severity</span>
           <SeverityFilter selected={selectedSeverity} onSelect={setSelectedSeverity} violations={activeViolations} />
         </div>
+        {hasActiveFilters && (
+          <button
+            onClick={clearAllFilters}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white/5 hover:bg-white/10 text-xs text-white/60 hover:text-white transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <X className="w-3 h-3" />
+            Clear filters
+          </button>
+        )}
       </div>
 
       {/* Historical scan banner */}
@@ -406,7 +439,7 @@ export function ScanResults() {
               setSelectedScanId(null)
               setHistoricalViolations([])
             }}
-            className="flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200 transition-colors"
+            className="flex items-center gap-1 text-xs text-amber-300 hover:text-amber-200 transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98]"
           >
             <X className="w-3.5 h-3.5" />
             View latest
@@ -441,7 +474,7 @@ export function ScanResults() {
 
           <div className="space-y-1 max-h-[640px] overflow-auto pr-1">
             <button
-              className={`w-full text-left rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
+              className={`w-full text-left rounded-md px-3 py-2 text-xs font-semibold transition-all duration-150 ease-out hover:scale-[1.01] active:scale-[0.99] ${
                 selectedFilePath === null
                   ? "bg-white/10 text-white"
                   : "bg-transparent text-white/75 hover:bg-white/5 hover:text-white"
@@ -462,7 +495,7 @@ export function ScanResults() {
               return (
                 <button
                   key={group.filePath}
-                  className={`w-full text-left rounded-md px-3 py-2 text-xs transition-colors flex flex-col gap-1 ${
+                  className={`w-full text-left rounded-md px-3 py-2 text-xs transition-all duration-150 ease-out hover:scale-[1.01] active:scale-[0.99] flex flex-col gap-1 ${
                     isActive
                       ? "bg-white/10 text-white"
                       : "bg-transparent text-white/80 hover:bg-white/5 hover:text-white"
@@ -504,7 +537,7 @@ export function ScanResults() {
                 <button
                   key={v.id}
                   onClick={() => setSelectedViolationId(v.id)}
-                  className={`w-full text-left px-3 py-3 transition-colors ${
+                  className={`w-full text-left px-3 py-3 transition-all duration-150 ease-out hover:scale-[1.01] active:scale-[0.99] ${
                     isActive
                       ? "bg-white/10 text-white"
                       : "bg-transparent text-white/85 hover:bg-white/5"
@@ -560,7 +593,7 @@ export function ScanResults() {
                   <button
                     onClick={handleExpandCode}
                     disabled={isLoadingFile}
-                    className="text-xs text-white/60 hover:text-white transition-colors disabled:opacity-50"
+                    className="text-xs text-white/60 hover:text-white transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
                   >
                     {isLoadingFile ? "Loading..." : isCodeExpanded ? "Show snippet only" : "Expand full file"}
                   </button>
@@ -713,14 +746,14 @@ export function ScanResults() {
               <button
                 onClick={confirmApplyFix}
                 disabled={isApplyingFix}
-                className="flex-1 px-6 py-3 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-colors disabled:opacity-50"
+                className="flex-1 px-6 py-3 bg-white text-black text-sm font-medium rounded-lg hover:bg-white/90 transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
               >
                 {isApplyingFix ? "Applying..." : generatedFix ? "Apply Fix" : "Generate & Apply"}
               </button>
               <button
                 onClick={() => setShowApplyConfirm(false)}
                 disabled={isApplyingFix}
-                className="flex-1 px-6 py-3 border border-white/10 text-sm rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50"
+                className="flex-1 px-6 py-3 border border-white/10 text-sm rounded-lg hover:bg-white/5 transition-all duration-150 ease-out hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
               >
                 Cancel
               </button>

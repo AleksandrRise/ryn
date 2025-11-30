@@ -2,15 +2,9 @@
 
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react"
 import { createPortal } from "react-dom"
-import {
-  Area,
-  AreaChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts"
 import { toast } from "sonner"
+import { ChartSelector, ChartContainer } from "./charts"
+import { useDashboardChartStore } from "@/lib/stores/dashboard-chart-store"
 import {
   check_github_connection,
   disconnect_github,
@@ -70,6 +64,20 @@ export function Dashboard() {
   const scanningReposRef = useRef<Set<number>>(new Set())
   const autoPollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoPollingRef = useRef(false)
+
+  // Pause monitoring state (persisted to localStorage)
+  const [isMonitoringPaused, setIsMonitoringPaused] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("ryn-monitoring-paused") === "true"
+    }
+    return false
+  })
+
+  // Persist pause state to localStorage
+  useEffect(() => {
+    localStorage.setItem("ryn-monitoring-paused", String(isMonitoringPaused))
+  }, [isMonitoringPaused])
+
   const isLocalMode = selectedPlatform.id === "local"
   const hasLocalProject = Boolean(selectedProject)
 
@@ -78,7 +86,23 @@ export function Dashboard() {
     violations: localViolations,
     lastScan: localLastScan,
     lastScanStats: localScanStats,
+    allScans: localScans,
   } = useScanData(selectedProject?.id)
+
+  // Chart preferences store
+  const {
+    localChartType,
+    githubChartType,
+    trendTimeRange,
+    setLocalChartType,
+    setGithubChartType,
+    setTrendTimeRange,
+  } = useDashboardChartStore()
+
+  // Computed chart settings based on mode
+  const currentChartType = isLocalMode ? localChartType : githubChartType
+  const setChartType = isLocalMode ? setLocalChartType : setGithubChartType
+  const showTimeRange = currentChartType === "trend-over-time"
 
   // Calculate local project stats
   const localTotalViolations = localViolations.length
@@ -204,7 +228,12 @@ export function Dashboard() {
         return next
       })
       await loadTrackedRepos()
-      console.log(`Scan started for repo ${repoId} (${reason})`)
+      // Show completion toast
+      const repoName = latestReposRef.current.find(r => r.id === repoId)?.github_repo.name ?? "Repository"
+      toast.success("Scan complete", {
+        description: `${repoName} scan finished.`,
+      })
+      console.log(`Scan completed for repo ${repoId} (${reason})`)
       return scanId
     } catch (error) {
       console.error(`Failed to scan repo ${repoId} (${reason}):`, error)
@@ -265,7 +294,7 @@ export function Dashboard() {
     let cancelled = false
 
     const pollTrackedRepos = async () => {
-      if (cancelled || autoPollingRef.current) return
+      if (cancelled || autoPollingRef.current || isMonitoringPaused) return
       autoPollingRef.current = true
 
       try {
@@ -334,7 +363,7 @@ export function Dashboard() {
         clearTimeout(autoPollTimerRef.current)
       }
     }
-  }, [connectionStatus?.connected, runScanForRepo, checkRepoAndFlag, loadTrackedRepos])
+  }, [connectionStatus?.connected, runScanForRepo, checkRepoAndFlag, loadTrackedRepos, isMonitoringPaused])
 
   // Track repo id set for change detection (no auto-scan)
   useEffect(() => {
@@ -368,6 +397,9 @@ export function Dashboard() {
     // Trigger scans for repos that need it
     for (const repo of unscannedRepos) {
       console.log(`[dashboard] Auto-scanning unscanned repo: ${repo.github_repo.name}`)
+      toast("First scan starting", {
+        description: `Running initial compliance scan on ${repo.github_repo.name}...`,
+      })
       runScanForRepo(repo.id, "auto-first-scan", false).catch(err => {
         console.error(`Failed to auto-scan repo ${repo.github_repo.name}:`, err)
       })
@@ -486,19 +518,6 @@ export function Dashboard() {
   const totalViolations = scannedRepos.reduce((sum, r) => sum + (r.total_violations ?? 0), 0)
   const criticalCount = scannedRepos.reduce((sum, r) => sum + (r.critical_violations ?? 0), 0)
   const healthyCount = scannedRepos.filter(r => (r.total_violations ?? 0) === 0).length
-
-  // Build chart data - pad with baseline point if only one repo to show a line
-  const rawChartData = scannedRepos.map(repo => ({
-    name: repo.github_repo.name,
-    violations: repo.total_violations ?? 0,
-    critical: repo.critical_violations ?? 0,
-  }))
-
-  // If only one data point, add a baseline to create a visible line
-  const chartData = rawChartData.length === 1
-    ? [{ name: "Baseline", violations: 0, critical: 0 }, ...rawChartData]
-    : rawChartData
-
   const hasScanData = scannedRepos.length > 0
 
   const recentActivity = [...trackedRepos]
@@ -712,22 +731,26 @@ export function Dashboard() {
 
               <div className="relative p-6 h-full">
                 {connectionStatus?.connected && (
-                  <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h2 className="text-base font-semibold">Weekly Trend</h2>
-                      <p className="text-xs text-white/40 mt-0.5">Violations over time</p>
+                      <h2 className="text-sm font-semibold">Compliance Overview</h2>
+                      <p className="text-xs text-white/40 mt-0.5">{trackedRepos.length} repositories monitored</p>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-5 text-xs text-white/50">
-                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-400"></span>Found</span>
-                        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400"></span>Fixed</span>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <ChartSelector
+                        chartType={currentChartType}
+                        onChartTypeChange={setChartType}
+                        mode="github"
+                        timeRange={trendTimeRange}
+                        onTimeRangeChange={setTrendTimeRange}
+                        showTimeRange={showTimeRange}
+                      />
                       <button
                         onClick={handleConnectClick}
-                        className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-white/60 hover:text-white transition-all border border-white/[0.04]"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-white/60 hover:text-white transition-all border border-white/[0.04]"
                       >
                         <i className="las la-cog"></i>
-                        <span>Manage Repos</span>
+                        <span>Repos</span>
                       </button>
                     </div>
                   </div>
@@ -735,54 +758,35 @@ export function Dashboard() {
 
                 {connectionStatus?.connected ? (
                   <div className="animate-fadeIn">
-                    {/* Chart */}
-                    <div className="h-56">
-                      {chartData.length === 0 ? (
-                        <div className="h-full flex items-center justify-center text-sm text-white/50">
-                          Scan a repo to see live findings
-                        </div>
-                      ) : (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={chartData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
-                            <defs>
-                              <linearGradient id="violGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="rgb(248,113,113)" stopOpacity={0.3} />
-                                <stop offset="100%" stopColor="rgb(248,113,113)" stopOpacity={0} />
-                              </linearGradient>
-                              <linearGradient id="critGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="rgb(251,191,36)" stopOpacity={0.35} />
-                                <stop offset="100%" stopColor="rgb(251,191,36)" stopOpacity={0} />
-                              </linearGradient>
-                            </defs>
-                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} />
-                            <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} />
-                            <Tooltip
-                              contentStyle={{ backgroundColor: "rgba(13,13,20,0.98)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px", fontSize: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
-                              labelStyle={{ color: "rgba(255,255,255,0.6)" }}
-                            />
-                            <Area type="monotone" dataKey="violations" stroke="rgb(248,113,113)" strokeWidth={2.5} fill="url(#violGrad)" name="Violations" />
-                            <Area type="monotone" dataKey="critical" stroke="rgb(251,191,36)" strokeWidth={2.5} fill="url(#critGrad)" name="Critical" />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      )}
+                    {/* Customizable Chart */}
+                    <div className="h-52">
+                      <ChartContainer
+                        chartType={currentChartType}
+                        mode="github"
+                        violations={[]}
+                        scans={[]}
+                        trackedRepos={trackedRepos}
+                        timeRange={trendTimeRange}
+                        height={200}
+                      />
                     </div>
 
                     {/* Summary stats below chart */}
-                    <div className="mt-4 pt-4 border-t border-white/[0.04] grid grid-cols-4 gap-4">
+                    <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-4 gap-4">
                       <div className="text-center">
-                        <div className="text-lg font-semibold text-white/90">{chartData.reduce((sum, d) => sum + d.violations, 0)}</div>
-                        <div className="text-[10px] text-white/40 uppercase tracking-wider">Total Found</div>
+                        <div className="text-base font-semibold text-white/90">{totalViolations}</div>
+                        <div className="text-[10px] text-white/40 uppercase tracking-wider">Total</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-lg font-semibold text-amber-300">{chartData.reduce((sum, d) => sum + d.critical, 0)}</div>
+                        <div className="text-base font-semibold text-red-400">{criticalCount}</div>
                         <div className="text-[10px] text-white/40 uppercase tracking-wider">Critical</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-lg font-semibold text-white/90">{healthyCount}/{trackedRepos.length}</div>
-                        <div className="text-[10px] text-white/40 uppercase tracking-wider">Clean Repos</div>
+                        <div className="text-base font-semibold text-emerald-400">{healthyCount}</div>
+                        <div className="text-[10px] text-white/40 uppercase tracking-wider">Clean</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-lg font-semibold text-emerald-400">{trackedRepos.filter(r => !!r.last_scanned_at).length}</div>
+                        <div className="text-base font-semibold text-white/80">{trackedRepos.filter(r => !!r.last_scanned_at).length}</div>
                         <div className="text-[10px] text-white/40 uppercase tracking-wider">Scanned</div>
                       </div>
                     </div>
@@ -791,54 +795,66 @@ export function Dashboard() {
                   <div className="h-full min-h-[300px] p-6">
                     {hasLocalScanData ? (
                       <div className="h-full flex flex-col">
-                        {/* Header */}
-                        <div className="flex items-center justify-between mb-5">
+                        {/* Header with Chart Selector */}
+                        <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                              <i className="las la-folder-open text-xl text-blue-400"></i>
+                            <div className="w-9 h-9 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                              <i className="las la-folder-open text-lg text-blue-400"></i>
                             </div>
                             <div>
-                              <h3 className="text-base font-semibold">{selectedProject?.name ?? "Local Project"}</h3>
+                              <h3 className="text-sm font-semibold">{selectedProject?.name ?? "Local Project"}</h3>
                               <p className="text-xs text-white/40">Last scanned {formatRelativeTime(localScanStats.completedAt)}</p>
                             </div>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex items-center gap-2">
+                            <ChartSelector
+                              chartType={currentChartType}
+                              onChartTypeChange={setChartType}
+                              mode="local"
+                              timeRange={trendTimeRange}
+                              onTimeRangeChange={setTrendTimeRange}
+                              showTimeRange={showTimeRange}
+                            />
                             <button
-                              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-white/60 hover:text-white transition-all border border-white/[0.04]"
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-white/60 hover:text-white transition-all border border-white/[0.04]"
                               onClick={() => router.push("/scan")}
                             >
                               <i className="las la-search"></i>
-                              <span>View Details</span>
+                              <span>Details</span>
                             </button>
                           </div>
                         </div>
 
-                        {/* Violation breakdown by severity */}
-                        <div className="flex-1 flex items-center justify-center">
-                          <div className="grid grid-cols-4 gap-6 w-full max-w-lg">
-                            <div className="text-center p-4 rounded-xl bg-white/[0.03] border border-white/[0.04]">
-                              <div className="text-2xl font-bold text-red-400">{localCriticalCount}</div>
-                              <div className="text-[10px] text-white/40 uppercase tracking-wider mt-1">Critical</div>
-                            </div>
-                            <div className="text-center p-4 rounded-xl bg-white/[0.03] border border-white/[0.04]">
-                              <div className="text-2xl font-bold text-orange-400">{localHighCount}</div>
-                              <div className="text-[10px] text-white/40 uppercase tracking-wider mt-1">High</div>
-                            </div>
-                            <div className="text-center p-4 rounded-xl bg-white/[0.03] border border-white/[0.04]">
-                              <div className="text-2xl font-bold text-yellow-400">{localViolations.filter(v => v.severity === "medium").length}</div>
-                              <div className="text-[10px] text-white/40 uppercase tracking-wider mt-1">Medium</div>
-                            </div>
-                            <div className="text-center p-4 rounded-xl bg-white/[0.03] border border-white/[0.04]">
-                              <div className="text-2xl font-bold text-white/60">{localViolations.filter(v => v.severity === "low").length}</div>
-                              <div className="text-[10px] text-white/40 uppercase tracking-wider mt-1">Low</div>
-                            </div>
-                          </div>
+                        {/* Chart Visualization */}
+                        <div className="flex-1 min-h-[180px]">
+                          <ChartContainer
+                            chartType={currentChartType}
+                            mode="local"
+                            violations={localViolations}
+                            scans={localScans}
+                            timeRange={trendTimeRange}
+                            height={180}
+                          />
                         </div>
 
-                        {/* Bottom summary */}
-                        <div className="mt-4 pt-4 border-t border-white/[0.04] flex items-center justify-between text-xs text-white/40">
-                          <span>{localScanStats.filesScanned} files scanned</span>
-                          <span>{localTotalViolations} total violation{localTotalViolations !== 1 ? "s" : ""}</span>
+                        {/* Bottom summary stats */}
+                        <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-4 gap-4">
+                          <div className="text-center">
+                            <div className="text-base font-semibold text-red-400">{localCriticalCount}</div>
+                            <div className="text-[10px] text-white/40 uppercase tracking-wider">Critical</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-base font-semibold text-amber-400">{localHighCount}</div>
+                            <div className="text-[10px] text-white/40 uppercase tracking-wider">High</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-base font-semibold text-white/80">{localScanStats.filesScanned}</div>
+                            <div className="text-[10px] text-white/40 uppercase tracking-wider">Files</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-base font-semibold text-white/80">{localTotalViolations}</div>
+                            <div className="text-[10px] text-white/40 uppercase tracking-wider">Total</div>
+                          </div>
                         </div>
                       </div>
                     ) : (
@@ -972,15 +988,32 @@ export function Dashboard() {
                   <h2 className="text-sm font-medium">Tracked Repositories</h2>
                   {connectionStatus?.connected && (
                     <div className="flex items-center gap-2 text-[11px] text-white/50">
-                      <span className="px-2 py-1 rounded-md bg-white/[0.05] text-emerald-300 flex items-center gap-1">
-                        <i className="las la-broadcast-tower text-sm"></i>
-                        Auto-monitoring every {Math.round(AUTO_POLL_INTERVAL_MS / 1000)}s
+                      <span className={`px-2 py-1 rounded-md flex items-center gap-1 ${
+                        isMonitoringPaused
+                          ? "bg-amber-500/10 text-amber-300"
+                          : "bg-white/[0.05] text-emerald-300"
+                      }`}>
+                        <i className={`las ${isMonitoringPaused ? "la-pause-circle" : "la-broadcast-tower"} text-sm`}></i>
+                        {isMonitoringPaused ? "Monitoring paused" : `Auto-monitoring every ${Math.round(AUTO_POLL_INTERVAL_MS / 1000)}s`}
                       </span>
-                      <span className="text-white/40">
-                        {lastAutoCheck
-                          ? `Last check ${lastAutoCheck.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
-                          : "Checking soon"}
-                      </span>
+                      <button
+                        onClick={() => setIsMonitoringPaused(prev => !prev)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] transition-colors ${
+                          isMonitoringPaused
+                            ? "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/20"
+                            : "bg-white/[0.05] text-white/60 hover:bg-white/[0.08]"
+                        }`}
+                      >
+                        <i className={`las ${isMonitoringPaused ? "la-play" : "la-pause"} text-sm`}></i>
+                        {isMonitoringPaused ? "Resume" : "Pause"}
+                      </button>
+                      {!isMonitoringPaused && (
+                        <span className="text-white/40">
+                          {lastAutoCheck
+                            ? `Last check ${lastAutoCheck.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                            : "Checking soon"}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
