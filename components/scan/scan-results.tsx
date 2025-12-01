@@ -247,7 +247,8 @@ export function ScanResults() {
         const content = await read_file_content(fullPath)
         setFullFileContent(content)
       } catch (error) {
-        console.error("Failed to load file:", error)
+        // File may not exist if project folder was deleted - this is recoverable
+        console.warn("File not available, showing stored snippet:", error)
         setFullFileContent(null) // Will fall back to snippet
       } finally {
         setIsLoadingFile(false)
