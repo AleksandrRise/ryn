@@ -116,7 +116,6 @@ export function ScanResults() {
   const [isGeneratingFix, setIsGeneratingFix] = useState(false)
   const [generatedFix, setGeneratedFix] = useState<Fix | null>(null)
   const [isApplyingFix, setIsApplyingFix] = useState(false)
-  const [isCodeExpanded, setIsCodeExpanded] = useState(false)
   const [fullFileContent, setFullFileContent] = useState<string | null>(null)
   const [isLoadingFile, setIsLoadingFile] = useState(false)
   const [showApplyConfirm, setShowApplyConfirm] = useState(false)
@@ -210,19 +209,18 @@ export function ScanResults() {
     }
   }, [visibleViolations, selectedViolationId])
 
-  // Load existing fix from database when violation changes
+  // Load existing fix and full file content when violation changes
   useEffect(() => {
-    setIsCodeExpanded(false)
     setFullFileContent(null)
     setIsReasoningExpanded(false)
 
+    if (!selectedViolationId) {
+      setGeneratedFix(null)
+      return
+    }
+
     // Load existing fix for this violation if one exists
     const loadExistingFix = async () => {
-      if (!selectedViolationId) {
-        setGeneratedFix(null)
-        return
-      }
-
       try {
         const detail = await get_violation(selectedViolationId)
         if (detail.fix) {
@@ -236,8 +234,29 @@ export function ScanResults() {
       }
     }
 
+    // Auto-load full file content
+    const loadFullFile = async () => {
+      if (!selectedProject) return
+
+      const violation = visibleViolations.find(v => v.id === selectedViolationId)
+      if (!violation) return
+
+      setIsLoadingFile(true)
+      try {
+        const fullPath = `${selectedProject.path}/${violation.filePath}`
+        const content = await read_file_content(fullPath)
+        setFullFileContent(content)
+      } catch (error) {
+        console.error("Failed to load file:", error)
+        setFullFileContent(null) // Will fall back to snippet
+      } finally {
+        setIsLoadingFile(false)
+      }
+    }
+
     loadExistingFix()
-  }, [selectedViolationId])
+    loadFullFile()
+  }, [selectedViolationId, selectedProject, visibleViolations])
 
   const selectedViolation = selectedViolationId
     ? visibleViolations.find((v) => v.id === selectedViolationId) ?? visibleViolations[0]
@@ -316,27 +335,6 @@ export function ScanResults() {
     }
   }
 
-  const handleExpandCode = async () => {
-    if (!selectedViolation || !selectedProject) return
-
-    if (isCodeExpanded) {
-      setIsCodeExpanded(false)
-      return
-    }
-
-    setIsLoadingFile(true)
-
-    try {
-      const fullPath = `${selectedProject.path}/${selectedViolation.filePath}`
-      const content = await read_file_content(fullPath)
-      setFullFileContent(content)
-      setIsCodeExpanded(true)
-    } catch (error) {
-      handleTauriError(error, "Failed to read full file content")
-    } finally {
-      setIsLoadingFile(false)
-    }
-  }
 
   if (!selectedProject) {
     return (
@@ -563,58 +561,55 @@ export function ScanResults() {
             )}
           </div>
 
-          {/* Scrollable content */}
-          <div className="flex-1 overflow-y-auto p-4">
+          {/* Scrollable content - flex layout for code to fill space */}
+          <div className="flex-1 flex flex-col min-h-0 p-4">
             {selectedViolation ? (
-              <div className="space-y-4">
-                <p className="text-[15px] text-white/90 leading-relaxed">{selectedViolation.description}</p>
+              <>
+                {/* Description - fixed height */}
+                <p className="shrink-0 text-[15px] text-white/90 leading-relaxed mb-4">{selectedViolation.description}</p>
 
-                {/* Code Snippet - constrained height */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-white/70">Code Snippet</span>
-                    <button
-                      onClick={handleExpandCode}
-                      disabled={isLoadingFile}
-                      className="text-[11px] text-white/50 hover:text-white transition-colors disabled:opacity-50"
-                    >
-                      {isLoadingFile ? "Loading..." : isCodeExpanded ? "Collapse" : "Expand"}
-                    </button>
-                  </div>
-
-                  {isCodeExpanded && fullFileContent ? (
-                    <CodeSnippet
-                      code={fullFileContent}
-                      filePath={selectedViolation.filePath}
-                      startLineNumber={1}
-                      highlightLines={[selectedViolation.lineNumber]}
-                      maxHeight="200px"
-                      className="shadow-inner"
-                    />
-                  ) : selectedViolation.codeSnippet ? (() => {
-                    const codeLines = selectedViolation.codeSnippet.split(/\r?\n/)
-                    const anchor = selectedViolation.lineNumber || 0
-                    const startLine = Math.max(1, anchor - Math.floor(codeLines.length / 2))
-                    return (
+                {/* Code - fills available space */}
+                <div className="flex-1 min-h-0 flex flex-col mb-4">
+                  <span className="shrink-0 text-xs font-semibold text-white/70 mb-2">Code</span>
+                  <div className="flex-1 min-h-0">
+                    {isLoadingFile ? (
+                      <div className="h-full rounded-lg border border-white/10 bg-[#0a0a0a] flex items-center justify-center">
+                        <span className="text-white/50 text-sm">Loading file...</span>
+                      </div>
+                    ) : fullFileContent ? (
                       <CodeSnippet
-                        code={selectedViolation.codeSnippet}
+                        code={fullFileContent}
                         filePath={selectedViolation.filePath}
-                        startLineNumber={startLine}
-                        highlightLines={[anchor]}
-                        maxHeight="200px"
-                        className="shadow-inner"
+                        startLineNumber={1}
+                        highlightLines={[selectedViolation.lineNumber]}
+                        maxHeight="100%"
+                        className="h-full shadow-inner"
                       />
-                    )
-                  })() : (
-                    <div className="rounded-lg border border-white/10 bg-[#0a0a0a] p-4 text-white/50 text-sm">
-                      No code snippet available.
-                    </div>
-                  )}
+                    ) : selectedViolation.codeSnippet ? (() => {
+                      const codeLines = selectedViolation.codeSnippet.split(/\r?\n/)
+                      const anchor = selectedViolation.lineNumber || 0
+                      const startLine = Math.max(1, anchor - Math.floor(codeLines.length / 2))
+                      return (
+                        <CodeSnippet
+                          code={selectedViolation.codeSnippet}
+                          filePath={selectedViolation.filePath}
+                          startLineNumber={startLine}
+                          highlightLines={[anchor]}
+                          maxHeight="100%"
+                          className="h-full shadow-inner"
+                        />
+                      )
+                    })() : (
+                      <div className="h-full rounded-lg border border-white/10 bg-[#0a0a0a] flex items-center justify-center">
+                        <span className="text-white/50 text-sm">No code available</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Suggested Fix - constrained */}
+                {/* Suggested Fix - fixed height */}
                 {generatedFix && (
-                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                  <div className="shrink-0 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 mb-4">
                     <div className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/90 mb-2">Suggested Fix</div>
                     <CodeBlock
                       code={generatedFix.fixed_code}
@@ -626,14 +621,14 @@ export function ScanResults() {
                   </div>
                 )}
 
-                {/* Reasoning with Show more/less */}
+                {/* Reasoning - fixed height */}
                 {(selectedViolation.llmReasoning || selectedViolation.regexReasoning) && (() => {
                   const reasoning = selectedViolation.llmReasoning || selectedViolation.regexReasoning || ""
                   const isLong = reasoning.length > 300
                   const displayText = isLong && !isReasoningExpanded ? reasoning.slice(0, 300) + "..." : reasoning
 
                   return (
-                    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="shrink-0 rounded-lg border border-white/10 bg-white/[0.03] p-3 mb-4">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[11px] font-semibold uppercase tracking-wider text-white/50">Why this is flagged</span>
                         {isLong && (
@@ -654,8 +649,8 @@ export function ScanResults() {
                   )
                 })()}
 
-                {/* Action buttons */}
-                <div className="flex items-center gap-2 pt-2">
+                {/* Action buttons - fixed height */}
+                <div className="shrink-0 flex items-center gap-2">
                   <Button
                     onClick={handleSuggestFix}
                     disabled={isGeneratingFix || generatedFix !== null}
@@ -687,7 +682,7 @@ export function ScanResults() {
                   )}
                 </div>
               </div>
-            </div>
+              </>
             ) : (
               <div className="flex items-center justify-center h-full text-sm text-white/40">
                 Select a violation to view details

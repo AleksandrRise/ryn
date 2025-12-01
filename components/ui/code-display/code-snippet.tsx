@@ -60,14 +60,18 @@ export const CodeSnippet = memo(function CodeSnippet({
     return "text"
   }, [language, filePath])
 
+  // When maxHeight is "100%", we want the element to fill its parent
+  // This requires height instead of maxHeight for proper flex behavior
+  const isFlexible = maxHeight === "100%"
+
   const mergedStyle = useMemo(
     () => ({
       ...SNIPPET_CODE_STYLE,
-      maxHeight,
+      ...(isFlexible ? { height: "100%", minHeight: 0 } : { maxHeight }),
       overflow: "auto",
       ...customStyle,
     }),
-    [customStyle, maxHeight]
+    [customStyle, maxHeight, isFlexible]
   )
 
   // Filter out invalid line numbers (negative, zero, etc.)
@@ -105,8 +109,13 @@ export const CodeSnippet = memo(function CodeSnippet({
     )
   }
 
+  // Add flex classes when using flexible height
+  const containerClasses = isFlexible
+    ? `border border-white/10 overflow-hidden rounded-lg flex flex-col ${className}`
+    : `border border-white/10 overflow-hidden rounded-lg ${className}`
+
   return (
-    <div className={`border border-white/10 overflow-hidden rounded-lg ${className}`}>
+    <div className={containerClasses}>
       <SyntaxHighlighter
         language={detectedLanguage}
         style={vscDarkPlus}
