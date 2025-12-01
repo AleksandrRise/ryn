@@ -12,20 +12,32 @@
 //!
 //! Run with `--lsp` to start as a Language Server Protocol server:
 //! ```
-//! ryn --lsp
+//! ryn --lsp                           # stdio mode (IDE spawns this)
+//! ryn --lsp --tcp --port 9257         # TCP mode (GUI spawns this)
 //! ```
-//! This exposes SOC 2 violations as IDE diagnostics via stdin/stdout.
+//! This exposes SOC 2 violations as IDE diagnostics.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 // Import command modules
-use ryn::commands::{analytics, audit, fix, github, logger, project, scan, settings, violation};
+use ryn::commands::{analytics, audit, fix, github, logger, lsp, project, scan, settings, violation};
 
 fn main() {
     // Check for --lsp flag
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|arg| arg == "--lsp") {
-        run_lsp_server();
+        // Check for --tcp flag (enables TCP mode instead of stdio)
+        let use_tcp = args.iter().any(|arg| arg == "--tcp");
+
+        // Parse --port value (defaults to 9257)
+        let port: u16 = args
+            .iter()
+            .position(|arg| arg == "--port")
+            .and_then(|i| args.get(i + 1))
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(9257);
+
+        run_lsp_server(use_tcp, port);
         return;
     }
 
@@ -56,7 +68,8 @@ fn main() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .manage(scan::ScanResponseChannels::default());
+        .manage(scan::ScanResponseChannels::default())
+        .manage(lsp::LspProcessState::default());
 
     // Run the Tauri application
     // If this fails, log detailed error and exit gracefully
@@ -116,6 +129,10 @@ fn main() {
             project::disable_project_tracking,
             project::get_project_tracking_status,
             project::update_last_file_change,
+            // LSP Commands (3)
+            lsp::start_lsp_server,
+            lsp::stop_lsp_server,
+            lsp::get_lsp_status,
         ])
         .run(tauri::generate_context!())
     {
@@ -132,8 +149,12 @@ fn main() {
 /// Run the LSP server for IDE integration
 ///
 /// This function starts the Ryn LSP server which exposes SOC 2 violations
-/// as IDE diagnostics. Communication happens over stdin/stdout.
-fn run_lsp_server() {
+/// as IDE diagnostics.
+///
+/// # Arguments
+/// * `use_tcp` - If true, listen on TCP port instead of stdin/stdout
+/// * `port` - TCP port to listen on (only used if use_tcp is true)
+fn run_lsp_server(use_tcp: bool, port: u16) {
     // Get the database path
     let db_path = match ryn::db::get_db_path() {
         Ok(path) => path,
@@ -146,8 +167,16 @@ fn run_lsp_server() {
     // Create a tokio runtime for the async LSP server
     let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
 
-    // Run the LSP server
-    if let Err(e) = runtime.block_on(ryn::lsp::start_lsp_server(db_path)) {
+    // Run the LSP server in the appropriate mode
+    let result = if use_tcp {
+        eprintln!("[ryn-lsp] Starting in TCP mode on port {}", port);
+        runtime.block_on(ryn::lsp::start_lsp_server_tcp(db_path, port))
+    } else {
+        eprintln!("[ryn-lsp] Starting in stdio mode");
+        runtime.block_on(ryn::lsp::start_lsp_server(db_path))
+    };
+
+    if let Err(e) = result {
         eprintln!("[ryn-lsp] Error: {}", e);
         std::process::exit(1);
     }

@@ -45,12 +45,18 @@
 //! - get_tracked_repos: Get tracked repos with details
 //! - check_repo_for_changes: Poll repo for new commits
 //! - scan_github_repo: Snapshot and scan a tracked repo
+//!
+//! LSP Commands (3):
+//! - start_lsp_server: Start LSP server as child process
+//! - stop_lsp_server: Stop LSP server
+//! - get_lsp_status: Get LSP server status
 
 pub mod analytics;
 pub mod audit;
 pub mod fix;
 pub mod github;
 pub mod logger;
+pub mod lsp;
 pub mod project;
 pub mod scan;
 pub mod settings;
@@ -75,3 +81,4 @@ pub use scan::{
 };
 pub use settings::{clear_database, export_data, get_settings, update_settings};
 pub use violation::{dismiss_violation, get_violation, get_violations};
+pub use lsp::{get_lsp_status, start_lsp_server, stop_lsp_server, LspProcessState};

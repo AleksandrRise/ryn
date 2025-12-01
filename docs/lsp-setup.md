@@ -4,9 +4,25 @@ Ryn includes an embedded Language Server Protocol (LSP) server that displays SOC
 
 ## Quick Start
 
-1. Build or install Ryn
+**Option A: Start from GUI (Recommended)**
+1. Open Ryn → Settings → IDE Integration
+2. Click "Start LSP Server"
+3. Configure your IDE to connect via TCP (see below)
+
+**Option B: Start from Terminal**
+1. Run `ryn --lsp` (stdio mode, IDE spawns the process)
 2. Configure your IDE to use `ryn --lsp` as the language server
-3. Open a project that has been scanned by Ryn
+
+## Server Modes
+
+Ryn LSP supports two communication modes:
+
+| Mode | Command | Use Case |
+|------|---------|----------|
+| **TCP** | `ryn --lsp --tcp --port 9257` | GUI-managed, IDE connects via network |
+| **stdio** | `ryn --lsp` | IDE spawns and manages the process |
+
+When you start the LSP from the Ryn GUI, it runs in TCP mode on port 9257. IDEs connect to `tcp://127.0.0.1:9257`.
 
 ## How It Works
 
@@ -20,6 +36,12 @@ The LSP server reads violations from Ryn's SQLite database and displays them as 
 ## IDE Configuration
 
 ### VS Code
+
+**TCP Mode (GUI-managed):**
+
+If using an LSP client that supports TCP connections, configure it to connect to `127.0.0.1:9257`.
+
+**stdio Mode:**
 
 Add to your `settings.json`:
 
@@ -44,6 +66,27 @@ Or if using a generic LSP client extension:
 ```
 
 ### Neovim (with nvim-lspconfig)
+
+**TCP Mode (GUI-managed):**
+
+```lua
+local lspconfig = require('lspconfig')
+local configs = require('lspconfig.configs')
+
+if not configs.ryn then
+  configs.ryn = {
+    default_config = {
+      cmd = vim.lsp.rpc.connect('127.0.0.1', 9257),
+      filetypes = { 'python', 'javascript', 'typescript' },
+      root_dir = lspconfig.util.root_pattern('.git', 'package.json', 'pyproject.toml'),
+    },
+  }
+end
+
+lspconfig.ryn.setup({})
+```
+
+**stdio Mode:**
 
 ```lua
 local lspconfig = require('lspconfig')
@@ -130,6 +173,7 @@ If you see database lock errors, make sure only one instance of the Ryn GUI is r
 
 ## Technical Details
 
-- **Protocol**: Language Server Protocol over stdin/stdout
+- **Protocol**: Language Server Protocol over stdin/stdout or TCP
+- **TCP Port**: 9257 (default, configurable via `--port`)
 - **Database**: Read-only access to `~/.local/share/ryn/ryn.db`
 - **Supported features**: `textDocument/publishDiagnostics`, `textDocument/hover`

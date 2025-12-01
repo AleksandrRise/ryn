@@ -119,6 +119,14 @@ export interface ScanCost {
   created_at: string
 }
 
+export interface LspStatus {
+  running: boolean
+  pid?: number
+  uptime_seconds?: number
+  started_at?: string
+  port?: number
+}
+
 // ============================================================================
 // PROJECT COMMANDS
 // ============================================================================
@@ -615,4 +623,33 @@ export async function get_project_tracking_status(
  */
 export async function update_last_file_change(projectId: number): Promise<void> {
   await invoke<void>("update_last_file_change", { projectId })
+}
+
+// ============================================================================
+// LSP COMMANDS
+// ============================================================================
+
+/**
+ * Start the LSP server as a background child process
+ * The server listens on TCP port 9257 for IDE connections.
+ * IDEs connect via tcp://127.0.0.1:9257
+ */
+export async function start_lsp_server(): Promise<LspStatus> {
+  return await invoke<LspStatus>("start_lsp_server")
+}
+
+/**
+ * Stop the running LSP server
+ * Kills the child process if it's running
+ */
+export async function stop_lsp_server(): Promise<void> {
+  await invoke<void>("stop_lsp_server")
+}
+
+/**
+ * Get current LSP server status
+ * Returns running state, PID, uptime, and port
+ */
+export async function get_lsp_status(): Promise<LspStatus> {
+  return await invoke<LspStatus>("get_lsp_status")
 }

@@ -16,6 +16,7 @@ import {
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
 import { save } from "@tauri-apps/plugin-dialog"
 import { writeTextFile } from "@tauri-apps/plugin-fs"
+import { LspSettings } from "./lsp-settings"
 
 // Settings state type
 interface SettingsState {
@@ -319,6 +320,10 @@ export function Settings() {
             )}
           </div>
         </div>
+
+        {/* IDE Integration (LSP Server) */}
+        <LspSettings />
+
         {/* Data & Maintenance */}
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 xl:col-span-2">
           <div className="flex items-center gap-3 mb-4">
