@@ -395,6 +395,17 @@ fn migrate_to_v8(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migrate from v8 to v9 (Remove desktop notifications setting)
+/// Removes the obsolete desktop_notifications setting from the database.
+/// This feature has been replaced by LSP integration for IDE-based alerts.
+fn migrate_to_v9(conn: &Connection) -> Result<()> {
+    // Remove desktop_notifications setting if it exists
+    conn.execute("DELETE FROM settings WHERE key = 'desktop_notifications'", [])
+        .context("Failed to remove desktop_notifications setting")?;
+
+    Ok(())
+}
+
 /// Backfill scan_mode for historical scans that used LLM analysis
 ///
 /// Rules (deterministic, no inference beyond stored data):
@@ -459,6 +470,7 @@ pub fn seed_settings(conn: &Connection) -> Result<()> {
 /// - v6: Smart polling (last_commit_sha, last_checked_at in tracked_repos)
 /// - v7: Incremental scanning (file_hashes table for change detection)
 /// - v8: Local project tracking (is_tracking_enabled, source_type in projects)
+/// - v9: Remove desktop notifications setting (replaced by LSP integration)
 pub fn run_migrations(conn: &Connection) -> Result<()> {
     let current_version = get_schema_version(conn)?;
 
@@ -501,6 +513,11 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
     if current_version < 8 {
         migrate_to_v8(conn)?;
         set_schema_version(conn, 8)?;
+    }
+
+    if current_version < 9 {
+        migrate_to_v9(conn)?;
+        set_schema_version(conn, 9)?;
     }
 
     // Seed default settings (idempotent - won't overwrite existing values)

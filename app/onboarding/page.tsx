@@ -13,7 +13,6 @@ import {
   PiLightning,
   PiBrain,
   PiMagnifyingGlass,
-  PiBell,
   PiCheckCircle,
   PiCaretRight,
   PiShield,
@@ -22,7 +21,6 @@ import { open } from "@tauri-apps/plugin-dialog"
 import { create_project, detect_framework, get_settings, complete_onboarding } from "@/lib/tauri/commands"
 import { useProjectStore } from "@/lib/stores/project-store"
 import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handler"
-import { isPermissionGranted, requestPermission, sendNotification } from "@tauri-apps/plugin-notification"
 import { useScanRunner } from "@/components/scan/hooks/use-scan-runner"
 import { ScanProgressCard } from "@/components/scan/scan-progress-card"
 import { FrameworkBadge } from "@/components/ui/framework-badge"
@@ -40,7 +38,6 @@ interface Step {
 const steps: Step[] = [
   { id: "project", title: "Choose your codebase", description: "Pick the folder you want Ryn to scan." },
   { id: "scan", title: "Set how deep to scan", description: "Select scan mode and guardrails for cost." },
-  { id: "notify", title: "Stay informed", description: "Enable desktop alerts for scans and cost limits." },
   { id: "finish", title: "Launch", description: "Review choices and start your first scan." },
 ]
 
@@ -62,8 +59,6 @@ function OnboardingContent() {
   const [costLimit, setCostLimit] = useState<string>("5.00")
   const [error, setError] = useState<string>("")
   const [checkingStatus, setCheckingStatus] = useState(true)
-  const [notificationStatus, setNotificationStatus] = useState<"unknown" | "granted" | "denied">("unknown")
-  const [isRequestingPermission, setIsRequestingPermission] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showStartPrompt, setShowStartPrompt] = useState(false)
   const [showIntro, setShowIntro] = useState(true)
@@ -98,19 +93,6 @@ function OnboardingContent() {
   useEffect(() => {
     const t = setTimeout(() => setShowIntro(false), 1200)
     return () => clearTimeout(t)
-  }, [])
-
-  useEffect(() => {
-    const checkPermission = async () => {
-      if (!isTauri) return
-      try {
-        const granted = await isPermissionGranted()
-        setNotificationStatus(granted ? "granted" : "unknown")
-      } catch (err) {
-        console.warn("[onboarding] notification permission check failed", err)
-      }
-    }
-    void checkPermission()
   }, [])
 
   const currentStep = steps[currentStepIndex]
@@ -153,32 +135,6 @@ function OnboardingContent() {
     }
     setError("")
     return parsed
-  }
-
-  const requestNotifications = async () => {
-    if (!isTauri) {
-      setNotificationStatus("unknown")
-      return
-    }
-    setIsRequestingPermission(true)
-    try {
-      let granted = await isPermissionGranted()
-      if (!granted) {
-        const result = await requestPermission()
-        granted = result === "granted"
-      }
-      if (granted) {
-        await sendNotification({ title: "Notifications enabled", body: "Ryn will alert you about scans here." })
-        setNotificationStatus("granted")
-      } else {
-        setNotificationStatus("denied")
-      }
-    } catch (err) {
-      console.error("[onboarding] notification request failed", err)
-      setNotificationStatus("denied")
-    } finally {
-      setIsRequestingPermission(false)
-    }
   }
 
   const handleNext = () => {
@@ -436,46 +392,6 @@ function OnboardingContent() {
                 </motion.div>
               )}
 
-              {currentStep.id === "notify" && (
-                <motion.div key="step-notify" variants={stepVariants} initial="initial" animate="animate" exit="exit">
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <PiBell className="w-5 h-5 text-emerald-300" />
-                  <div>
-                    <h2 className="text-xl font-semibold">Stay in the loop</h2>
-                    <p className="text-white/60 text-sm">Desktop alerts for scan progress and cost limits.</p>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-white/10 bg-black/40 p-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-semibold">Desktop notifications</div>
-                      <div className="text-xs text-white/60">We’ll ping when scans finish or approach the cost cap.</div>
-                    </div>
-                    <Button
-                      onClick={requestNotifications}
-                      variant="outline"
-                      className="gap-2"
-                      disabled={!isTauri || isRequestingPermission}
-                    >
-                      <PiBell className="w-4 h-4" />
-                      {notificationStatus === "granted" ? "Enabled" : "Enable"}
-                    </Button>
-                  </div>
-                  <div className="text-xs text-white/60">
-                    Status: {notificationStatus === "granted" ? "Granted" : notificationStatus === "denied" ? "Denied" : "Not requested"}
-                  </div>
-                  {!isTauri && (
-                    <div className="text-xs text-amber-300/80">
-                      Enable desktop notifications from the installed app to get OS-level alerts.
-                    </div>
-                  )}
-                </div>
-              </div>
-                </motion.div>
-              )}
-
               {currentStep.id === "finish" && (
                 <motion.div key="step-finish" variants={stepVariants} initial="initial" animate="animate" exit="exit">
               <div className="space-y-4">
@@ -499,16 +415,6 @@ function OnboardingContent() {
                   <SummaryRow
                     label="Cost limit"
                     value={selectedMode === "regex_only" ? "No AI cost" : `$${costLimit || "5.00"}`}
-                  />
-                  <SummaryRow
-                    label="Notifications"
-                    value={
-                      isTauri
-                        ? notificationStatus === "granted"
-                          ? "Enabled"
-                          : "Not enabled"
-                        : "Available in desktop app"
-                    }
                   />
                 </div>
 

@@ -40,10 +40,8 @@ fn main() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_shell::init())
-        .manage(scan::ScanResponseChannels::default())
-        .manage(scan::FileWatcherState::default());
+        .manage(scan::ScanResponseChannels::default());
 
     // Run the Tauri application
     // If this fails, log detailed error and exit gracefully
@@ -53,11 +51,9 @@ fn main() {
             project::select_project_folder,
             project::create_project,
             project::get_projects,
-            // Scan Commands (8) - added watch_project, stop_watching, and cancel_scan
+            // Scan Commands (6)
             scan::detect_framework,
             scan::scan_project,
-            scan::watch_project,
-            scan::stop_watching,
             scan::get_scan_progress,
             scan::get_scans,
             scan::respond_to_cost_limit,

@@ -39,7 +39,6 @@
             "dialog:allow-open",
             "dialog:allow-save",
             "dialog:default",
-            "notification:default",
             "shell:allow-open",
             "shell:default",
             "fs:allow-read-text-file",
