@@ -7,6 +7,14 @@
 //! - All commands integrated with database, scanning, rules, and Grok API
 //! - 280+ production tests across all command modules
 //! - Real integration with all previous phases
+//!
+//! ## LSP Server Mode
+//!
+//! Run with `--lsp` to start as a Language Server Protocol server:
+//! ```
+//! ryn --lsp
+//! ```
+//! This exposes SOC 2 violations as IDE diagnostics via stdin/stdout.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -14,6 +22,13 @@
 use ryn::commands::{analytics, audit, fix, github, logger, project, scan, settings, violation};
 
 fn main() {
+    // Check for --lsp flag
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|arg| arg == "--lsp") {
+        run_lsp_server();
+        return;
+    }
+
     // Load environment variables from .env file
     // This allows API keys and config to be read from .env during development
     if let Err(e) = ryn::utils::env::load_env() {
@@ -110,6 +125,30 @@ fn main() {
         println!("[ryn]   - Port conflicts (if another instance is running)");
         println!("[ryn]   - Missing system dependencies");
         println!("[ryn]   - Incompatible OS version");
+        std::process::exit(1);
+    }
+}
+
+/// Run the LSP server for IDE integration
+///
+/// This function starts the Ryn LSP server which exposes SOC 2 violations
+/// as IDE diagnostics. Communication happens over stdin/stdout.
+fn run_lsp_server() {
+    // Get the database path
+    let db_path = match ryn::db::get_db_path() {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("[ryn-lsp] Failed to get database path: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Create a tokio runtime for the async LSP server
+    let runtime = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+
+    // Run the LSP server
+    if let Err(e) = runtime.block_on(ryn::lsp::start_lsp_server(db_path)) {
+        eprintln!("[ryn-lsp] Error: {}", e);
         std::process::exit(1);
     }
 }

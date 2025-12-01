@@ -5,6 +5,7 @@ pub mod commands;
 pub mod db;
 pub mod fix_generator;
 pub mod github;
+pub mod lsp;
 pub mod models;
 pub mod rate_limiter;
 pub mod rules;

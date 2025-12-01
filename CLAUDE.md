@@ -21,6 +21,8 @@ cd src-tauri && cargo test <name>   # Single test
 pnpm test                           # Frontend (Vitest)
 pnpm lint                           # ESLint
 cd src-tauri && cargo clippy -- -D warnings
+
+ryn --lsp                           # Start LSP server for IDE integration
 ```
 
 **Requires**: `XAI_API_KEY` in `.env` for AI features. Rust changes need tauri dev restart.
@@ -71,7 +73,8 @@ src-tauri/src/
 ├── rules/          # 4 SOC 2 rule engines
 ├── scanner/        # Framework detection, file selection
 ├── fix_generator/  # Grok API client
-├── db/             # SQLite, migrations v0→v3
+├── db/             # SQLite, migrations v0→v9
+├── lsp/            # LSP server for IDE integration
 └── security/       # Path validation
 
 lib/
@@ -83,6 +86,19 @@ lib/
 
 components/         # Feature-first: dashboard/, scan/, violation/, settings/, ui/
 ```
+
+## LSP Server
+
+Ryn includes an embedded LSP server (`ryn --lsp`) for IDE integration. See [docs/lsp-setup.md](docs/lsp-setup.md) for configuration.
+
+**LSP Module** (src-tauri/src/lsp/):
+- `backend.rs` - Entry point, stdin/stdout server setup
+- `server.rs` - LanguageServer trait implementation
+- `database.rs` - Read-only violation queries
+- `diagnostics.rs` - Violation → LSP Diagnostic conversion
+- `document_tracker.rs` - Tracks open files
+
+**Supported LSP features**: `textDocument/publishDiagnostics`, `textDocument/hover`
 
 ## Adding Features
 
