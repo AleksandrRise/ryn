@@ -3,9 +3,8 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { PiFloppyDisk, PiDownloadSimple, PiChartBar, PiSparkle, PiEye, PiCompass } from "react-icons/pi"
+import { PiFloppyDisk, PiDownloadSimple, PiChartBar, PiSparkle, PiCompass } from "react-icons/pi"
 import { useProjectStore } from "@/lib/stores/project-store"
-import { useFileWatcher } from "@/lib/hooks/useFileWatcher"
 import {
   get_settings,
   update_settings,
@@ -20,21 +19,18 @@ import { writeTextFile } from "@tauri-apps/plugin-fs"
 
 // Settings state type
 interface SettingsState {
-  desktopNotifications: boolean
   llmScanMode: string
   costLimitPerScan: string
 }
 
 // Default state values
 const defaultState: SettingsState = {
-  desktopNotifications: true,
   llmScanMode: "smart",
   costLimitPerScan: "5.00",
 }
 
 // Map frontend state keys to backend storage keys
 const settingsKeyMap: Record<keyof SettingsState, string> = {
-  desktopNotifications: "desktop_notifications",
   llmScanMode: "llm_scan_mode",
   costLimitPerScan: "cost_limit_per_scan",
 }
@@ -51,9 +47,7 @@ function settingsArrayToState(settings: SettingsType[]): SettingsState {
 
     const value = setting.value
     const parsedValue = value === "true" || value === "false" ? (value === "true") : value
-    if (stateKey === "desktopNotifications") {
-      state.desktopNotifications = Boolean(parsedValue)
-    } else if (stateKey === "llmScanMode") {
+    if (stateKey === "llmScanMode") {
       state.llmScanMode = parsedValue as SettingsState["llmScanMode"]
     } else if (stateKey === "costLimitPerScan") {
       state.costLimitPerScan = String(parsedValue)
@@ -66,10 +60,6 @@ function settingsArrayToState(settings: SettingsType[]): SettingsState {
 export function Settings() {
   const { selectedProject } = useProjectStore()
   const [state, setState] = useState<SettingsState>(defaultState)
-  const { isWatching, startWatching, stopWatching, isLoading: isWatcherLoading } = useFileWatcher(
-    selectedProject?.id,
-    { autoStart: false, showNotifications: state.desktopNotifications }
-  )
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [apiKeyAvailable, setApiKeyAvailable] = useState(true)
@@ -329,66 +319,6 @@ export function Settings() {
             )}
           </div>
         </div>
-        {/* Monitoring & Notifications */}
-        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-white/5 rounded-lg">
-              <PiEye className="w-5 h-5 text-white/60" />
-            </div>
-            <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Monitoring</h2>
-          </div>
-
-          <div className="space-y-6">
-            <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
-              <div>
-                <p className="text-[14px] mb-1">Desktop notifications</p>
-                <p className="text-[12px] text-[#aaaaaa]">Use OS-level alerts for file changes and scans</p>
-              </div>
-              <button
-                onClick={() => updateSetting("desktopNotifications", !state.desktopNotifications)}
-                className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 ${
-                  state.desktopNotifications
-                    ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
-                    : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
-                }`}
-              >
-                {state.desktopNotifications ? "ON" : "OFF"}
-              </button>
-            </div>
-
-            {selectedProject ? (
-              <div className="flex items-center justify-between py-4 border-b border-[#1a1a1a]">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <PiEye className="w-4 h-4 text-white/60" />
-                    <p className="text-[14px] mb-1">Real-time file watching</p>
-                  </div>
-                  <p className="text-[12px] text-[#aaaaaa]">
-                    {isWatching
-                      ? `Monitoring ${selectedProject.name} for file changes`
-                      : "Watch project files for real-time changes"}
-                  </p>
-                </div>
-                <button
-                  onClick={isWatching ? stopWatching : startWatching}
-                  disabled={isWatcherLoading}
-                  className={`px-4 py-2 text-[10px] font-bold tracking-widest transition-all duration-200 border min-w-[60px] hover:scale-105 active:scale-95 disabled:opacity-50 ${
-                    isWatching
-                      ? "bg-[#b3b3b3] text-black border-[#b3b3b3] shadow-md"
-                      : "bg-[#0a0a0a] text-[#333] border-[#1a1a1a] hover:border-[#333] hover:bg-[#111]"
-                  }`}
-                >
-                  {isWatcherLoading ? "..." : isWatching ? "ON" : "OFF"}
-                </button>
-              </div>
-            ) : (
-              <div className="py-4 border-b border-[#1a1a1a] text-[12px] text-[#aaaaaa]">
-                Select a project to enable file watching and notifications.
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Data & Maintenance */}
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 xl:col-span-2">
           <div className="flex items-center gap-3 mb-4">
