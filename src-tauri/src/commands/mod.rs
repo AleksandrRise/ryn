@@ -71,7 +71,7 @@ pub use project::{
     select_project_folder,
 };
 pub use scan::{
-    detect_framework, get_scan_progress, get_scans, scan_project, stop_watching, watch_project,
+    detect_framework, get_scan_progress, get_scans, scan_project,
 };
 pub use settings::{clear_database, export_data, get_settings, update_settings};
 pub use violation::{dismiss_violation, get_violation, get_violations};

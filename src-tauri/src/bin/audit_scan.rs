@@ -57,7 +57,6 @@ async fn main() -> anyhow::Result<()> {
     // Build a lightweight Tauri app so scan_project can emit events.
     let app = tauri::Builder::default()
         .manage(scan::ScanResponseChannels::default())
-        .manage(scan::FileWatcherState::default())
         .build(tauri::generate_context!())
         .expect("failed to build tauri app");
 

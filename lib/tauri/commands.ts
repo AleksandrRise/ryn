@@ -218,20 +218,6 @@ export async function get_scans(
   return await invoke<ScanResult[]>("get_scans", { projectId })
 }
 
-/**
- * Start watching a project for real-time file changes
- * Emits "file-changed" events whenever files are modified, created, or deleted
- */
-export async function watch_project(projectId: number): Promise<string> {
-  return await invoke<string>("watch_project", { projectId })
-}
-
-/**
- * Stop watching a project for file changes
- */
-export async function stop_watching(projectId: number): Promise<string> {
-  return await invoke<string>("stop_watching", { projectId })
-}
 
 // ============================================================================
 // VIOLATION COMMANDS
@@ -593,8 +579,7 @@ export async function scan_github_repo(
 
 /**
  * Enable tracking for a local project
- * Sets is_tracking_enabled = true. Should be combined with watch_project()
- * to start the file watcher for auto-scanning.
+ * Sets is_tracking_enabled = true for database tracking purposes.
  * @param projectId - The ID of the project to track
  */
 export async function enable_project_tracking(projectId: number): Promise<void> {
@@ -603,8 +588,7 @@ export async function enable_project_tracking(projectId: number): Promise<void> 
 
 /**
  * Disable tracking for a local project
- * Sets is_tracking_enabled = false. Should be combined with stop_watching()
- * to stop the file watcher.
+ * Sets is_tracking_enabled = false for database tracking purposes.
  * @param projectId - The ID of the project to stop tracking
  */
 export async function disable_project_tracking(projectId: number): Promise<void> {
