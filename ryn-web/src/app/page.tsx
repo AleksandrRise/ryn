@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { TopNav } from "@/components/layout/top-nav";
+import { useLenis } from "@/hooks/useLenis";
 import {
   Shield,
   Zap,
@@ -32,7 +34,7 @@ const ScrollReveal = ({ children, delay = 0, className = "" }: ScrollRevealProps
     initial={{ opacity: 0, y: 20 }}
     whileInView={{ opacity: 1, y: 0 }}
     viewport={{ once: true, margin: "-50px" }}
-    transition={{ duration: 0.6, delay, ease: "easeOut" }}
+    transition={{ duration: 0.5, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
     className={className}
   >
     {children}
@@ -115,8 +117,9 @@ const Button = ({
 
   return (
     <motion.button
-      whileHover={{ scale: 1.05 }}
-      whileTap={{ scale: 0.95 }}
+      whileHover={{ scale: 1.03 }}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 200, damping: 30 }}
       className={`${baseStyle} ${variants[variant]} ${className}`}
       onClick={onClick}
       disabled={disabled}
@@ -138,14 +141,14 @@ interface BootLoaderProps {
 
 const BootLoader = ({ onComplete }: BootLoaderProps) => {
   const [logs, setLogs] = useState<string[]>([]);
-  const logLines = [
+  const logLines = React.useMemo(() => [
     "INITIALIZING RYN KERNEL...",
     "LOADING SECURITY MODULES [CC6.1, CC6.7]...",
     "CONNECTING TO LOCAL DAEMON...",
     "BYPASSING AUDITOR PROTOCOLS...",
     "ESTABLISHING SECURE ENVIRONMENT...",
     "SYSTEM READY.",
-  ];
+  ], []);
 
   useEffect(() => {
     let delay = 0;
@@ -158,15 +161,13 @@ const BootLoader = ({ onComplete }: BootLoaderProps) => {
         }
       }, delay);
     });
-    // logLines is a constant array; onComplete is stable for the lifetime
-    // of this component instance.
   }, [logLines, onComplete]);
 
   return (
     <motion.div
       className="fixed inset-0 z-50 bg-black flex items-center justify-center font-mono text-xs sm:text-sm text-green-500/80 p-8"
       exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)" }}
-      transition={{ duration: 0.8 }}
+      transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
       <div className="w-full max-w-lg">
         {logs.map((log, i) => (
@@ -536,8 +537,8 @@ const FeatureCard = ({
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
-      transition={{ delay: delay, duration: 0.5, ease: "easeOut" }}
-      whileHover={{ y: -5, transition: { duration: 0.2 } }}
+      transition={{ delay: delay, duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+      whileHover={{ y: -5, transition: { type: "spring", stiffness: 300, damping: 20 } }}
       className="group relative p-6 bg-[#0E0E0E] rounded-xl border border-white/10 hover:border-white/20 transition-colors overflow-hidden"
     >
       <div className="absolute top-0 right-0 p-4 opacity-20 group-hover:opacity-30 transition-opacity">
@@ -577,8 +578,8 @@ const ArchitectureBlock = () => (
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
-      whileHover={{ y: -5 }}
-      transition={{ delay: 0 }}
+      whileHover={{ y: -5, transition: { type: "spring", stiffness: 300, damping: 20 } }}
+      transition={{ delay: 0, duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
       className="p-6 rounded-2xl bg-gradient-to-br from-[#111] to-[#050505] border border-white/10"
     >
       <div className="mb-4 text-emerald-400">
@@ -595,8 +596,8 @@ const ArchitectureBlock = () => (
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
-      whileHover={{ y: -5 }}
-      transition={{ delay: 0.1 }}
+      whileHover={{ y: -5, transition: { type: "spring", stiffness: 300, damping: 20 } }}
+      transition={{ delay: 0.1, duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
       className="p-6 rounded-2xl bg-gradient-to-br from-[#111] to-[#050505] border border-white/10 relative overflow-hidden"
     >
       <div className="absolute inset-0 bg-blue-500/5" />
@@ -614,8 +615,8 @@ const ArchitectureBlock = () => (
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
-      whileHover={{ y: -5 }}
-      transition={{ delay: 0.2 }}
+      whileHover={{ y: -5, transition: { type: "spring", stiffness: 300, damping: 20 } }}
+      transition={{ delay: 0.2, duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
       className="p-6 rounded-2xl bg-gradient-to-br from-[#111] to-[#050505] border border-white/10"
     >
       <div className="mb-4 text-purple-400">
@@ -638,38 +639,28 @@ export default function Home() {
   const scale = useTransform(scrollYProgress, [0, 0.2], [1, 0.95]);
   const opacity = useTransform(scrollYProgress, [0, 0.2], [1, 0.5]);
 
+  useLenis();
+
+  const handleBootComplete = React.useCallback(() => {
+    setLoading(false);
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-blue-500/30 overflow-x-hidden font-sans">
       <AnimatePresence>
-        {loading && <BootLoader onComplete={() => setLoading(false)} />}
+        {loading && <BootLoader onComplete={handleBootComplete} />}
       </AnimatePresence>
 
       <SecurityGridBackground />
+
+      {!loading && <TopNav />}
 
       {!loading && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
         >
-          {/* Navigation */}
-          <nav className="fixed top-0 w-full z-50 backdrop-blur-md border-b border-white/5 bg-black/50">
-            <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-cyan-500 rounded-lg flex items-center justify-center">
-                  <span className="font-bold text-white text-xs">R</span>
-                </div>
-                <span className="font-bold text-lg tracking-tight">Ryn</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <a href="/dashboard">
-                  <Button variant="primary" className="h-9 px-4 text-sm">
-                    Enter Web Version
-                  </Button>
-                </a>
-              </div>
-            </div>
-          </nav>
 
           {/* Hero Section */}
           <section className="relative pt-32 pb-20 px-6 max-w-7xl mx-auto">
@@ -916,10 +907,7 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
                 <div className="col-span-2">
                   <div className="flex items-center space-x-2 mb-4">
-                    <div className="w-6 h-6 bg-gray-800 rounded flex items-center justify-center">
-                      <span className="font-bold text-white text-xs">R</span>
-                    </div>
-                    <span className="font-bold">Ryn</span>
+                    <img src="/ryn-logo.svg" alt="Ryn" className="w-6 h-6" />
                   </div>
                   <p className="text-gray-500 text-sm max-w-sm">
                     A comprehensive compliance scanner built on Tauri, Rust, and

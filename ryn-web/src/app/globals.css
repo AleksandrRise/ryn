@@ -47,6 +47,8 @@ body {
   font-weight: 400;
   line-height: 1.5;
   font-size: 0.875rem;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
 }
 
 /* Global cursor pointer for all interactive elements */
@@ -242,4 +244,18 @@ summary {
 .animate-fade-in-left,
 .animate-fade-in-right {
   opacity: 0;
+}
+
+/* GPU acceleration for animations */
+[role="presentation"],
+.motion-div {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Smooth scroll behavior for sections */
+section {
+  scroll-behavior: smooth;
 }
