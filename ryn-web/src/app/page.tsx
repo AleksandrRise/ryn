@@ -18,6 +18,10 @@ import {
   Cpu,
   Code2,
   AlertTriangle,
+  Infinity,
+  Unlock,
+  Github,
+  Sparkles,
 } from "lucide-react";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 
@@ -183,7 +187,7 @@ const BootLoader = ({ onComplete }: BootLoaderProps) => {
         ))}
         <motion.div
           animate={{ opacity: [0, 1, 0] }}
-          transition={{ repeat: Infinity, duration: 0.8 }}
+          transition={{ repeatType: "loop", duration: 0.8 }}
           className="h-4 w-2 bg-green-500 mt-2 inline-block"
         />
       </div>
@@ -384,7 +388,7 @@ const RynInterface = () => {
                 <div className="w-16 h-16 rounded-full border-2 border-blue-500/30 flex items-center justify-center relative">
                   <motion.div
                     animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    transition={{ duration: 2, repeatType: "loop", ease: "linear" }}
                     className="absolute inset-0 border-t-2 border-blue-500 rounded-full"
                   />
                   <Shield size={24} className="text-blue-500" />
@@ -541,10 +545,6 @@ const FeatureCard = ({
       whileHover={{ y: -5, transition: { type: "spring", stiffness: 300, damping: 20 } }}
       className="group relative p-6 bg-[#0E0E0E] rounded-xl border border-white/10 hover:border-white/20 transition-colors overflow-hidden"
     >
-      <div className="absolute top-0 right-0 p-4 opacity-20 group-hover:opacity-30 transition-opacity">
-        <Icon size={80} />
-      </div>
-
       <div className="relative z-10">
         <div className="flex justify-between items-start mb-4">
           <div className="p-2 bg-white/5 rounded-lg inline-flex text-blue-400">
@@ -873,31 +873,133 @@ export default function Home() {
           </section>
 
           {/* Pricing / Open Source */}
-          <section className="py-32 relative overflow-hidden">
-            <div className="absolute inset-0 bg-blue-900/5" />
-            <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
-              <motion.h2
-                initial={{ scale: 0.9, opacity: 0 }}
-                whileInView={{ scale: 1, opacity: 1 }}
-                viewport={{ margin: "-100px" }}
-                className="text-6xl md:text-8xl font-bold tracking-tighter mb-8 text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-800"
-              >
-                Free.
-              </motion.h2>
-              <p className="text-2xl text-gray-300 mb-10">
-                No account. No limits. Your code stays local.
-              </p>
-              <div className="flex justify-center space-x-4">
-                <a href="https://github.com/AleksandrRise/ryn/releases" target="_blank" rel="noopener noreferrer">
-                  <Button variant="primary" className="h-12 px-8 text-lg">
-                    Download for Mac
-                  </Button>
-                </a>
+          <section className="py-40 relative overflow-hidden">
+            {/* Animated background elements */}
+            <div className="absolute inset-0">
+              <div className="absolute inset-0 bg-gradient-to-b from-emerald-900/10 via-transparent to-purple-900/10" />
+              <div className="absolute top-20 left-10 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl" />
+              <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+            </div>
+
+
+            <div className="max-w-5xl mx-auto px-6 relative z-10">
+              {/* Main heading section */}
+              <div className="text-center mb-20">
+                <motion.h2
+                  initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ margin: "-100px" }}
+                  transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
+                  className="text-8xl md:text-9xl lg:text-[12rem] font-black tracking-tighter mb-6 leading-none uppercase"
+                >
+                  <motion.span
+                    className="bg-clip-text text-transparent bg-gradient-to-r from-emerald-300 via-blue-300 to-purple-300"
+                    animate={{
+                      backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                    }}
+                    transition={{ duration: 3, repeatType: "loop" }}
+                    style={{
+                      backgroundSize: "200% 200%",
+                    }}
+                  >
+                    Free
+                  </motion.span>
+                  <span className="text-white">.</span>
+                </motion.h2>
+
+                <motion.p
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ margin: "-100px" }}
+                  transition={{ duration: 0.6, delay: 0.15 }}
+                  className="text-xl text-gray-300 max-w-3xl mx-auto mb-12"
+                >
+                  No account. No credit card. No hidden costs. Your code stays local, always.
+                </motion.p>
+
+                {/* What's included */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  viewport={{ margin: "-50px" }}
+                  transition={{ duration: 0.6, delay: 0.3 }}
+                  className="flex flex-wrap justify-center gap-6 max-w-3xl mx-auto"
+                >
+                  {[
+                    { icon: Zap, label: "Unlimited Scans" },
+                    { icon: Github, label: "100% Open Source" },
+                    { icon: Server, label: "Totally Private" },
+                  ].map((item, i) => {
+                    const Icon = item.icon;
+                    return (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, y: 20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ margin: "-50px" }}
+                        transition={{ delay: 0.35 + i * 0.1, duration: 0.5 }}
+                        className="flex items-center gap-2 text-gray-400"
+                      >
+                        <Icon size={18} className="text-emerald-400" />
+                        <span className="text-sm font-medium">{item.label}</span>
+                      </motion.div>
+                    );
+                  })}
+                </motion.div>
               </div>
-              <p className="mt-8 text-sm text-gray-500 font-mono">
-                Built by developers who got tired of paying $50k/year for compliance
-                tools.
-              </p>
+
+              {/* CTA Section */}
+              <motion.div
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ margin: "-50px" }}
+                transition={{ duration: 0.8 }}
+                className="flex flex-col items-center gap-6"
+              >
+                {/* Primary Button */}
+                <motion.div className="relative">
+                  <motion.a
+                    href="https://github.com/AleksandrRise/ryn/releases"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="relative inline-flex items-center gap-3 px-10 py-4 bg-white text-black rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden group"
+                  >
+                    {/* Shimmer effect - dark rainbow on hover */}
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500/40 via-purple-500/40 via-pink-500/40 to-transparent pointer-events-none"
+                      initial={{ x: "-100%" }}
+                      transition={{ duration: 0.7, ease: "easeInOut" }}
+                      whileHover={{ x: "100%" }}
+                    />
+
+                    <Download size={22} className="relative z-10" />
+                    <span className="relative z-10">Download for Mac</span>
+                  </motion.a>
+                </motion.div>
+
+                {/* Secondary Link */}
+                <motion.a
+                  href="https://github.com/AleksandrRise/ryn"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  whileHover={{ x: 4 }}
+                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  <Github size={18} />
+                  <span className="text-sm">View on GitHub</span>
+                </motion.a>
+              </motion.div>
+
+              {/* Supporting text */}
+              <motion.p
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                viewport={{ margin: "-50px" }}
+                transition={{ delay: 0.4, duration: 0.6 }}
+                className="text-gray-500 text-sm text-center max-w-xl mx-auto mt-12"
+              >
+                Built by developers who got tired of $50k/year compliance tools. Ryn does both: scans <span className="text-white font-semibold">and</span> fixes.
+              </motion.p>
             </div>
           </section>
 

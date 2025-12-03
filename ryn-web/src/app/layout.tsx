@@ -12,6 +12,9 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "Ryn - SOC 2 Compliance Tool",
   description: "AI-powered SOC 2 compliance scanning and remediation",
+  icons: {
+    icon: "/ryn-logo.svg",
+  },
 }
 
 export default function RootLayout({
