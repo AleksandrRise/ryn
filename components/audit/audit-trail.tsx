@@ -79,7 +79,17 @@ export function AuditTrail() {
     }
   }
 
-  const filteredEvents = selectedType === "all" ? events : events.filter(e => e.type === selectedType)
+  const getEventTypeLabel = (type: string) => {
+    // Simplify event type for display
+    if (type.includes("scan")) return "scan"
+    if (type.includes("fix")) return "fix"
+    if (type.includes("violation")) return "violation"
+    return type
+  }
+
+  const filteredEvents = selectedType === "all"
+    ? events
+    : events.filter(e => getEventTypeLabel(e.type) === selectedType)
   const visibleEvents = filteredEvents.slice(0, visibleCount)
   const hasMore = filteredEvents.length > visibleCount
 
@@ -141,14 +151,6 @@ export function AuditTrail() {
     } else {
       return "bg-white/10 text-white/60 border-white/20"
     }
-  }
-
-  const getEventTypeLabel = (type: string) => {
-    // Simplify event type for display
-    if (type.includes("scan")) return "scan"
-    if (type.includes("fix")) return "fix"
-    if (type.includes("violation")) return "violation"
-    return type
   }
 
   return (
