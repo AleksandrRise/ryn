@@ -1,13 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(./run-ryn-dev.sh)"
     ],
     "deny": [],
+    "ask": [],
     "additionalDirectories": [
       "/Users/seane/test-repos/vulnerable-flask"
-    ],
-    "ask": []
+    ]
   },
   "outputStyle": "Beginner"
 }
