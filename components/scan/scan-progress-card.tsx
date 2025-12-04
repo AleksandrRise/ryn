@@ -138,8 +138,8 @@ export function ScanProgressCard({ progress, aiActivity, onCancel }: ScanProgres
             <PiFileMagnifyingGlass className="w-6 h-6 text-blue-400" />
           )}
         </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
             <h3 className="text-lg font-semibold">
               {isAiAnalyzing
                 ? "AI analyzing files..."
@@ -159,7 +159,7 @@ export function ScanProgressCard({ progress, aiActivity, onCancel }: ScanProgres
               </Button>
             )}
           </div>
-          <p className="text-sm text-white/60 font-mono truncate mt-1">
+          <p className="text-sm text-white/60 font-mono truncate mt-1 max-w-full">
             {isAiAnalyzing && aiActivity
               ? `Batch ${aiActivity.currentBatch} of ${aiActivity.totalBatches} • ${aiActivity.filesAnalyzed}/${aiActivity.totalLlmFiles} files analyzed`
               : isWaitingForAI
@@ -168,9 +168,9 @@ export function ScanProgressCard({ progress, aiActivity, onCancel }: ScanProgres
             }
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-3xl font-bold tabular-nums">{progress.percentage}%</div>
-          <p className="text-xs text-white/40">
+        <div className="text-right shrink-0">
+          <div className="text-3xl font-bold tabular-nums whitespace-nowrap">{progress.percentage}%</div>
+          <p className="text-xs text-white/40 whitespace-nowrap">
             {progress.filesScanned} / {progress.totalFiles} files
           </p>
         </div>
