@@ -7,6 +7,8 @@ import { ConsoleLogger } from "@/components/console-logger"
 import { Toaster } from "sonner"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { TopNav } from "@/components/layout/top-nav"
+import { HalloweenThemeContextProvider } from "@/lib/context/HalloweenContext"
+import { HalloweenThemeProvider } from "@/components/halloween/HalloweenThemeProvider"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -30,16 +32,20 @@ export default function RootLayout({
         <link rel="stylesheet" href="/css/line-awesome.min.css" />
       </head>
       <body className={inter.className}>
-        <ErrorBoundary>
-          <ConsoleLogger />
-          <WaterBackground />
-          <div className="fixed inset-x-0 top-0 bottom-0 bg-black/78 backdrop-blur-[2px] z-[5]" />
-          <div className="relative z-10">
-            <TopNav />
-            <div className="pt-16">{children}</div>
-          </div>
-          <Toaster theme="dark" richColors />
-        </ErrorBoundary>
+        <HalloweenThemeContextProvider>
+          <ErrorBoundary>
+            <HalloweenThemeProvider>
+              <ConsoleLogger />
+              <WaterBackground />
+              <div className="fixed inset-x-0 top-0 bottom-0 bg-black/78 backdrop-blur-[2px] z-[5]" />
+              <div className="relative z-10">
+                <TopNav />
+                <div className="pt-16">{children}</div>
+              </div>
+              <Toaster theme="dark" richColors />
+            </HalloweenThemeProvider>
+          </ErrorBoundary>
+        </HalloweenThemeContextProvider>
       </body>
     </html>
   )

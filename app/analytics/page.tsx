@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, Tooltip } from 'recharts'
-import { PiCalendar, PiTrendUp, PiCurrencyDollar, PiActivity, PiSparkle } from 'react-icons/pi'
+import { PiCalendar, PiTrendUp, PiCurrencyDollar, PiFile, PiSparkle } from 'react-icons/pi'
 import { get_scan_costs, type TimeRange, type ScanCost } from "@/lib/tauri/commands"
 import type { CategoricalChartState } from 'recharts/types/chart/types'
 
@@ -176,7 +176,7 @@ export default function AnalyticsPage() {
                 <CardTitle className="text-sm font-medium">
                   Files Analyzed
                 </CardTitle>
-                <PiActivity className="size-4 text-muted-foreground" />
+                <PiFile className="size-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold tabular-nums">
