@@ -103,6 +103,11 @@ export function Dashboard() {
         const projects = await get_projects()
         setLocalProjects(projects)
 
+        // Auto-select first project if not already selected
+        if (projects.length > 0 && !selectedProject) {
+          setSelectedProject(projects[0])
+        }
+
         const scansMap = new Map<number, ScanResult[]>()
         for (const project of projects) {
           const scans = await get_scans(project.id)
@@ -114,7 +119,7 @@ export function Dashboard() {
       }
     }
     loadLocalProjects()
-  }, [])
+  }, [selectedProject, setSelectedProject])
 
   const isLocalMode = selectedPlatform.id === "local"
   const hasLocalProject = Boolean(selectedProject)
@@ -183,14 +188,8 @@ export function Dashboard() {
     }
   }, [connectionStatus?.connected, loadTrackedRepos])
 
-  // Sync platform tab to match loaded project on initial hydration
-  const hasInitializedPlatformRef = useRef(false)
-  useEffect(() => {
-    if (selectedProject && !hasInitializedPlatformRef.current) {
-      hasInitializedPlatformRef.current = true
-      setSelectedPlatform(PLATFORMS.find(p => p.id === "local")!)
-    }
-  }, [selectedProject])
+  // Don't auto-select platform - let user choose or remember their preference
+  // This prevents forcing Local mode when GitHub is connected
 
   useEffect(() => {
     const loadScanModeSetting = async () => {
