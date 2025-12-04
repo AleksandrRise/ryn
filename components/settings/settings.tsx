@@ -17,6 +17,7 @@ import { handleTauriError, showSuccess, showInfo } from "@/lib/utils/error-handl
 import { save } from "@tauri-apps/plugin-dialog"
 import { writeTextFile } from "@tauri-apps/plugin-fs"
 import { LspSettings } from "./lsp-settings"
+import { HalloweenToggle } from "@/components/halloween/HalloweenToggle"
 
 // Settings state type
 interface SettingsState {
@@ -323,6 +324,17 @@ export function Settings() {
 
         {/* IDE Integration (LSP Server) */}
         <LspSettings />
+
+        {/* Halloween Theme */}
+        <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-white/5 rounded-lg">
+              <span className="text-xl">🎃</span>
+            </div>
+            <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Halloween Theme</h2>
+          </div>
+          <HalloweenToggle />
+        </div>
 
         {/* Data & Maintenance */}
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 xl:col-span-2">

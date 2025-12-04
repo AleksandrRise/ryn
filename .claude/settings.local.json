@@ -20,7 +20,15 @@
       "Bash(git rebase:*)",
       "Bash(GIT_EDITOR=true git rebase:*)",
       "Bash(find:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(bash run-ryn-dev.sh:*)",
+      "Bash(pnpm dev)",
+      "Bash(pkill:*)",
+      "Bash(lsof:*)",
+      "Bash(xargs kill:*)",
+      "Bash(pnpm tsc:*)",
+      "Bash(kill:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "additionalDirectories": [

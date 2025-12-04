@@ -17,6 +17,10 @@ import type { Severity, Violation } from "@/lib/types/violation"
 import { formatDateTime } from "@/lib/utils/date"
 import { handleTauriError, showInfo, showSuccess } from "@/lib/utils/error-handler"
 import { apply_fix, generate_fix, get_violation, read_file_content, type Fix } from "@/lib/tauri/commands"
+import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
+import { SpookyViolationCard } from "@/components/halloween/SpookyViolationCard"
+import { BanishGhostAnimation } from "@/components/halloween/BanishGhostAnimation"
+import { usePoofEffect } from "@/lib/hooks/usePoofEffect"
 
 // Category order for consistent rendering
 const CATEGORY_ORDER = ["CC6.1", "CC6.7", "CC7.2", "A1.2"]
@@ -24,6 +28,8 @@ const CATEGORY_ORDER = ["CC6.1", "CC6.7", "CC7.2", "A1.2"]
 export function ScanResults() {
   const { selectedProject } = useProjectStore()
   const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
+  const { isEnabled: halloweenEnabled } = useHalloweenTheme()
+  const { isPoofing, triggerPoof } = usePoofEffect()
 
   const {
     isLoading,
@@ -323,7 +329,13 @@ export function ScanResults() {
 
       showInfo("Applying fix to file...")
       await apply_fix(fixToApply.id)
-      showSuccess("Fix applied successfully! File has been modified.")
+      
+      // Trigger Halloween poof effect if enabled
+      if (halloweenEnabled) {
+        triggerPoof("Ghost banished! The spirit has been laid to rest.")
+      } else {
+        showSuccess("Fix applied successfully! File has been modified.")
+      }
 
       // Reflect applied state locally and refresh violation list
       setGeneratedFix((prev) => (prev ? { ...prev, applied_at: new Date().toISOString() } : { ...fixToApply!, applied_at: new Date().toISOString() }))
@@ -488,9 +500,24 @@ export function ScanResults() {
                       </div>
 
                       {/* Violations in this category */}
-                      {categoryViolations.map((v) => {
+                      {categoryViolations.map((v, idx) => {
                         const isActive = v.id === selectedViolation?.id
                         const fileName = v.filePath.split("/").pop() || v.filePath
+                        
+                        // Halloween mode: render spooky cards
+                        if (halloweenEnabled) {
+                          return (
+                            <div key={v.id} className="px-2 py-1">
+                              <SpookyViolationCard
+                                violation={v}
+                                onClick={() => setSelectedViolationId(v.id)}
+                                index={idx}
+                              />
+                            </div>
+                          )
+                        }
+                        
+                        // Standard mode: render normal cards
                         return (
                           <button
                             key={v.id}
@@ -745,6 +772,12 @@ export function ScanResults() {
           </div>
         </div>
       )}
+      
+      {/* Halloween banish ghost animation overlay */}
+      <BanishGhostAnimation
+        isVisible={isPoofing}
+        severity={selectedViolation?.severity}
+      />
     </div>
   )
 }
