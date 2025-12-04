@@ -56,7 +56,13 @@ export function Dashboard() {
   const router = useRouter()
   const { setSelectedProject, selectedProject } = useProjectStore()
   const [connectionStatus, setConnectionStatus] = useState<GitHubConnectionStatus | null>(null)
-  const [selectedPlatform, setSelectedPlatform] = useState<typeof PLATFORMS[number]>(PLATFORMS[0])
+  const [selectedPlatform, setSelectedPlatform] = useState<typeof PLATFORMS[number]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("ryn-selected-platform")
+      return PLATFORMS.find(p => p.id === saved) || PLATFORMS[0]
+    }
+    return PLATFORMS[0]
+  })
   const [platformDropdownOpen, setPlatformDropdownOpen] = useState(false)
   const [repoManagerOpen, setRepoManagerOpen] = useState(false)
   const [oauthModalOpen, setOauthModalOpen] = useState(false)
@@ -95,6 +101,11 @@ export function Dashboard() {
   useEffect(() => {
     localStorage.setItem("ryn-monitoring-paused", String(isMonitoringPaused))
   }, [isMonitoringPaused])
+
+  // Persist platform selection to localStorage
+  useEffect(() => {
+    localStorage.setItem("ryn-selected-platform", selectedPlatform.id)
+  }, [selectedPlatform])
 
   // Load local projects and their scans for Recent Activity
   useEffect(() => {
@@ -814,67 +825,9 @@ export function Dashboard() {
               )}
 
               <div className="relative p-6 h-full">
-                {connectionStatus?.connected && (
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h2 className="text-sm font-semibold">Compliance Overview</h2>
-                      <p className="text-xs text-white/40 mt-0.5">{trackedRepos.length} repositories monitored</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <ChartSelector
-                        chartType={currentChartType}
-                        onChartTypeChange={setChartType}
-                        mode="github"
-                        timeRange={trendTimeRange}
-                        onTimeRangeChange={setTrendTimeRange}
-                        showTimeRange={showTimeRange}
-                      />
-                      <button
-                        onClick={handleConnectClick}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-white/60 hover:text-white transition-all border border-white/[0.04]"
-                      >
-                        <i className="las la-cog"></i>
-                        <span>Repos</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {connectionStatus?.connected ? (
-                  <div className="animate-fadeIn">
-                    {/* Customizable Chart */}
-                    <div className="flex-1 min-h-[200px]">
-                      <ChartContainer
-                        chartType={currentChartType}
-                        mode="github"
-                        violations={[]}
-                        scans={[]}
-                        trackedRepos={trackedRepos}
-                        timeRange={trendTimeRange}
-                      />
-                    </div>
-
-                    {/* Summary stats below chart */}
-                    <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-4 gap-4">
-                      <div className="text-center">
-                        <div className="text-base font-semibold text-white/90">{totalViolations}</div>
-                        <div className="text-[10px] text-white/40 uppercase tracking-wider">Total</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-base font-semibold text-red-400">{criticalCount}</div>
-                        <div className="text-[10px] text-white/40 uppercase tracking-wider">Critical</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-base font-semibold text-emerald-400">{healthyCount}</div>
-                        <div className="text-[10px] text-white/40 uppercase tracking-wider">Clean</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-base font-semibold text-white/80">{trackedRepos.filter(r => !!r.last_scanned_at).length}</div>
-                        <div className="text-[10px] text-white/40 uppercase tracking-wider">Scanned</div>
-                      </div>
-                    </div>
-                  </div>
-                ) : hasLocalProject ? (
+                {isLocalMode ? (
+                  // ===== LOCAL MODE =====
+                  hasLocalProject ? (
                   <div className="h-full min-h-[300px] p-6">
                     {hasLocalScanData ? (
                       <div className="h-full flex flex-col">
@@ -965,48 +918,94 @@ export function Dashboard() {
                       </div>
                     )}
                   </div>
-                ) : isLocalMode ? (
-                  <div className="h-full min-h-[300px] flex items-center justify-center">
-                    <div className="flex flex-col items-center justify-center text-center w-full transition-transform duration-300 group-hover/card:scale-[1.02]">
-                      <div className="relative w-14 h-14 mb-4 mx-auto">
-                        <div className="absolute inset-0 rounded-xl bg-white/12 blur-lg transition-all duration-300 group-hover/card:bg-white/16" />
-                        <div className="relative w-full h-full rounded-xl bg-white/08 border border-white/15 flex items-center justify-center transition-all duration-300 group-hover/card:border-white/25">
-                          <i className="las la-folder-open text-2xl text-white/80"></i>
-                        </div>
-                      </div>
-                      <h3 className="text-lg font-semibold mb-1.5">Open a local project</h3>
-                      <p className="text-sm text-white/50 mb-5 leading-relaxed max-w-xs mx-auto">Select a folder to scan locally.</p>
-                      <button
-                        className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-white/12 hover:bg-white/16 border border-white/18 text-sm font-medium text-white transition-all duration-300 shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
-                        onClick={() => handlePlatformSelect(PLATFORMS.find((p) => p.id === "local")!)}
-                      >
-                        <i className="las la-folder-open text-lg"></i>
-                        Choose Folder
-                      </button>
-                    </div>
-                  </div>
                 ) : (
-                  <div className="h-full min-h-[300px] flex items-center justify-center">
-                    <div className="flex flex-col items-center justify-center text-center w-full transition-transform duration-300 group-hover/card:scale-[1.02]">
-                      {/* Icon with glow */}
-                      <div className="relative w-14 h-14 mb-4 mx-auto">
-                        <div className="absolute inset-0 rounded-xl bg-emerald-400/30 blur-lg transition-all duration-300 group-hover/card:bg-emerald-400/40" />
-                        <div className="relative w-full h-full rounded-xl bg-gradient-to-br from-emerald-400/20 to-emerald-500/10 border border-emerald-400/30 flex items-center justify-center transition-all duration-300 group-hover/card:border-emerald-400/50">
-                          <i className="lab la-github text-2xl text-emerald-300 transition-all duration-300 group-hover/card:text-emerald-200"></i>
+                  // ===== GITHUB MODE =====
+                  connectionStatus?.connected ? (
+                    // GitHub connected - show charts
+                    <div className="animate-fadeIn">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h2 className="text-sm font-semibold">Compliance Overview</h2>
+                          <p className="text-xs text-white/40 mt-0.5">{trackedRepos.length} repositories monitored</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <ChartSelector
+                            chartType={currentChartType}
+                            onChartTypeChange={setChartType}
+                            mode="github"
+                            timeRange={trendTimeRange}
+                            onTimeRangeChange={setTrendTimeRange}
+                            showTimeRange={showTimeRange}
+                          />
+                          <button
+                            onClick={handleConnectClick}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-white/60 hover:text-white transition-all border border-white/[0.04]"
+                          >
+                            <i className="las la-cog"></i>
+                            <span>Repos</span>
+                          </button>
                         </div>
                       </div>
-                      <h3 className="text-lg font-semibold mb-1.5 transition-colors duration-300 group-hover/card:text-emerald-100">Connect Your Repositories</h3>
-                      <p className="text-sm text-white/40 mb-5 leading-relaxed max-w-xs mx-auto">
-                        Link your GitHub account to monitor SOC 2 compliance
-                      </p>
-                      <div className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-500 text-sm font-medium transition-all duration-300 group-hover/card:bg-emerald-400 group-hover/card:shadow-lg group-hover/card:shadow-emerald-500/25 mx-auto">
-                        <i className="lab la-github text-lg"></i>
-                        Connect GitHub
-                        <i className="las la-arrow-right text-sm transition-all duration-300 opacity-0 -translate-x-2 group-hover/card:opacity-100 group-hover/card:translate-x-0"></i>
+
+                      {/* Customizable Chart */}
+                      <div className="flex-1 min-h-[200px]">
+                        <ChartContainer
+                          chartType={currentChartType}
+                          mode="github"
+                          violations={[]}
+                          scans={[]}
+                          trackedRepos={trackedRepos}
+                          timeRange={trendTimeRange}
+                        />
                       </div>
-                      <p className="mt-3 text-xs text-white/30">Read-only access · Secure OAuth</p>
+
+                      {/* Summary stats below chart */}
+                      <div className="mt-3 pt-3 border-t border-white/[0.04] grid grid-cols-4 gap-4">
+                        <div className="text-center">
+                          <div className="text-base font-semibold text-white/90">{totalViolations}</div>
+                          <div className="text-[10px] text-white/40 uppercase tracking-wider">Total</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-base font-semibold text-red-400">{criticalCount}</div>
+                          <div className="text-[10px] text-white/40 uppercase tracking-wider">Critical</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-base font-semibold text-emerald-400">{healthyCount}</div>
+                          <div className="text-[10px] text-white/40 uppercase tracking-wider">Clean</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-base font-semibold text-white/80">{trackedRepos.filter(r => !!r.last_scanned_at).length}</div>
+                          <div className="text-[10px] text-white/40 uppercase tracking-wider">Scanned</div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    // GitHub not connected - show CTA
+                    <div className="h-full min-h-[300px] flex items-center justify-center">
+                      <div className="flex flex-col items-center justify-center text-center w-full transition-transform duration-300 group-hover/card:scale-[1.02]">
+                        {/* Icon with glow */}
+                        <div className="relative w-14 h-14 mb-4 mx-auto">
+                          <div className="absolute inset-0 rounded-xl bg-emerald-400/30 blur-lg transition-all duration-300 group-hover/card:bg-emerald-400/40" />
+                          <div className="relative w-full h-full rounded-xl bg-gradient-to-br from-emerald-400/20 to-emerald-500/10 border border-emerald-400/30 flex items-center justify-center transition-all duration-300 group-hover/card:border-emerald-400/50">
+                            <i className="lab la-github text-2xl text-emerald-300 transition-all duration-300 group-hover/card:text-emerald-200"></i>
+                          </div>
+                        </div>
+                        <h3 className="text-lg font-semibold mb-1.5 transition-colors duration-300 group-hover/card:text-emerald-100">Connect Your Repositories</h3>
+                        <p className="text-sm text-white/40 mb-5 leading-relaxed max-w-xs mx-auto">
+                          Link your GitHub account to monitor SOC 2 compliance
+                        </p>
+                        <button
+                          onClick={handleConnectClick}
+                          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-500 text-sm font-medium transition-all duration-300 hover:bg-emerald-400 hover:shadow-lg hover:shadow-emerald-500/25 text-white"
+                        >
+                          <i className="lab la-github text-lg"></i>
+                          Connect GitHub
+                          <i className="las la-arrow-right text-sm transition-all duration-300 opacity-0 -translate-x-2 group-hover/card:opacity-100 group-hover/card:translate-x-0"></i>
+                        </button>
+                        <p className="mt-3 text-xs text-white/30">Read-only access · Secure OAuth</p>
+                      </div>
+                    </div>
+                  )
                 )}
               </div>
             </div>
