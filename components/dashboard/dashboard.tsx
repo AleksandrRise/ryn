@@ -940,13 +940,19 @@ export function Dashboard() {
                   )
                 ) : (
                   connectionStatus?.connected ? (
-                    <div className="animate-fadeIn">
+                    <div className="animate-fadeIn h-full flex flex-col">
                       <div className="flex items-center justify-between mb-4">
                         <div>
                           <h2 className="text-sm font-semibold">Compliance Overview</h2>
                           <p className="text-xs text-white/40 mt-0.5">{trackedRepos.length} repositories monitored</p>
                         </div>
                         <div className="flex items-center gap-2">
+                          {selectedProject && (
+                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.06] border border-white/[0.04]">
+                              <i className="las la-folder text-xs text-white/60"></i>
+                              <span className="text-xs text-white/60">{selectedProject.name}</span>
+                            </div>
+                          )}
                           <ChartSelector
                             chartType={currentChartType}
                             onChartTypeChange={setChartType}
