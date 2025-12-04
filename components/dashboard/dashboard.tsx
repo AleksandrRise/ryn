@@ -826,7 +826,6 @@ export function Dashboard() {
 
               <div className="relative p-6 h-full">
                 {isLocalMode ? (
-                  // ===== LOCAL MODE =====
                   hasLocalProject ? (
                     <div className="h-full min-h-[300px] p-6">
                     {hasLocalScanData ? (
@@ -919,7 +918,6 @@ export function Dashboard() {
                     )}
                     </div>
                   ) : (
-                    // No local project selected - show CTA to open one
                     <div className="h-full min-h-[300px] flex items-center justify-center">
                       <div className="flex flex-col items-center justify-center text-center w-full">
                         <div className="relative w-14 h-14 mb-4 mx-auto">
@@ -941,9 +939,7 @@ export function Dashboard() {
                     </div>
                   )
                 ) : (
-                  // ===== GITHUB MODE =====
                   connectionStatus?.connected ? (
-                    // GitHub connected - show charts
                     <div className="animate-fadeIn">
                       <div className="flex items-center justify-between mb-4">
                         <div>
@@ -1002,7 +998,6 @@ export function Dashboard() {
                       </div>
                     </div>
                   ) : (
-                    // GitHub not connected - show CTA
                     <div className="h-full min-h-[300px] flex items-center justify-center">
                       <div className="flex flex-col items-center justify-center text-center w-full transition-transform duration-300 group-hover/card:scale-[1.02]">
                         {/* Icon with glow */}
