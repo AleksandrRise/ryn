@@ -3,6 +3,7 @@
 import { ReactNode } from "react"
 import { BatSwoop } from "./BatSwoop"
 import { PumpkinCursor } from "./PumpkinCursor"
+import { HalloweenBackground } from "./HalloweenBackground"
 import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
 
 interface HalloweenThemeProviderProps {
@@ -81,6 +82,7 @@ export function HalloweenThemeProvider({ children }: HalloweenThemeProviderProps
       {children}
       {isEnabled && (
         <>
+          <HalloweenBackground />
           <BatSwoop />
           <PumpkinCursor />
         </>
