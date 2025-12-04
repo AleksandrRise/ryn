@@ -17,7 +17,7 @@ import type { Severity, Violation } from "@/lib/types/violation"
 import { formatDateTime } from "@/lib/utils/date"
 import { handleTauriError, showInfo, showSuccess } from "@/lib/utils/error-handler"
 import { apply_fix, generate_fix, get_violation, read_file_content, type Fix } from "@/lib/tauri/commands"
-import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
+import { useHalloweenThemeContext } from "@/lib/context/HalloweenContext"
 import { SpookyViolationCard } from "@/components/halloween/SpookyViolationCard"
 import { BanishGhostAnimation } from "@/components/halloween/BanishGhostAnimation"
 import { usePoofEffect } from "@/lib/hooks/usePoofEffect"
@@ -28,7 +28,7 @@ const CATEGORY_ORDER = ["CC6.1", "CC6.7", "CC7.2", "A1.2"]
 export function ScanResults() {
   const { selectedProject } = useProjectStore()
   const [selectedSeverity, setSelectedSeverity] = useState<Severity | "all">("all")
-  const { isEnabled: halloweenEnabled } = useHalloweenTheme()
+  const { isEnabled: halloweenEnabled } = useHalloweenThemeContext()
   const { isPoofing, triggerPoof } = usePoofEffect()
 
   const {

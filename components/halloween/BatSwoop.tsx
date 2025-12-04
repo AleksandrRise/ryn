@@ -2,10 +2,10 @@
 
 import { motion, AnimatePresence } from "framer-motion"
 import { useEffect, useState } from "react"
-import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
+import { useHalloweenThemeContext } from "@/lib/context/HalloweenContext"
 
 export function BatSwoop() {
-  const { isEnabled } = useHalloweenTheme()
+  const { isEnabled } = useHalloweenThemeContext()
   const [isVisible, setIsVisible] = useState(false)
 
   useEffect(() => {

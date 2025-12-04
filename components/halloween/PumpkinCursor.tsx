@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect } from "react"
-import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
+import { useHalloweenThemeContext } from "@/lib/context/HalloweenContext"
 
 export function PumpkinCursor() {
-  const { isEnabled } = useHalloweenTheme()
+  const { isEnabled } = useHalloweenThemeContext()
 
   useEffect(() => {
     if (!isEnabled) {

@@ -3,7 +3,7 @@
 import { motion } from "framer-motion"
 import { Violation } from "@/lib/types/violation"
 import { SpookyViolationCard } from "./SpookyViolationCard"
-import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
+import { useHalloweenThemeContext } from "@/lib/context/HalloweenContext"
 import { HauntingMeter } from "./HauntingMeter"
 
 interface HauntedHouseProps {
@@ -14,7 +14,7 @@ interface HauntedHouseProps {
 }
 
 export function HauntedHouse({ violations, onViolationClick, isScanning, scanProgress }: HauntedHouseProps) {
-  const { isEnabled } = useHalloweenTheme()
+  const { isEnabled } = useHalloweenThemeContext()
 
   if (!isEnabled) {
     return (

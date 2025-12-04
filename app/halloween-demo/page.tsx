@@ -6,7 +6,7 @@ import { HauntingMeter } from "@/components/halloween/HauntingMeter"
 import { BanishGhostAnimation } from "@/components/halloween/BanishGhostAnimation"
 import { HalloweenToggle } from "@/components/halloween/HalloweenToggle"
 import { usePoofEffect } from "@/lib/hooks/usePoofEffect"
-import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
+import { useHalloweenThemeContext } from "@/lib/context/HalloweenContext"
 import type { Violation } from "@/lib/types/violation"
 
 // Mock violations for demo
@@ -71,7 +71,7 @@ export default function HalloweenDemoPage() {
   const [scanProgress, setScanProgress] = useState(0)
   const [isScanning, setIsScanning] = useState(false)
   const { isPoofing, triggerPoof } = usePoofEffect()
-  const { isEnabled } = useHalloweenTheme()
+  const { isEnabled } = useHalloweenThemeContext()
 
   const startDemoScan = () => {
     setIsScanning(true)

@@ -1,10 +1,10 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
+import { useHalloweenThemeContext } from "@/lib/context/HalloweenContext"
 
 export function HalloweenToggle() {
-  const { isEnabled, toggle } = useHalloweenTheme()
+  const { isEnabled, toggle } = useHalloweenThemeContext()
 
   return (
     <div className="relative">

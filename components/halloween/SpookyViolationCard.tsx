@@ -3,7 +3,7 @@
 import { motion } from "framer-motion"
 import Image from "next/image"
 import { Violation } from "@/lib/types/violation"
-import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
+import { useHalloweenThemeContext } from "@/lib/context/HalloweenContext"
 
 interface SpookyViolationCardProps {
   violation: Violation
@@ -12,7 +12,7 @@ interface SpookyViolationCardProps {
 }
 
 export function SpookyViolationCard({ violation, onClick, index = 0 }: SpookyViolationCardProps) {
-  const { isEnabled } = useHalloweenTheme()
+  const { isEnabled } = useHalloweenThemeContext()
   
   if (!isEnabled) {
     // Fallback to standard card

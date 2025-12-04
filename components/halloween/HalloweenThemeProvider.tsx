@@ -4,14 +4,14 @@ import { ReactNode } from "react"
 import { BatSwoop } from "./BatSwoop"
 import { PumpkinCursor } from "./PumpkinCursor"
 import { HalloweenBackground } from "./HalloweenBackground"
-import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
+import { useHalloweenThemeContext } from "@/lib/context/HalloweenContext"
 
 interface HalloweenThemeProviderProps {
   children: ReactNode
 }
 
 export function HalloweenThemeProvider({ children }: HalloweenThemeProviderProps) {
-  const { isEnabled } = useHalloweenTheme()
+  const { isEnabled } = useHalloweenThemeContext()
 
   return (
     <>
@@ -64,12 +64,24 @@ export function HalloweenThemeProvider({ children }: HalloweenThemeProviderProps
           }
 
           ::-webkit-scrollbar-thumb {
-            background: linear-gradient(to bottom, #8b5cf6, #f97316);
+            background: linear-gradient(to bottom, #8b0000, #dc143c);
             border-radius: 4px;
           }
 
           ::-webkit-scrollbar-thumb:hover {
-            background: linear-gradient(to bottom, #a78bfa, #fb923c);
+            background: linear-gradient(to bottom, #b22222, #ff1744);
+          }
+
+          /* Hide all range sliders by default (horizontal) */
+          input[type="range"] {
+            opacity: 0 !important;
+            visibility: hidden !important;
+          }
+
+          /* Show vertical sliders with reduced opacity */
+          input[type="range"][orient="vertical"] {
+            opacity: 0.3 !important;
+            visibility: visible !important;
           }
 
           /* Selection color */

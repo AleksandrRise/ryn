@@ -1,10 +1,10 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
+import { useHalloweenThemeContext } from "@/lib/context/HalloweenContext"
 
 export function HalloweenBackground() {
-  const { isEnabled } = useHalloweenTheme()
+  const { isEnabled } = useHalloweenThemeContext()
 
   return (
     <AnimatePresence>

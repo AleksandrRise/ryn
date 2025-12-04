@@ -1,7 +1,7 @@
 "use client"
 
 import { ReactNode } from "react"
-import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
+import { useHalloweenThemeContext } from "@/lib/context/HalloweenContext"
 import { HauntedHouse } from "@/components/halloween/HauntedHouse"
 import { BanishGhostAnimation } from "@/components/halloween/BanishGhostAnimation"
 import { usePoofEffect } from "@/lib/hooks/usePoofEffect"
@@ -26,7 +26,7 @@ export function HalloweenScanWrapper({
   scanProgress,
   children
 }: HalloweenScanWrapperProps) {
-  const { isEnabled } = useHalloweenTheme()
+  const { isEnabled } = useHalloweenThemeContext()
   const { isPoofing } = usePoofEffect()
 
   // If Halloween mode is enabled, render haunted house
