@@ -1,6 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
+import Image from "next/image"
 import { Violation } from "@/lib/types/violation"
 import { useHalloweenTheme } from "@/lib/hooks/useHalloweenTheme"
 
@@ -44,7 +45,8 @@ export function SpookyViolationCard({ violation, onClick, index = 0 }: SpookyVio
       duration: 2,
       intensity: 1.5,
       label: "Vengeful Phantom",
-      emoji: "👿",
+      imagePath: "/me-devil.png",
+      imageAlt: "Vengeful Phantom",
       borderColor: "border-red-500/50"
     },
     high: {
@@ -54,7 +56,8 @@ export function SpookyViolationCard({ violation, onClick, index = 0 }: SpookyVio
       duration: 3,
       intensity: 1.2,
       label: "Angry Specter",
-      emoji: "😈",
+      imagePath: "/me-angry.png",
+      imageAlt: "Angry Specter",
       borderColor: "border-orange-500/40"
     },
     medium: {
@@ -64,7 +67,8 @@ export function SpookyViolationCard({ violation, onClick, index = 0 }: SpookyVio
       duration: 4,
       intensity: 1,
       label: "Mischievous Ghost",
-      emoji: "👻",
+      imagePath: "/chicken.png",
+      imageAlt: "Mischievous Ghost",
       borderColor: "border-yellow-500/30"
     },
     low: {
@@ -74,7 +78,8 @@ export function SpookyViolationCard({ violation, onClick, index = 0 }: SpookyVio
       duration: 5,
       intensity: 0.8,
       label: "Faint Whisper",
-      emoji: "👼",
+      imagePath: "/invisible.png",
+      imageAlt: "Faint Whisper",
       borderColor: "border-blue-500/25"
     }
   }
@@ -115,10 +120,16 @@ export function SpookyViolationCard({ violation, onClick, index = 0 }: SpookyVio
             repeat: Infinity,
             ease: "easeInOut"
           }}
-          className="absolute -top-7 -right-3"
+          className="absolute -top-8 -right-4"
         >
-          <div className={`text-5xl ${config.glow} ${config.color} filter`}>
-            {config.emoji}
+          <div className={`relative w-20 h-20 ${config.glow}`}>
+            <Image
+              src={config.imagePath}
+              alt={config.imageAlt}
+              fill
+              className="object-contain drop-shadow-lg"
+              priority
+            />
           </div>
         </motion.div>
 

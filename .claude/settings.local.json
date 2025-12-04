@@ -1,39 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cd:*)",
-      "Bash(cd:*)",
-      "Bash(cargo tauri:*)",
-      "Bash(cd:*)",
-      "Bash(cd:*)",
-      "Bash(cd:*)",
-      "Bash(pnpm install:*)",
-      "Bash(pnpm tauri dev:*)",
-      "Bash(pnpm add:*)",
-      "Bash(git pull:*)",
-      "Bash(git stash:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)",
-      "Bash(gh pr create:*)",
-      "Bash(git checkout:*)",
-      "Bash(git rebase:*)",
-      "Bash(GIT_EDITOR=true git rebase:*)",
-      "Bash(find:*)",
-      "Bash(cargo check:*)",
-      "Bash(bash run-ryn-dev.sh:*)",
-      "Bash(pnpm dev)",
-      "Bash(pkill:*)",
-      "Bash(lsof:*)",
-      "Bash(xargs kill:*)",
-      "Bash(pnpm tsc:*)",
-      "Bash(kill:*)",
-      "WebFetch(domain:github.com)"
+      "Bash(cat:*)"
     ],
     "deny": [],
     "additionalDirectories": [
       "/Users/seane/test-repos/vulnerable-flask"
-    ]
+    ],
+    "ask": []
   },
   "outputStyle": "Beginner"
 }
