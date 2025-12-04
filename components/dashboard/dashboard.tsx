@@ -828,7 +828,7 @@ export function Dashboard() {
                 {isLocalMode ? (
                   // ===== LOCAL MODE =====
                   hasLocalProject ? (
-                  <div className="h-full min-h-[300px] p-6">
+                    <div className="h-full min-h-[300px] p-6">
                     {hasLocalScanData ? (
                       <div className="h-full flex flex-col">
                         {/* Header with Chart Selector */}
@@ -917,7 +917,29 @@ export function Dashboard() {
                         </div>
                       </div>
                     )}
-                  </div>
+                    </div>
+                  ) : (
+                    // No local project selected - show CTA to open one
+                    <div className="h-full min-h-[300px] flex items-center justify-center">
+                      <div className="flex flex-col items-center justify-center text-center w-full">
+                        <div className="relative w-14 h-14 mb-4 mx-auto">
+                          <div className="absolute inset-0 rounded-xl bg-white/12 blur-lg" />
+                          <div className="relative w-full h-full rounded-xl bg-white/08 border border-white/15 flex items-center justify-center">
+                            <i className="las la-folder-open text-2xl text-white/80"></i>
+                          </div>
+                        </div>
+                        <h3 className="text-lg font-semibold mb-1.5">Open a local project</h3>
+                        <p className="text-sm text-white/50 mb-5 leading-relaxed max-w-xs mx-auto">Select a folder to scan locally.</p>
+                        <button
+                          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-white/12 hover:bg-white/16 border border-white/18 text-sm font-medium text-white transition-all duration-300 shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
+                          onClick={() => handlePlatformSelect(PLATFORMS.find((p) => p.id === "local")!)}
+                        >
+                          <i className="las la-folder-open text-lg"></i>
+                          Choose Folder
+                        </button>
+                      </div>
+                    </div>
+                  )
                 ) : (
                   // ===== GITHUB MODE =====
                   connectionStatus?.connected ? (
