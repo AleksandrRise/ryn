@@ -685,7 +685,7 @@ export default function Home() {
                   A local-first desktop app for developers, not auditors.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-                  <a href="https://github.com/AleksandrRise/ryn/releases" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
+                  <a href="https://github.com/AleksandrRise/ryn/releases/tag/release-alpha" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
                     <Button variant="primary" className="w-full space-x-2">
                       <Download size={18} />
                       <span>Download for macOS</span>
@@ -959,7 +959,7 @@ export default function Home() {
                 {/* Primary Button */}
                 <motion.div className="relative">
                   <motion.a
-                    href="https://github.com/AleksandrRise/ryn/releases"
+                    href="https://github.com/AleksandrRise/ryn/releases/tag/release-alpha"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="relative inline-flex items-center gap-3 px-10 py-4 bg-white text-black rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden group"
@@ -1020,12 +1020,12 @@ export default function Home() {
                   <h4 className="text-white font-bold mb-4">Product</h4>
                   <ul className="space-y-2 text-sm text-gray-500">
                     <li>
-                      <a href="https://github.com/AleksandrRise/ryn/releases" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
+                      <a href="https://github.com/AleksandrRise/ryn/releases/tag/release-alpha" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
                         Download
                       </a>
                     </li>
                     <li>
-                      <a href="https://github.com/AleksandrRise/ryn/releases" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
+                      <a href="https://github.com/AleksandrRise/ryn/releases/tag/release-alpha" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
                         Changelog
                       </a>
                     </li>

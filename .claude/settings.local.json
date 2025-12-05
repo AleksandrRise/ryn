@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(cat:*)",
-      "Bash(./run-ryn-dev.sh)"
+      "Bash(./run-ryn-dev.sh)",
+      "Bash(git tag:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": [],

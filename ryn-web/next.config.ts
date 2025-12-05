@@ -9,6 +9,11 @@ const createConfig = (phase: string): NextConfig => {
     turbopack: {
       root: process.cwd(),
     },
+    reactStrictMode: true,
+    compress: true,
+    poweredByHeader: false,
+    generateEtags: true,
+    pageExtensions: ["ts", "tsx", "js", "jsx"],
   }
 
   if (phase === PHASE_PRODUCTION_BUILD) {
