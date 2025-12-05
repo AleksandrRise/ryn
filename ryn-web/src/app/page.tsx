@@ -954,31 +954,20 @@ export default function Home() {
                 transition={{ duration: 0.8 }}
                 className="flex flex-col items-center gap-6"
               >
-                {/* Primary Button */}
-                <motion.div className="relative">
-                  <DownloadButton
-                    className="relative inline-flex items-center gap-3 px-10 py-4 bg-white text-black rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden group"
+                {/* Buttons */}
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                  <DownloadButton />
+                  <motion.a
+                    href="https://github.com/AleksandrRise/ryn"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    whileHover={{ x: 4 }}
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
                   >
-                    <motion.div
-                      className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500/40 via-purple-500/40 via-pink-500/40 to-transparent pointer-events-none"
-                      initial={{ x: "-100%" }}
-                      transition={{ duration: 0.7, ease: "easeInOut" }}
-                      whileHover={{ x: "100%" }}
-                    />
-                  </DownloadButton>
-                </motion.div>
-
-                {/* Secondary Link */}
-                <motion.a
-                  href="https://github.com/AleksandrRise/ryn"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  whileHover={{ x: 4 }}
-                  className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
-                >
-                  <Github size={18} />
-                  <span className="text-sm">View on GitHub</span>
-                </motion.a>
+                    <Github size={18} />
+                    <span className="text-sm">View on GitHub</span>
+                  </motion.a>
+                </div>
               </motion.div>
 
               {/* Supporting text */}
@@ -1010,11 +999,6 @@ export default function Home() {
                 <div>
                   <h4 className="text-white font-bold mb-4">Product</h4>
                   <ul className="space-y-2 text-sm text-gray-500">
-                    <li>
-                      <DownloadButton className="hover:text-blue-400">
-                        Download
-                      </DownloadButton>
-                    </li>
                     <li>
                       <a href="https://github.com/AleksandrRise/ryn/releases/tag/release-alpha" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
                         Changelog
