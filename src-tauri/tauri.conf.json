@@ -83,7 +83,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
+    "targets": ["app", "dmg", "msi", "appimage"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -96,6 +96,16 @@
       "minimumSystemVersion": "10.13",
       "signingIdentity": "-",
       "entitlements": "Entitlements.plist"
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      }
     }
   }
 }

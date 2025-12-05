@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
+import { DownloadButton } from "@/components/download-button";
 
 // --- ANIMATION UTILS ---
 
@@ -685,12 +686,9 @@ export default function Home() {
                   A local-first desktop app for developers, not auditors.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-                  <a href="https://github.com/AleksandrRise/ryn/releases/tag/release-alpha" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
-                    <Button variant="primary" className="w-full space-x-2">
-                      <Download size={18} />
-                      <span>Download for macOS</span>
-                    </Button>
-                  </a>
+                  <DownloadButton
+                    className="w-full sm:w-auto"
+                  />
                   <a href="https://github.com/AleksandrRise/ryn" target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
                     <Button variant="secondary" className="w-full space-x-2">
                       <Terminal size={18} />
@@ -958,23 +956,16 @@ export default function Home() {
               >
                 {/* Primary Button */}
                 <motion.div className="relative">
-                  <motion.a
-                    href="https://github.com/AleksandrRise/ryn/releases/tag/release-alpha"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <DownloadButton
                     className="relative inline-flex items-center gap-3 px-10 py-4 bg-white text-black rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transition-shadow duration-300 overflow-hidden group"
                   >
-                    {/* Shimmer effect - dark rainbow on hover */}
                     <motion.div
                       className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500/40 via-purple-500/40 via-pink-500/40 to-transparent pointer-events-none"
                       initial={{ x: "-100%" }}
                       transition={{ duration: 0.7, ease: "easeInOut" }}
                       whileHover={{ x: "100%" }}
                     />
-
-                    <Download size={22} className="relative z-10" />
-                    <span className="relative z-10">Download for Mac</span>
-                  </motion.a>
+                  </DownloadButton>
                 </motion.div>
 
                 {/* Secondary Link */}
@@ -1020,9 +1011,9 @@ export default function Home() {
                   <h4 className="text-white font-bold mb-4">Product</h4>
                   <ul className="space-y-2 text-sm text-gray-500">
                     <li>
-                      <a href="https://github.com/AleksandrRise/ryn/releases/tag/release-alpha" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
+                      <DownloadButton className="hover:text-blue-400">
                         Download
-                      </a>
+                      </DownloadButton>
                     </li>
                     <li>
                       <a href="https://github.com/AleksandrRise/ryn/releases/tag/release-alpha" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400">
