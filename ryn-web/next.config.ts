@@ -16,13 +16,6 @@ const createConfig = (phase: string): NextConfig => {
     pageExtensions: ["ts", "tsx", "js", "jsx"],
   }
 
-  if (phase === PHASE_PRODUCTION_BUILD) {
-    return {
-      ...baseConfig,
-      output: "export",
-    }
-  }
-
   return baseConfig
 }
 

@@ -1,7 +1,6 @@
 {
   "buildCommand": "pnpm build",
   "installCommand": "pnpm install",
-  "outputDirectory": ".next/static",
   "framework": "nextjs",
   "env": {
     "NEXT_PUBLIC_APP_NAME": "Ryn"
