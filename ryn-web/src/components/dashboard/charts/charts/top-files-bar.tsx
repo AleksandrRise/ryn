@@ -64,9 +64,9 @@ export function TopFilesBar({ data, height = "100%" }: TopFilesBarProps) {
             boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
           }}
           labelStyle={{ color: "rgba(255,255,255,0.6)" }}
-          formatter={(value: number, _name: string, props: { payload: BarDataPoint & { displayName: string } }) => [
+          formatter={(value: number, _name: string, props?: { payload?: BarDataPoint & { displayName: string } }) => [
             `${value} violations`,
-            props.payload.name, // Show full name in tooltip
+            props?.payload?.name ?? 'Unknown', // Show full name in tooltip
           ]}
         />
 
