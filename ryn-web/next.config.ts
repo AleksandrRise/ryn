@@ -3,6 +3,7 @@ import type { NextConfig } from "next"
 
 const createConfig = (phase: string): NextConfig => {
   const baseConfig: NextConfig = {
+    output: "export",
     images: {
       unoptimized: true,
     },
