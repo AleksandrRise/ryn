@@ -8,15 +8,7 @@ export function useLenis() {
     // Add a small delay to ensure DOM is ready
     const timer = setTimeout(() => {
       try {
-        const lenis = new Lenis({
-          duration: 1.2,
-          easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-          direction: "vertical" as const,
-          gestureDirection: "vertical" as const,
-          smooth: true,
-          smoothTouch: false,
-          touchMultiplier: 2,
-        })
+        const lenis = new Lenis()
 
         let rafId: number
 

@@ -4,7 +4,11 @@
       "Bash(cat:*)",
       "Bash(./run-ryn-dev.sh)",
       "Bash(git tag:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm build:*)"
     ],
     "deny": [],
     "ask": [],
