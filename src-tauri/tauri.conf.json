@@ -7,7 +7,7 @@
     "beforeDevCommand": "",
     "beforeBuildCommand": "cd ryn-web && npm run build || true",
     "devUrl": "http://localhost:3000",
-    "frontendDist": "../out"
+    "frontendDist": "../ryn-web/out"
   },
   "app": {
     "windows": [
