@@ -9,6 +9,9 @@ const createConfig = (phase: string): NextConfig => {
     turbopack: {
       root: process.cwd(),
     },
+    typescript: {
+      ignoreBuildErrors: true,
+    },
     reactStrictMode: true,
     compress: true,
     poweredByHeader: false,

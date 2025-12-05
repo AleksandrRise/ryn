@@ -8,7 +8,14 @@
       "Bash(git push:*)",
       "Bash(git commit:*)",
       "Bash(pnpm install:*)",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(pnpm dev)",
+      "Bash(git restore:*)",
+      "Bash(pnpm tauri build:*)",
+      "Bash(tee:*)",
+      "Bash(find:*)",
+      "Bash(perl -pi -e:*)"
     ],
     "deny": [],
     "ask": [],
